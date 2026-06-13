@@ -1,0 +1,79 @@
+const db = require('./database');
+const { simulateGame } = require('./simulateGame');
+
+function generateSchedule(season) {
+    const teams = db.prepare('SELECT id FROM teams').all();
+    const games = [];
+    const weeks = 18;
+
+    // Simple round-robin: pair up teams each week
+    for (let week = 1; week <= weeks; week++) {
+        const shuffled = [...teams].sort(() => Math.random() - 0.5);
+        for (let i = 0; i < shuffled.length; i += 2) {
+            games.push({
+                season,
+                week,
+                home_team_id: shuffled[i].id,
+                away_team_id: shuffled[i + 1].id
+            });
+        }
+    }
+    return games;
+}
+
+function simulateSeason(season = 2024) {
+    console.log(`Simulating ${season} season...`);
+
+    const schedule = generateSchedule(season);
+
+    const insertGame = db.prepare(`
+        INSERT INTO games (season, week, home_team_id, away_team_id, home_score, away_score, is_simulated)
+        VALUES (@season, @week, @home_team_id, @away_team_id, @home_score, @away_score, 1)
+    `);
+
+    for (let game of schedule) {
+        const result = simulateGame(game.home_team_id, game.away_team_id);
+        insertGame.run({
+            ...game,
+            home_score: result.homeScore,
+            away_score: result.awayScore
+        });
+    }
+
+    console.log(`${schedule.length} games simulated`);
+
+    // Print standings
+    const teams = db.prepare('SELECT id, city, name FROM teams').all();
+
+    console.log("\n--- FINAL STANDINGS ---");
+
+    const conferences = ["AFC", "NFC"];
+    for (let conf of conferences) {
+        console.log(`\n${conf}`);
+        const confTeams = db.prepare('SELECT id, city, name FROM teams WHERE conference = ?').all(conf);
+
+        const standings = confTeams.map(team => {
+            const wins = db.prepare(`
+                SELECT COUNT(*) as count FROM games
+                WHERE season = ? AND is_simulated = 1
+                AND ((home_team_id = ? AND home_score > away_score)
+                OR (away_team_id = ? AND away_score > home_score))
+            `).get(season, team.id, team.id).count;
+
+            const losses = db.prepare(`
+                SELECT COUNT(*) as count FROM games
+                WHERE season = ? AND is_simulated = 1
+                AND ((home_team_id = ? AND home_score < away_score)
+                OR (away_team_id = ? AND away_score < home_score))
+            `).get(season, team.id, team.id).count;
+
+            return { ...team, wins, losses };
+        }).sort((a, b) => b.wins - a.wins);
+
+        for (let team of standings) {
+            console.log(`  ${team.city} ${team.name}: ${team.wins}-${team.losses}`);
+        }
+    }
+}
+
+simulateSeason(2024);
