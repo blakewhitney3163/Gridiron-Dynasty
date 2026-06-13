@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Standings from './Standings';
+import Teams from './Teams';
 
 type Tab = 'home' | 'standings' | 'teams' | 'schedule' | 'playoffs';
 
@@ -56,12 +57,7 @@ export default function App() {
           </div>
         )}
         {activeTab === 'standings' && <Standings />}
-        {activeTab === 'teams' && (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#aaa' }}>
-            <h2 style={{ color: '#4FC3F7' }}>Teams</h2>
-            <p>Coming soon — browse all 32 teams and their rosters.</p>
-          </div>
-        )}
+        {activeTab === 'teams' && <Teams />}
         {activeTab === 'schedule' && (
           <div style={{ padding: '40px', textAlign: 'center', color: '#aaa' }}>
             <h2 style={{ color: '#4FC3F7' }}>Schedule</h2>
