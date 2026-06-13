@@ -67,6 +67,20 @@ ipcMain.handle('get-roster', (_event: any, teamId: number) => {
   `).all(teamId);
 });
 
+//Returns all games for a given season, including team names and scores
+ipcMain.handle('get-schedule', (_event: any, season: number = 2024) => {
+  return db.prepare(`
+    SELECT
+      g.id, g.week, g.home_score, g.away_score,
+      ht.city || ' ' || ht.name AS home_team,
+      at.city || ' ' || at.name AS away_team
+    FROM games g
+    JOIN teams ht ON g.home_team_id = ht.id
+    JOIN teams at ON g.away_team_id = at.id
+    WHERE g.season = ? AND g.is_simulated = 1
+    ORDER BY g.week, g.id
+  `).all(season);
+});
 // ─── App Lifecycle ─────────────────────────────────────────────────────────────
 
 app.on('ready', createWindow);

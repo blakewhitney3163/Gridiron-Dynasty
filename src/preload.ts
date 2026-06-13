@@ -16,4 +16,8 @@ contextBridge.exposeInMainWorld('api', {
   getRoster: (teamId: number) =>
     ipcRenderer.invoke('get-roster', teamId),
 
+  //Fetch all games for a given season grouped by week
+  getSchedule: (season: number) =>
+    ipcRenderer.invoke('get-schedule', season),
+
 });
