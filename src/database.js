@@ -1,7 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const db = new Database(path.join(__dirname, '..', 'nfl-simulator.db'));
+const db = new Database(path.join(process.cwd(), 'nfl-simulator.db'));
 
 db.exec(`
     CREATE TABLE IF NOT EXISTS teams (

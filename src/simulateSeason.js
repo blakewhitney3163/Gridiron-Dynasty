@@ -4,9 +4,8 @@ const { simulateGame } = require('./simulateGame');
 function generateSchedule(season) {
     const teams = db.prepare('SELECT id FROM teams').all();
     const games = [];
-    const weeks = 18;
+    const weeks = 17;
 
-    // Simple round-robin: pair up teams each week
     for (let week = 1; week <= weeks; week++) {
         const shuffled = [...teams].sort(() => Math.random() - 0.5);
         for (let i = 0; i < shuffled.length; i += 2) {
@@ -23,6 +22,9 @@ function generateSchedule(season) {
 
 function simulateSeason(season = 2024) {
     console.log(`Simulating ${season} season...`);
+
+    // Clear previous simulation data for this season
+    db.prepare('DELETE FROM games WHERE season = ?').run(season);
 
     const schedule = generateSchedule(season);
 
@@ -42,12 +44,8 @@ function simulateSeason(season = 2024) {
 
     console.log(`${schedule.length} games simulated`);
 
-    // Print standings
-    const teams = db.prepare('SELECT id, city, name FROM teams').all();
-
-    console.log("\n--- FINAL STANDINGS ---");
-
     const conferences = ["AFC", "NFC"];
+    console.log("\n--- FINAL STANDINGS ---");
     for (let conf of conferences) {
         console.log(`\n${conf}`);
         const confTeams = db.prepare('SELECT id, city, name FROM teams WHERE conference = ?').all(conf);
