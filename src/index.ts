@@ -496,6 +496,131 @@ ipcMain.handle('set-user-team', (_event: any, teamId: number) => {
   return { success: true };
 });
 
+// ─── Team Status ──────────────────────────────────────────────────────────────
+
+function getTeamTradeProfile(teamId: number): {
+  status: string;
+  description: string;
+  acceptanceThreshold: number;
+  wins: number;
+  losses: number;
+  avgOverall: number;
+} {
+  const season = getCurrentSeason();
+
+  const record = db.prepare(`
+    SELECT
+      SUM(CASE WHEN (home_team_id = ? AND home_score > away_score)
+               OR (away_team_id = ? AND away_score > home_score) THEN 1 ELSE 0 END) as wins,
+      SUM(CASE WHEN (home_team_id = ? AND home_score < away_score)
+               OR (away_team_id = ? AND away_score < home_score) THEN 1 ELSE 0 END) as losses,
+      COUNT(*) as games_played
+    FROM games
+    WHERE (home_team_id = ? OR away_team_id = ?)
+      AND season = ? AND is_simulated = 1 AND is_playoff = 0
+  `).get(teamId, teamId, teamId, teamId, teamId, teamId, season) as any;
+
+  const ovrRow = db.prepare(
+    'SELECT AVG(overall_rating) as avg_ovr FROM players WHERE team_id = ?'
+  ).get(teamId) as any;
+
+  const wins = record?.wins ?? 0;
+  const losses = record?.losses ?? 0;
+  const gamesPlayed = record?.games_played ?? 0;
+  const winPct = gamesPlayed >= 4 ? wins / gamesPlayed : 0.5;
+  const avgOverall = Math.round(ovrRow?.avg_ovr ?? 75);
+
+  let status: string;
+  let description: string;
+  let acceptanceThreshold: number;
+
+  if (winPct >= 0.65 && avgOverall >= 78) {
+    status = 'Contender';
+    description = 'Competing for a title — demands full value in any deal.';
+    acceptanceThreshold = -3;
+  } else if (winPct >= 0.50 && avgOverall >= 76) {
+    status = 'Buyer';
+    description = 'Looking to add a piece for a playoff push.';
+    acceptanceThreshold = -8;
+  } else if (winPct < 0.40 && avgOverall >= 77) {
+    status = 'Seller';
+    description = 'Moving veterans for future assets — open to dealing.';
+    acceptanceThreshold = -18;
+  } else if (winPct < 0.45 && avgOverall < 77) {
+    status = 'Rebuilding';
+    description = 'Tearing it down. Will move anyone for the right offer.';
+    acceptanceThreshold = -22;
+  } else {
+    status = 'Neutral';
+    description = 'No strong inclination to buy or sell right now.';
+    acceptanceThreshold = -8;
+  }
+
+  return { status, description, acceptanceThreshold, wins, losses, avgOverall };
+}
+
+ipcMain.handle('get-team-status', (_event: any, teamId: number) => {
+  return getTeamTradeProfile(teamId);
+});
+
+// ─── Trades ───────────────────────────────────────────────────────────────────
+
+ipcMain.handle('propose-trade', (_event: any, { myPlayerIds, theirPlayerIds, theirTeamId }: {
+  myPlayerIds: number[];
+  theirPlayerIds: number[];
+  theirTeamId: number;
+}) => {
+  const myTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
+  if (!myTeamRow) return { accepted: false, reason: 'No franchise selected.' };
+  const myTeamId = parseInt(myTeamRow.value);
+
+  const myPlayers = myPlayerIds.map(id =>
+    db.prepare('SELECT id, first_name, last_name, overall_rating FROM players WHERE id = ? AND team_id = ?')
+      .get(id, myTeamId)
+  ).filter(Boolean) as any[];
+
+  const theirPlayers = theirPlayerIds.map(id =>
+    db.prepare('SELECT id, first_name, last_name, overall_rating FROM players WHERE id = ? AND team_id = ?')
+      .get(id, theirTeamId)
+  ).filter(Boolean) as any[];
+
+  if (myPlayers.length === 0 || theirPlayers.length === 0) {
+    return { accepted: false, reason: 'Invalid players selected.' };
+  }
+
+  const myValue = myPlayers.reduce((sum: number, p: any) => sum + p.overall_rating, 0);
+  const theirValue = theirPlayers.reduce((sum: number, p: any) => sum + p.overall_rating, 0);
+
+  // CPU perspective: positive = they're getting more
+  const valueDiff = theirValue - myValue;
+  const randomFactor = Math.floor(Math.random() * 11) - 5; // -5 to +5
+
+  // Status-aware threshold
+  const profile = getTeamTradeProfile(theirTeamId);
+  const accepted = (valueDiff + randomFactor) >= profile.acceptanceThreshold;
+
+  if (accepted) {
+    const executeTrade = db.transaction(() => {
+      for (const p of myPlayers) {
+        db.prepare('UPDATE players SET team_id = ? WHERE id = ?').run(theirTeamId, p.id);
+      }
+      for (const p of theirPlayers) {
+        db.prepare('UPDATE players SET team_id = ? WHERE id = ?').run(myTeamId, p.id);
+      }
+    });
+    executeTrade();
+    return { accepted: true };
+  }
+
+  const reason = valueDiff < -20
+    ? 'Not enough value — we need significantly more to make this work.'
+    : valueDiff < -10
+    ? 'The offer is too light for us right now.'
+    : `We're not interested at this time.`;
+
+  return { accepted: false, reason };
+});
+
 // ─── App Lifecycle ─────────────────────────────────────────────────────────────
 
 app.on('ready', createWindow);

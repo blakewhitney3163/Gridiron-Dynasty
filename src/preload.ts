@@ -17,6 +17,12 @@ contextBridge.exposeInMainWorld('api', {
   getStandings: (season: number) =>
     ipcRenderer.invoke('get-standings', season),
 
+  getTeamStatus: (teamId: number) =>
+    ipcRenderer.invoke('get-team-status', teamId),
+
+  proposeTrade: (payload: { myPlayerIds: number[]; theirPlayerIds: number[]; theirTeamId: number }) =>
+    ipcRenderer.invoke('propose-trade', payload),
+
   getTeams: () =>
     ipcRenderer.invoke('get-teams'),
 
