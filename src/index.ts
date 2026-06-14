@@ -314,7 +314,10 @@ ipcMain.handle('advance-season', () => {
   db.prepare('UPDATE players SET age = age + 1').run();
 
   // Retire players 39+ with overall rating below 78
-  db.prepare('DELETE FROM players WHERE age >= 39 AND overall_rating < 78').run();
+  db.prepare(`
+  UPDATE players SET team_id = NULL, is_free_agent = 1
+  WHERE age >= 39 AND overall_rating < 78 AND is_free_agent = 0
+`).run();
 
   // Advance the season
   db.prepare("UPDATE settings SET value = ? WHERE key = 'current_season'").run(String(next));
