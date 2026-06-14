@@ -7,10 +7,11 @@ import Stats from './Stats';
 import Playoffs from './Playoffs';
 import TeamSelection from './TeamSelection';
 import Trades from './Trades';
+import Franchise from './Franchise';
 
 declare const window: any;
 
-type Tab = 'home' | 'standings' | 'teams' | 'schedule' | 'stats' | 'playoffs' | 'trades';
+type Tab = 'home' | 'standings' | 'teams' | 'schedule' | 'stats' | 'playoffs' | 'trades' | 'franchise';
 
 interface UserTeam {
   id: number;
@@ -29,6 +30,7 @@ const tabs: { id: Tab; label: string }[] = [
   { id: 'stats', label: 'Stats' },
   { id: 'playoffs', label: 'Playoffs' },
   { id: 'trades', label: 'Trades' },
+  { id: 'franchise', label: 'Franchise' },
 ];
 
 export default function App() {
@@ -140,6 +142,9 @@ export default function App() {
           <Playoffs data={playoffData} setData={setPlayoffData} currentSeason={currentSeason} />
         )}
         {activeTab === 'trades' && <Trades userTeam={userTeam} />}
+        {activeTab === 'franchise' && (
+          <Franchise userTeam={userTeam} currentSeason={currentSeason} />
+        )}
       </div>
     </div>
   );

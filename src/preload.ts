@@ -3,27 +3,19 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('api', {
 
   resetDynasty: () =>
-  ipcRenderer.invoke('reset-dynasty'),
+    ipcRenderer.invoke('reset-dynasty'),
 
   getPlayoffSeeds: () =>
-  ipcRenderer.invoke('get-playoff-seeds'),
+    ipcRenderer.invoke('get-playoff-seeds'),
 
   getUserTeam: () =>
-  ipcRenderer.invoke('get-user-team'),
+    ipcRenderer.invoke('get-user-team'),
 
   setUserTeam: (teamId: number) =>
-  ipcRenderer.invoke('set-user-team', teamId),
-
-  seedDevTraits: () => ipcRenderer.invoke('seed-dev-traits'),
+    ipcRenderer.invoke('set-user-team', teamId),
 
   getStandings: (season: number) =>
     ipcRenderer.invoke('get-standings', season),
-
-  getTeamStatus: (teamId: number) =>
-    ipcRenderer.invoke('get-team-status', teamId),
-
-  proposeTrade: (payload: { myPlayerIds: number[]; theirPlayerIds: number[]; theirTeamId: number }) =>
-    ipcRenderer.invoke('propose-trade', payload),
 
   getTeams: () =>
     ipcRenderer.invoke('get-teams'),
@@ -64,7 +56,6 @@ contextBridge.exposeInMainWorld('api', {
   advanceSeason: () =>
     ipcRenderer.invoke('advance-season'),
 
-  // Week-by-week simulation
   generateSchedule: () =>
     ipcRenderer.invoke('generate-schedule'),
 
@@ -79,5 +70,27 @@ contextBridge.exposeInMainWorld('api', {
 
   getGameBoxScore: (gameId: number) =>
     ipcRenderer.invoke('get-game-box-score', gameId),
+
+  getTeamStatus: (teamId: number) =>
+    ipcRenderer.invoke('get-team-status', teamId),
+
+  proposeTrade: (payload: { myPlayerIds: number[]; theirPlayerIds: number[]; theirTeamId: number }) =>
+    ipcRenderer.invoke('propose-trade', payload),
+
+  seedDevTraits: () =>
+    ipcRenderer.invoke('seed-dev-traits'),
+
+  // Contracts
+  getTeamContracts: (teamId: number) =>
+    ipcRenderer.invoke('get-team-contracts', teamId),
+
+  getCapSummary: (teamId: number) =>
+    ipcRenderer.invoke('get-cap-summary', teamId),
+
+  extendPlayer: (payload: { playerId: number; years: number; salary: number }) =>
+    ipcRenderer.invoke('extend-player', payload),
+
+  releasePlayer: (playerId: number) =>
+    ipcRenderer.invoke('release-player', playerId),
 
 });
