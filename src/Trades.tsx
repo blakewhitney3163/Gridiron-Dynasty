@@ -174,8 +174,8 @@ export default function Trades({ userTeam }: Props) {
   const selectedTeam = teams.find(t => t.id === selectedTeamId);
   const statusMeta   = STATUS_META[teamStatus?.status ?? ''] ?? STATUS_META['Neutral'];
 
-  const threshold  = teamStatus?.acceptanceThreshold ?? -8;
-  const margin     = (theirValue - myValue) - threshold;
+  const threshold = teamStatus?.acceptanceThreshold ?? -8;
+  const margin = (myValue - theirValue) - threshold;
   const likelihood =
     !canPropose   ? 'idle' :
     margin >= 5   ? 'yes' :

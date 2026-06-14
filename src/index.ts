@@ -670,7 +670,7 @@ ipcMain.handle('propose-trade', (_event: any, { myPlayerIds, theirPlayerIds, the
   const theirValue = theirPlayers.reduce((sum: number, p: any) =>
     sum + calcPlayerTradeValue(p.overall_rating, p.age, p.position, p.dev_trait), 0);
 
-  const valueDiff    = theirValue - myValue;
+  const valueDiff    = myValue - theirValue;
   const randomFactor = Math.floor(Math.random() * 11) - 5;
   const profile      = getTeamTradeProfile(theirTeamId);
 
@@ -702,6 +702,38 @@ ipcMain.handle('propose-trade', (_event: any, { myPlayerIds, theirPlayerIds, the
                                'We\'re not interested at this time.';
 
   return { accepted: false, reason };
+});
+
+// Dev Trait assign for Elite
+ipcMain.handle('seed-dev-traits', () => {
+  const setTrait = (firstName: string, lastName: string, trait: string) => {
+    const player = db.prepare(
+      'SELECT id FROM players WHERE first_name = ? AND last_name = ?'
+    ).get(firstName, lastName) as any;
+    if (player) {
+      db.prepare('UPDATE players SET dev_trait = ? WHERE id = ?').run(trait, player.id);
+    }
+  };
+
+  setTrait('Drake',   'Maye',      'X-Factor');
+  setTrait('Caleb',   'Williams',  'X-Factor');
+  setTrait('Jayden',  'Daniels',   'Superstar');
+  setTrait('Lamar',   'Jackson',   'X-Factor');
+  setTrait('Patrick', 'Mahomes',   'X-Factor');
+  setTrait('Josh',    'Allen',     'X-Factor');
+  setTrait('Joe',     'Burrow',    'Superstar');
+  setTrait('Jalen',   'Hurts',     'Superstar');
+  setTrait('Justin',  'Jefferson', 'X-Factor');
+  setTrait('CeeDee',  'Lamb',      'X-Factor');
+  setTrait('Tyreek',  'Hill',      'X-Factor');
+  setTrait('Brock',   'Bowers',    'Superstar');
+  setTrait('Micah',   'Parsons',   'X-Factor');
+  setTrait('Myles',   'Garrett',   'X-Factor');
+  setTrait('T.J.',    'Watt',      'X-Factor');
+  setTrait('Bo',      'Nix',       'Star');
+  setTrait('Dak',     'Prescott',  'Star');
+
+  return { success: true };
 });
 
 // ─── App Lifecycle ─────────────────────────────────────────────────────────────

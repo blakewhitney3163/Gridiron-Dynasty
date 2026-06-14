@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('api', {
   setUserTeam: (teamId: number) =>
   ipcRenderer.invoke('set-user-team', teamId),
 
+  seedDevTraits: () => ipcRenderer.invoke('seed-dev-traits'),
+
   getStandings: (season: number) =>
     ipcRenderer.invoke('get-standings', season),
 
