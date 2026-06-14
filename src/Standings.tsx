@@ -16,7 +16,7 @@ export default function Standings() {
   const [standings, setStandings] = useState<Team[]>([]);
 
   useEffect(() => {
-    window.api.getStandings(2024).then((data: Team[]) => {
+    window.api.getStandings(2025).then((data: Team[]) => {
       setStandings(data.sort((a, b) => b.wins - a.wins));
     });
   }, []);
@@ -25,7 +25,7 @@ export default function Standings() {
 
   return (
     <div style={{ padding: '20px', backgroundColor: '#1a1a2e', minHeight: '100vh', color: '#fff' }}>
-      <h2 style={{ color: '#4FC3F7', marginBottom: '20px' }}>2024 Standings</h2>
+      <h2 style={{ color: '#4FC3F7', marginBottom: '20px' }}>2025 Standings</h2>
       {conferences.map(conf => (
         <div key={conf} style={{ marginBottom: '30px' }}>
           <h3 style={{ color: '#FF8740', borderBottom: '1px solid #444', paddingBottom: '5px' }}>{conf}</h3>

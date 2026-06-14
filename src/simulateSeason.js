@@ -20,7 +20,7 @@ function generateSchedule(season) {
     return games;
 }
 
-function simulateSeason(season = 2024) {
+function simulateSeason(season = 2025) {
     console.log(`Simulating ${season} season...`);
 
     // Clear previous data for this season
@@ -103,4 +103,4 @@ function simulateSeason(season = 2024) {
     }
 }
 
-simulateSeason(2024);
+simulateSeason(2025);

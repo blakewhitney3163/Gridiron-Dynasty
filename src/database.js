@@ -74,7 +74,18 @@ db.exec(`
         FOREIGN KEY (player_id) REFERENCES players(id),
         FOREIGN KEY (team_id) REFERENCES teams(id)
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
 `);
+
+//seed current season if not already set
+const existingSeason = db.prepare("SELECT value FROM settings WHERE key = 'current_season'").get();
+if (!existingSeason) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('current_season', '2025')").run();
+}
 
 console.log("Database and tables created successfully");
 

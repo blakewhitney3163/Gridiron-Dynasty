@@ -16,7 +16,7 @@ export default function Schedule() {
   const [selectedWeek, setSelectedWeek] = useState<number>(1);
 
   useEffect(() => {
-    window.api.getSchedule(2024).then((data: Game[]) => setGames(data));
+    window.api.getSchedule(2025).then((data: Game[]) => setGames(data));
   }, []);
 
   const weeks = Array.from({ length: 17 }, (_, i) => i + 1);

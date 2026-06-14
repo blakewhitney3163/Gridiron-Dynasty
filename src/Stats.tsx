@@ -42,7 +42,7 @@ export default function Stats() {
   const [category, setCategory] = useState<StatCategory>('passing');
 
   useEffect(() => {
-    window.api.getStats(2024).then((data: StatsData) => setStats(data));
+    window.api.getStats(2025).then((data: StatsData) => setStats(data));
   }, []);
 
   if (!stats) {
@@ -57,7 +57,7 @@ export default function Stats() {
 
   return (
     <div style={{ padding: '24px' }}>
-      <h2 style={{ color: '#4FC3F7', marginBottom: '20px' }}>2024 Season Leaders</h2>
+      <h2 style={{ color: '#4FC3F7', marginBottom: '20px' }}>2025 Season Leaders</h2>
 
       {/* Category selector */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>

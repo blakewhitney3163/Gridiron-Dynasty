@@ -26,7 +26,7 @@ export default function Home() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
 
   useEffect(() => {
-    window.api.getDashboard(2024).then((data: Dashboard) => setDashboard(data));
+    window.api.getDashboard(2025).then((data: Dashboard) => setDashboard(data));
   }, []);
 
   if (!dashboard) {

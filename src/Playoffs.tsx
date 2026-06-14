@@ -77,7 +77,7 @@ export default function Playoffs({ data, setData }: Props) {
 
   const handleSimulate = async () => {
     setSimulating(true);
-    const result = await window.api.simulatePlayoffs(2024);
+    const result = await window.api.simulatePlayoffs(2025);
     setData(result);
     setSimulating(false);
   };
@@ -85,7 +85,7 @@ export default function Playoffs({ data, setData }: Props) {
   return (
     <div style={{ padding: '24px', overflowY: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '24px' }}>
-        <h2 style={{ color: '#4FC3F7', margin: 0 }}>2024 Playoffs</h2>
+        <h2 style={{ color: '#4FC3F7', margin: 0 }}>2025 Playoffs</h2>
         <button
           onClick={handleSimulate}
           disabled={simulating}
