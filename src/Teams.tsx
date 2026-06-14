@@ -30,6 +30,10 @@ interface PlayerStats {
   targets: number; receptions: number; rec_yards: number; rec_tds: number;
 }
 
+interface CareerSeasonStats extends PlayerStats {
+  season: number;
+}
+
 const POSITION_ORDER = [
   'QB', 'HB', 'FB',
   'WR', 'TE',
@@ -56,6 +60,49 @@ function StatBox({ label, value }: { label: string; value: any }) {
   );
 }
 
+function SeasonStatsRow({ s, position }: { s: CareerSeasonStats; position: string }) {
+  if (position === 'QB') {
+    return (
+      <tr style={{ borderBottom: '1px solid #1a1a1a', fontSize: '12px' }}>
+        <td style={{ padding: '6px 8px', color: '#FFD700', fontWeight: 'bold' }}>{s.season}</td>
+        <td style={{ padding: '6px 8px', color: '#aaa' }}>{s.games}</td>
+        <td style={{ padding: '6px 8px', color: '#4FC3F7', fontWeight: 'bold' }}>{s.pass_yards}</td>
+        <td style={{ padding: '6px 8px', color: '#81C784' }}>{s.pass_tds}</td>
+        <td style={{ padding: '6px 8px', color: '#e57373' }}>{s.interceptions}</td>
+        <td style={{ padding: '6px 8px', color: '#aaa' }}>
+          {s.pass_attempts > 0 ? `${Math.round((s.completions / s.pass_attempts) * 100)}%` : '—'}
+        </td>
+      </tr>
+    );
+  }
+  if (position === 'RB') {
+    return (
+      <tr style={{ borderBottom: '1px solid #1a1a1a', fontSize: '12px' }}>
+        <td style={{ padding: '6px 8px', color: '#FFD700', fontWeight: 'bold' }}>{s.season}</td>
+        <td style={{ padding: '6px 8px', color: '#aaa' }}>{s.games}</td>
+        <td style={{ padding: '6px 8px', color: '#4FC3F7', fontWeight: 'bold' }}>{s.rush_yards}</td>
+        <td style={{ padding: '6px 8px', color: '#81C784' }}>{s.rush_tds}</td>
+        <td style={{ padding: '6px 8px', color: '#aaa' }}>
+          {s.rush_attempts > 0 ? (s.rush_yards / s.rush_attempts).toFixed(1) : '—'}
+        </td>
+        <td style={{ padding: '6px 8px', color: '#aaa' }}>{s.receptions} / {s.rec_yards}</td>
+      </tr>
+    );
+  }
+  return (
+    <tr style={{ borderBottom: '1px solid #1a1a1a', fontSize: '12px' }}>
+      <td style={{ padding: '6px 8px', color: '#FFD700', fontWeight: 'bold' }}>{s.season}</td>
+      <td style={{ padding: '6px 8px', color: '#aaa' }}>{s.games}</td>
+      <td style={{ padding: '6px 8px', color: '#4FC3F7', fontWeight: 'bold' }}>{s.rec_yards}</td>
+      <td style={{ padding: '6px 8px', color: '#81C784' }}>{s.rec_tds}</td>
+      <td style={{ padding: '6px 8px', color: '#aaa' }}>{s.receptions}/{s.targets}</td>
+      <td style={{ padding: '6px 8px', color: '#aaa' }}>
+        {s.targets > 0 ? `${Math.round((s.receptions / s.targets) * 100)}%` : '—'}
+      </td>
+    </tr>
+  );
+}
+
 export default function Teams() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
@@ -63,6 +110,8 @@ export default function Teams() {
   const [selectedPosition, setSelectedPosition] = useState<string>('');
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
+  const [careerStats, setCareerStats] = useState<CareerSeasonStats[]>([]);
+  const [statsView, setStatsView] = useState<'season' | 'career'>('season');
 
   useEffect(() => {
     window.api.getTeams().then((data: Team[]) => setTeams(data));
@@ -82,7 +131,10 @@ export default function Teams() {
   const handleSelectPlayer = (player: Player) => {
     setSelectedPlayer(player);
     setPlayerStats(null);
+    setCareerStats([]);
+    setStatsView('season');
     window.api.getPlayerStats(player.id).then((stats: PlayerStats) => setPlayerStats(stats));
+    window.api.getPlayerCareerStats(player.id).then((stats: CareerSeasonStats[]) => setCareerStats(stats));
   };
 
   const getAvailablePositions = (players: Player[]) => {
@@ -96,6 +148,12 @@ export default function Teams() {
     .sort((a, b) => b.overall_rating - a.overall_rating);
 
   const conferences = ['AFC', 'NFC'];
+  const careerHeaders = {
+    QB: ['Season', 'G', 'YDS', 'TD', 'INT', 'CMP%'],
+    RB: ['Season', 'G', 'YDS', 'TD', 'YPC', 'REC/REYDS'],
+    WR: ['Season', 'G', 'YDS', 'TD', 'REC/TGT', 'CTH%'],
+    TE: ['Season', 'G', 'YDS', 'TD', 'REC/TGT', 'CTH%'],
+  } as Record<string, string[]>;
 
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 90px)' }}>
@@ -185,7 +243,7 @@ export default function Teams() {
               ))}
             </div>
 
-            {/* Player profile panel */}
+            {/* Player profile */}
             {selectedPlayer && (
               <div style={{ flex: 1, overflowY: 'auto', padding: '20px', background: '#0a0a1a' }}>
                 <button
@@ -228,47 +286,94 @@ export default function Teams() {
                   </div>
                 </div>
 
-                {/* Season stats */}
-                <div>
-                  <div style={{ color: '#666', fontSize: '11px', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '1px' }}>2025 Season Stats</div>
-                  {!playerStats ? (
-                    <div style={{ color: '#555', fontSize: '13px' }}>Loading...</div>
-                  ) : playerStats.games === 0 ? (
-                    <div style={{ color: '#555', fontSize: '13px' }}>No stats recorded this season</div>
-                  ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                      {selectedPlayer.position === 'QB' && <>
-                        <StatBox label="Games" value={playerStats.games} />
-                        <StatBox label="Pass Yards" value={playerStats.pass_yards} />
-                        <StatBox label="Touchdowns" value={playerStats.pass_tds} />
-                        <StatBox label="Interceptions" value={playerStats.interceptions} />
-                        <StatBox label="Completions" value={`${playerStats.completions}/${playerStats.pass_attempts}`} />
-                        <StatBox label="Comp %" value={playerStats.pass_attempts > 0 ? `${Math.round((playerStats.completions / playerStats.pass_attempts) * 100)}%` : '—'} />
-                      </>}
-                      {selectedPlayer.position === 'RB' && <>
-                        <StatBox label="Games" value={playerStats.games} />
-                        <StatBox label="Rush Yards" value={playerStats.rush_yards} />
-                        <StatBox label="Rush TDs" value={playerStats.rush_tds} />
-                        <StatBox label="Yds/Carry" value={playerStats.rush_attempts > 0 ? (playerStats.rush_yards / playerStats.rush_attempts).toFixed(1) : '—'} />
-                        <StatBox label="Receptions" value={playerStats.receptions} />
-                        <StatBox label="Rec Yards" value={playerStats.rec_yards} />
-                      </>}
-                      {(selectedPlayer.position === 'WR' || selectedPlayer.position === 'TE') && <>
-                        <StatBox label="Games" value={playerStats.games} />
-                        <StatBox label="Receptions" value={playerStats.receptions} />
-                        <StatBox label="Rec Yards" value={playerStats.rec_yards} />
-                        <StatBox label="Touchdowns" value={playerStats.rec_tds} />
-                        <StatBox label="Targets" value={playerStats.targets} />
-                        <StatBox label="Catch %" value={playerStats.targets > 0 ? `${Math.round((playerStats.receptions / playerStats.targets) * 100)}%` : '—'} />
-                      </>}
-                      {!['QB', 'RB', 'WR', 'TE'].includes(selectedPlayer.position) && (
-                        <div style={{ gridColumn: '1/-1', color: '#555', fontSize: '13px', textAlign: 'center', padding: '16px 0' }}>
-                          Detailed stats not tracked for this position
-                        </div>
-                      )}
+                {/* Stats toggle - only show for tracked positions */}
+                {['QB', 'RB', 'WR', 'TE'].includes(selectedPlayer.position) && (
+                  <div>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                      {(['season', 'career'] as const).map(v => (
+                        <button
+                          key={v}
+                          onClick={() => setStatsView(v)}
+                          style={{
+                            padding: '5px 14px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                            background: statsView === v ? '#4FC3F7' : '#1a1a3e',
+                            color: statsView === v ? '#000' : '#aaa',
+                            fontWeight: statsView === v ? 'bold' : 'normal',
+                            fontSize: '12px',
+                          }}
+                        >
+                          {v === 'season' ? 'This Season' : 'Career'}
+                        </button>
+                      ))}
                     </div>
-                  )}
-                </div>
+
+                    {statsView === 'season' && (
+                      <>
+                        {!playerStats ? (
+                          <div style={{ color: '#555', fontSize: '13px' }}>Loading...</div>
+                        ) : playerStats.games === 0 ? (
+                          <div style={{ color: '#555', fontSize: '13px' }}>No stats this season</div>
+                        ) : (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            {selectedPlayer.position === 'QB' && <>
+                              <StatBox label="Games" value={playerStats.games} />
+                              <StatBox label="Pass Yards" value={playerStats.pass_yards} />
+                              <StatBox label="Touchdowns" value={playerStats.pass_tds} />
+                              <StatBox label="Interceptions" value={playerStats.interceptions} />
+                              <StatBox label="Completions" value={`${playerStats.completions}/${playerStats.pass_attempts}`} />
+                              <StatBox label="Comp %" value={playerStats.pass_attempts > 0 ? `${Math.round((playerStats.completions / playerStats.pass_attempts) * 100)}%` : '—'} />
+                            </>}
+                            {selectedPlayer.position === 'RB' && <>
+                              <StatBox label="Games" value={playerStats.games} />
+                              <StatBox label="Rush Yards" value={playerStats.rush_yards} />
+                              <StatBox label="Rush TDs" value={playerStats.rush_tds} />
+                              <StatBox label="Yds/Carry" value={playerStats.rush_attempts > 0 ? (playerStats.rush_yards / playerStats.rush_attempts).toFixed(1) : '—'} />
+                              <StatBox label="Receptions" value={playerStats.receptions} />
+                              <StatBox label="Rec Yards" value={playerStats.rec_yards} />
+                            </>}
+                            {(selectedPlayer.position === 'WR' || selectedPlayer.position === 'TE') && <>
+                              <StatBox label="Games" value={playerStats.games} />
+                              <StatBox label="Receptions" value={playerStats.receptions} />
+                              <StatBox label="Rec Yards" value={playerStats.rec_yards} />
+                              <StatBox label="Touchdowns" value={playerStats.rec_tds} />
+                              <StatBox label="Targets" value={playerStats.targets} />
+                              <StatBox label="Catch %" value={playerStats.targets > 0 ? `${Math.round((playerStats.receptions / playerStats.targets) * 100)}%` : '—'} />
+                            </>}
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {statsView === 'career' && (
+                      <>
+                        {careerStats.length === 0 ? (
+                          <div style={{ color: '#555', fontSize: '13px' }}>No career stats yet</div>
+                        ) : (
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid #333' }}>
+                                {(careerHeaders[selectedPlayer.position] || ['Season', 'G', 'YDS', 'TD', 'REC', 'TGT']).map(h => (
+                                  <th key={h} style={{ padding: '6px 8px', color: '#666', textAlign: 'left', fontWeight: 'normal' }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {careerStats.map((s, i) => (
+                                <SeasonStatsRow key={i} s={s} position={selectedPlayer.position} />
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {!['QB', 'RB', 'WR', 'TE'].includes(selectedPlayer.position) && (
+                  <div style={{ color: '#555', fontSize: '13px', textAlign: 'center', padding: '20px 0' }}>
+                    Detailed stats not tracked for this position
+                  </div>
+                )}
               </div>
             )}
           </div>
