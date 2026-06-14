@@ -30,7 +30,7 @@ function getCurrentSeason(): number {
 
 // ─── Trade Value Helpers ──────────────────────────────────────────────────────
 
-function calcPlayerTradeValue(overallRating: number, age: number, position: string): number {
+function calcPlayerTradeValue(overallRating: number, age: number, position: string, devTrait: string = 'Normal'): number {
   const ageFactor =
     age <= 23 ? 1.4 :
     age <= 26 ? 1.25 :
@@ -43,7 +43,42 @@ function calcPlayerTradeValue(overallRating: number, age: number, position: stri
     WR: 1.1, TE: 1.1, OL: 1.05, S: 1.0, RB: 0.85, K: 0.7,
   };
 
-  return Math.round(overallRating * ageFactor * (posFactor[position] ?? 1.0));
+  const traitFactor: Record<string, number> = {
+    'Normal': 1.0, 'Star': 1.15, 'Superstar': 1.3, 'X-Factor': 1.5,
+  };
+
+  return Math.round(
+    overallRating *
+    ageFactor *
+    (posFactor[position] ?? 1.0) *
+    (traitFactor[devTrait] ?? 1.0)
+  );
+}
+
+// Extra threshold a team demands for a player who is their franchise cornerstone
+function getPlayerAvailabilityPremium(player: { age: number; position: string; dev_trait: string }): number {
+  const trait = player.dev_trait ?? 'Normal';
+  let premium = 0;
+
+  // Young franchise QB — nearly untouchable
+  if (player.position === 'QB' && player.age <= 26) {
+    premium += trait === 'X-Factor'  ? 80
+             : trait === 'Superstar' ? 50
+             : trait === 'Star'      ? 25
+             : 10;
+  }
+
+  // Any young X-Factor or Superstar at any position
+  if (player.age <= 25 && (trait === 'X-Factor' || trait === 'Superstar')) {
+    premium += trait === 'X-Factor' ? 50 : 30;
+  }
+
+  // Young Star
+  if (player.age <= 25 && trait === 'Star') {
+    premium += 15;
+  }
+
+  return premium;
 }
 
 function getTeamTradeProfile(teamId: number): {
@@ -135,7 +170,8 @@ ipcMain.handle('get-teams', () => {
 
 ipcMain.handle('get-roster', (_event: any, teamId: number) => {
   return db.prepare(`
-    SELECT id, first_name, last_name, position, position_label, overall_rating, age, speed, strength, awareness
+    SELECT id, first_name, last_name, position, position_label, overall_rating, age,
+           speed, strength, awareness, dev_trait
     FROM players WHERE team_id = ?
     ORDER BY
       CASE position
@@ -362,11 +398,51 @@ ipcMain.handle('get-current-season', () => getCurrentSeason());
 ipcMain.handle('advance-season', () => {
   const current = getCurrentSeason();
   const next = current + 1;
-  db.prepare('UPDATE players SET age = age + 1').run();
+
+  // Age all active players first
+  db.prepare('UPDATE players SET age = age + 1 WHERE is_free_agent = 0').run();
+
+  // Dev-trait-based progression
+  const players = db.prepare(
+    'SELECT id, age, overall_rating, dev_trait FROM players WHERE is_free_agent = 0 AND team_id IS NOT NULL'
+  ).all() as any[];
+
+  const updateOvr = db.prepare('UPDATE players SET overall_rating = ? WHERE id = ?');
+
+  // [min, max] OVR change ranges by age bracket and trait
+  const progressionTable: Record<string, Record<string, [number, number]>> = {
+    young:    { Normal: [0, 1],  Star: [1, 2],  Superstar: [2, 3],  'X-Factor': [3, 4]  },
+    rising:   { Normal: [0, 1],  Star: [0, 2],  Superstar: [1, 2],  'X-Factor': [2, 3]  },
+    prime:    { Normal: [-1, 0], Star: [0, 1],  Superstar: [0, 1],  'X-Factor': [0, 1]  },
+    decline:  { Normal: [-2,-1], Star: [-1, 0], Superstar: [-1, 0], 'X-Factor': [-1, 0] },
+    old:      { Normal: [-3,-2], Star: [-2,-1], Superstar: [-2,-1], 'X-Factor': [-1, 0] },
+    veteran:  { Normal: [-4,-3], Star: [-3,-2], Superstar: [-3,-2], 'X-Factor': [-2,-1] },
+  };
+
+  const progressPlayers = db.transaction(() => {
+    for (const p of players) {
+      const trait = p.dev_trait ?? 'Normal';
+      const bracket =
+        p.age <= 23 ? 'young' :
+        p.age <= 26 ? 'rising' :
+        p.age <= 29 ? 'prime' :
+        p.age <= 32 ? 'decline' :
+        p.age <= 35 ? 'old' : 'veteran';
+
+      const [min, max] = progressionTable[bracket][trait] ?? [0, 0];
+      const change = Math.floor(Math.random() * (max - min + 1)) + min;
+      const newOvr = Math.max(40, Math.min(99, p.overall_rating + change));
+      updateOvr.run(newOvr, p.id);
+    }
+  });
+  progressPlayers();
+
+  // Retire aging low-rated players
   db.prepare(`
     UPDATE players SET team_id = NULL, is_free_agent = 1
-    WHERE age >= 39 AND overall_rating < 78 AND is_free_agent = 0
+    WHERE age >= 38 AND overall_rating < 75 AND is_free_agent = 0
   `).run();
+
   db.prepare("UPDATE settings SET value = ? WHERE key = 'current_season'").run(String(next));
   return { nextSeason: next };
 });
@@ -576,12 +652,12 @@ ipcMain.handle('propose-trade', (_event: any, { myPlayerIds, theirPlayerIds, the
   const myTeamId = parseInt(myTeamRow.value);
 
   const myPlayers = myPlayerIds.map(id =>
-    db.prepare('SELECT id, first_name, last_name, overall_rating, age, position FROM players WHERE id = ? AND team_id = ?')
+    db.prepare('SELECT id, first_name, last_name, overall_rating, age, position, dev_trait FROM players WHERE id = ? AND team_id = ?')
       .get(id, myTeamId)
   ).filter(Boolean) as any[];
 
   const theirPlayers = theirPlayerIds.map(id =>
-    db.prepare('SELECT id, first_name, last_name, overall_rating, age, position FROM players WHERE id = ? AND team_id = ?')
+    db.prepare('SELECT id, first_name, last_name, overall_rating, age, position, dev_trait FROM players WHERE id = ? AND team_id = ?')
       .get(id, theirTeamId)
   ).filter(Boolean) as any[];
 
@@ -589,13 +665,21 @@ ipcMain.handle('propose-trade', (_event: any, { myPlayerIds, theirPlayerIds, the
     return { accepted: false, reason: 'Invalid players selected.' };
   }
 
-  const myValue    = myPlayers.reduce((sum: number, p: any) => sum + calcPlayerTradeValue(p.overall_rating, p.age, p.position), 0);
-  const theirValue = theirPlayers.reduce((sum: number, p: any) => sum + calcPlayerTradeValue(p.overall_rating, p.age, p.position), 0);
+  const myValue    = myPlayers.reduce((sum: number, p: any) =>
+    sum + calcPlayerTradeValue(p.overall_rating, p.age, p.position, p.dev_trait), 0);
+  const theirValue = theirPlayers.reduce((sum: number, p: any) =>
+    sum + calcPlayerTradeValue(p.overall_rating, p.age, p.position, p.dev_trait), 0);
 
-  const valueDiff   = theirValue - myValue;
+  const valueDiff    = theirValue - myValue;
   const randomFactor = Math.floor(Math.random() * 11) - 5;
-  const profile     = getTeamTradeProfile(theirTeamId);
-  const accepted    = (valueDiff + randomFactor) >= profile.acceptanceThreshold;
+  const profile      = getTeamTradeProfile(theirTeamId);
+
+  // Add per-player availability premium for any franchise cornerstone they're being asked to move
+  const availabilityPremium = theirPlayers.reduce((sum: number, p: any) =>
+    sum + getPlayerAvailabilityPremium(p), 0);
+
+  const effectiveThreshold = profile.acceptanceThreshold + availabilityPremium;
+  const accepted = (valueDiff + randomFactor) >= effectiveThreshold;
 
   if (accepted) {
     const executeTrade = db.transaction(() => {
@@ -611,9 +695,11 @@ ipcMain.handle('propose-trade', (_event: any, { myPlayerIds, theirPlayerIds, the
   }
 
   const reason =
-    valueDiff < -20 ? 'Not enough value — we need significantly more to make this work.' :
-    valueDiff < -10 ? 'The offer is too light for us right now.' :
-    'We\'re not interested at this time.';
+    availabilityPremium > 40 ? 'That player is a cornerstone of our franchise — not available at any reasonable price.' :
+    availabilityPremium > 0  ? 'We\'re protective of that player. You\'ll need to significantly sweeten the offer.' :
+    valueDiff < -20          ? 'Not enough value — we need significantly more to make this work.' :
+    valueDiff < -10          ? 'The offer is too light for us right now.' :
+                               'We\'re not interested at this time.';
 
   return { accepted: false, reason };
 });

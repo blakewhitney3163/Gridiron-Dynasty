@@ -17,6 +17,7 @@ interface Player {
   position_label: string;
   overall_rating: number;
   age: number;
+  dev_trait: string;
 }
 
 interface TeamStatus {
@@ -47,6 +48,13 @@ const STATUS_META: Record<string, { color: string; bg: string }> = {
   Neutral:    { color: '#FF8740', bg: '#1a0f00' },
 };
 
+const TRAIT_META: Record<string, { color: string }> = {
+  'Normal':    { color: '#444'    },
+  'Star':      { color: '#4FC3F7' },
+  'Superstar': { color: '#FF8740' },
+  'X-Factor':  { color: '#FFD700' },
+};
+
 function ratingColor(r: number): string {
   if (r >= 90) return '#FFD700';
   if (r >= 80) return '#4caf50';
@@ -54,7 +62,7 @@ function ratingColor(r: number): string {
   return '#888';
 }
 
-function calcTradeValue(overall: number, age: number, position: string): number {
+function calcTradeValue(overall: number, age: number, position: string, devTrait: string = 'Normal'): number {
   const ageFactor =
     age <= 23 ? 1.4 :
     age <= 26 ? 1.25 :
@@ -67,13 +75,17 @@ function calcTradeValue(overall: number, age: number, position: string): number 
     WR: 1.1, TE: 1.1, OL: 1.05, S: 1.0, RB: 0.85, K: 0.7,
   };
 
-  return Math.round(overall * ageFactor * (posFactor[position] ?? 1.0));
+  const traitFactor: Record<string, number> = {
+    'Normal': 1.0, 'Star': 1.15, 'Superstar': 1.3, 'X-Factor': 1.5,
+  };
+
+  return Math.round(overall * ageFactor * (posFactor[position] ?? 1.0) * (traitFactor[devTrait] ?? 1.0));
 }
 
 function trajectory(age: number): { label: string; color: string } {
-  if (age <= 26) return { label: '↑ Rising',    color: '#4caf50' };
-  if (age <= 30) return { label: '→ Prime',      color: '#FF8740' };
-  return              { label: '↓ Declining',  color: '#777'    };
+  if (age <= 26) return { label: '↑ Rising',   color: '#4caf50' };
+  if (age <= 30) return { label: '→ Prime',     color: '#FF8740' };
+  return              { label: '↓ Declining', color: '#777'    };
 }
 
 export default function Trades({ userTeam }: Props) {
@@ -148,14 +160,14 @@ export default function Trades({ userTeam }: Props) {
   const myFiltered    = myRoster.filter(p => myPos === 'ALL' || p.position === myPos);
   const theirFiltered = theirRoster.filter(p => theirPos === 'ALL' || p.position === theirPos);
 
-  const myValue    = mySelected.reduce((s, id) => {
+  const myValue = mySelected.reduce((s, id) => {
     const p = myRoster.find(x => x.id === id);
-    return s + (p ? calcTradeValue(p.overall_rating, p.age, p.position) : 0);
+    return s + (p ? calcTradeValue(p.overall_rating, p.age, p.position, p.dev_trait) : 0);
   }, 0);
 
   const theirValue = theirSelected.reduce((s, id) => {
     const p = theirRoster.find(x => x.id === id);
-    return s + (p ? calcTradeValue(p.overall_rating, p.age, p.position) : 0);
+    return s + (p ? calcTradeValue(p.overall_rating, p.age, p.position, p.dev_trait) : 0);
   }, 0);
 
   const canPropose   = mySelected.length > 0 && theirSelected.length > 0 && selectedTeamId !== null;
@@ -217,8 +229,7 @@ export default function Trades({ userTeam }: Props) {
             <div style={{
               background: statusMeta.bg,
               border: `1px solid ${statusMeta.color}30`,
-              borderRadius: 8, padding: '12px 16px',
-              marginBottom: 16,
+              borderRadius: 8, padding: '12px 16px', marginBottom: 16,
               display: 'flex', alignItems: 'center', gap: 16,
             }}>
               <div>
@@ -275,6 +286,8 @@ export default function Trades({ userTeam }: Props) {
           <div style={{ background: '#0e0e0e', border: '1px solid #1e1e1e', borderRadius: 8, padding: '14px 16px' }}>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 16, marginBottom: 14, alignItems: 'start' }}>
+
+              {/* You offer */}
               <div>
                 <div style={{ fontSize: 10, color: '#555', letterSpacing: 1, marginBottom: 6 }}>YOU OFFER</div>
                 {mySelected.length === 0
@@ -284,9 +297,12 @@ export default function Trades({ userTeam }: Props) {
                       return p ? (
                         <div key={id} style={{ fontSize: 12, color: '#ccc', marginBottom: 3 }}>
                           {p.first_name} {p.last_name}
+                          {p.dev_trait && p.dev_trait !== 'Normal' && (
+                            <span style={{ color: TRAIT_META[p.dev_trait]?.color, fontWeight: 'bold' }}> · {p.dev_trait}</span>
+                          )}
                           <span style={{ color: '#444' }}> · {p.position_label || p.position} · </span>
                           <span style={{ color: ratingColor(p.overall_rating) }}>{p.overall_rating} OVR</span>
-                          <span style={{ color: '#4FC3F7' }}> · {calcTradeValue(p.overall_rating, p.age, p.position)} val</span>
+                          <span style={{ color: '#4FC3F7' }}> · {calcTradeValue(p.overall_rating, p.age, p.position, p.dev_trait)} val</span>
                         </div>
                       ) : null;
                     })}
@@ -299,6 +315,7 @@ export default function Trades({ userTeam }: Props) {
 
               <div style={{ fontSize: 20, color: '#2a2a2a', alignSelf: 'center' }}>⇄</div>
 
+              {/* You receive */}
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 10, color: '#555', letterSpacing: 1, marginBottom: 6 }}>YOU RECEIVE</div>
                 {theirSelected.length === 0
@@ -308,9 +325,12 @@ export default function Trades({ userTeam }: Props) {
                       return p ? (
                         <div key={id} style={{ fontSize: 12, color: '#ccc', marginBottom: 3 }}>
                           {p.first_name} {p.last_name}
+                          {p.dev_trait && p.dev_trait !== 'Normal' && (
+                            <span style={{ color: TRAIT_META[p.dev_trait]?.color, fontWeight: 'bold' }}> · {p.dev_trait}</span>
+                          )}
                           <span style={{ color: '#444' }}> · {p.position_label || p.position} · </span>
                           <span style={{ color: ratingColor(p.overall_rating) }}>{p.overall_rating} OVR</span>
-                          <span style={{ color: statusMeta.color }}> · {calcTradeValue(p.overall_rating, p.age, p.position)} val</span>
+                          <span style={{ color: statusMeta.color }}> · {calcTradeValue(p.overall_rating, p.age, p.position, p.dev_trait)} val</span>
                         </div>
                       ) : null;
                     })}
@@ -422,7 +442,9 @@ function RosterPanel({ title, subtitle, players, selected, posFilter, onPosFilte
           players.map(player => {
             const isSelected = selected.includes(player.id);
             const traj = trajectory(player.age);
-            const val  = calcTradeValue(player.overall_rating, player.age, player.position);
+            const val  = calcTradeValue(player.overall_rating, player.age, player.position, player.dev_trait);
+            const traitColor = TRAIT_META[player.dev_trait]?.color ?? '#444';
+            const showTrait  = player.dev_trait && player.dev_trait !== 'Normal';
             return (
               <div
                 key={player.id}
@@ -436,8 +458,20 @@ function RosterPanel({ title, subtitle, players, selected, posFilter, onPosFilte
                 }}
               >
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, color: isSelected ? '#fff' : '#ccc', fontWeight: isSelected ? '700' : '400' }}>
-                    {player.first_name} {player.last_name}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontSize: 12, color: isSelected ? '#fff' : '#ccc', fontWeight: isSelected ? '700' : '400' }}>
+                      {player.first_name} {player.last_name}
+                    </span>
+                    {showTrait && (
+                      <span style={{
+                        fontSize: 8, fontWeight: 'bold', color: '#000',
+                        background: traitColor,
+                        padding: '1px 5px', borderRadius: 2, letterSpacing: 0.3,
+                      }}>
+                        {player.dev_trait === 'X-Factor' ? 'XF' :
+                         player.dev_trait === 'Superstar' ? 'SS' : 'S'}
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: 10, display: 'flex', gap: 8, marginTop: 1 }}>
                     <span style={{ color: '#555' }}>{player.position_label || player.position} · Age {player.age}</span>
