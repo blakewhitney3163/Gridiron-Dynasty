@@ -4,6 +4,7 @@ import Teams from './Teams';
 import Schedule from './Schedule';
 import Home from './Home';
 import Stats from './Stats';
+import Playoffs from './Playoffs';
 
 type Tab = 'home' | 'standings' | 'teams' | 'schedule' |'stats' | 'playoffs';
 
@@ -18,6 +19,7 @@ const tabs: { id: Tab; label: string }[] = [
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('standings');
+  const [playoffData, setPlayoffData] = useState(null);
 
   return (
     <div style={{ fontFamily: 'Arial', background: '#1a1a2e', minHeight: '100vh', color: 'white' }}>
@@ -59,12 +61,7 @@ export default function App() {
         {activeTab === 'teams' && <Teams />}
         {activeTab === 'schedule' && <Schedule />}
         {activeTab === 'stats' && <Stats />}
-        {activeTab === 'playoffs' && (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#aaa' }}>
-            <h2 style={{ color: '#4FC3F7' }}>Playoffs</h2>
-            <p>Coming soon — playoff bracket and results.</p>
-          </div>
-        )}
+        {activeTab === 'playoffs' && <Playoffs data={playoffData} setData={setPlayoffData}/>}
       </div>
     </div>
   );

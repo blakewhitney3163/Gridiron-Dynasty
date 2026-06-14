@@ -20,12 +20,20 @@ contextBridge.exposeInMainWorld('api', {
   getSchedule: (season: number) =>
     ipcRenderer.invoke('get-schedule', season),
 
-  //Fetch dashboard summary data
+  // Fetch dashboard summary data
   getDashboard: (season: number) =>
     ipcRenderer.invoke('get-dashboard', season),
 
-  //Fetch season stat leaders by category
+  // Fetch season stat leaders by category
   getStats: (season: number) =>
     ipcRenderer.invoke('get-stats', season),
+
+  // Simulate the playoff bracket
+  simulatePlayoffs: (season: number) =>
+    ipcRenderer.invoke('simulate-playoffs', season),
+
+  // Fetch existing playoff results
+  getPlayoffs: (season: number) =>
+    ipcRenderer.invoke('get-playoffs', season),
 
 });
