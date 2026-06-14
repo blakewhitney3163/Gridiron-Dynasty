@@ -23,11 +23,20 @@ contextBridge.exposeInMainWorld('api', {
   getPlayerStats: (playerId: number) =>
     ipcRenderer.invoke('get-player-stats', playerId),
 
+  getPlayerCareerStats: (playerId: number) =>
+    ipcRenderer.invoke('get-player-career-stats', playerId),
+
   simulatePlayoffs: (season: number) =>
     ipcRenderer.invoke('simulate-playoffs', season),
 
   getPlayoffs: (season: number) =>
     ipcRenderer.invoke('get-playoffs', season),
+
+  getChampions: () =>
+    ipcRenderer.invoke('get-champions'),
+
+  getSeasons: () =>
+    ipcRenderer.invoke('get-seasons'),
 
   getCurrentSeason: () =>
     ipcRenderer.invoke('get-current-season'),

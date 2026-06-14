@@ -91,6 +91,31 @@ ipcMain.handle('get-player-stats', (_event: any, playerId: number) => {
   `).get(playerId, season);
 });
 
+ipcMain.handle('get-player-career-stats', (_event: any, playerId: number) => {
+  return db.prepare(`
+    SELECT
+      g.season,
+      COUNT(DISTINCT s.game_id) as games,
+      SUM(s.pass_attempts) as pass_attempts,
+      SUM(s.completions) as completions,
+      SUM(s.pass_yards) as pass_yards,
+      SUM(s.pass_tds) as pass_tds,
+      SUM(s.interceptions) as interceptions,
+      SUM(s.rush_attempts) as rush_attempts,
+      SUM(s.rush_yards) as rush_yards,
+      SUM(s.rush_tds) as rush_tds,
+      SUM(s.targets) as targets,
+      SUM(s.receptions) as receptions,
+      SUM(s.rec_yards) as rec_yards,
+      SUM(s.rec_tds) as rec_tds
+    FROM stats s
+    JOIN games g ON s.game_id = g.id
+    WHERE s.player_id = ?
+    GROUP BY g.season
+    ORDER BY g.season DESC
+  `).all(playerId);
+});
+
 ipcMain.handle('get-schedule', (_event: any, season?: number) => {
   const s = season ?? getCurrentSeason();
   return db.prepare(`
@@ -239,6 +264,10 @@ ipcMain.handle('simulate-playoffs', (_event: any, season?: number) => {
   const nfcChamp = simGame(nfcDiv[0].winner, nfcDiv[1].winner, 20);
   const superBowl = simGame(afcChamp.winner, nfcChamp.winner, 21);
 
+  // Record champion
+  const championId = superBowl.winner.id;
+  db.prepare('INSERT OR REPLACE INTO champions (season, team_id) VALUES (?, ?)').run(s, championId);
+
   return {
     afc: { seeds: afcTeams, wildCard: afcWC, divisional: afcDiv, championship: afcChamp },
     nfc: { seeds: nfcTeams, wildCard: nfcWC, divisional: nfcDiv, championship: nfcChamp },
@@ -260,12 +289,37 @@ ipcMain.handle('get-playoffs', (_event: any, season?: number) => {
   `).all(s);
 });
 
+ipcMain.handle('get-champions', () => {
+  return db.prepare(`
+    SELECT c.season, t.city || ' ' || t.name AS team_name, t.conference
+    FROM champions c
+    JOIN teams t ON c.team_id = t.id
+    ORDER BY c.season DESC
+  `).all();
+});
+
+ipcMain.handle('get-seasons', () => {
+  return db.prepare(`
+    SELECT DISTINCT season FROM games WHERE is_simulated = 1 ORDER BY season DESC
+  `).all().map((r: any) => r.season);
+});
+
 ipcMain.handle('get-current-season', () => getCurrentSeason());
 
 ipcMain.handle('advance-season', () => {
-  const next = getCurrentSeason() + 1;
+  const current = getCurrentSeason();
+  const next = current + 1;
+
+  // Age all players by 1 year
+  db.prepare('UPDATE players SET age = age + 1').run();
+
+  // Retire players 39+ with overall rating below 78
+  db.prepare('DELETE FROM players WHERE age >= 39 AND overall_rating < 78').run();
+
+  // Advance the season
   db.prepare("UPDATE settings SET value = ? WHERE key = 'current_season'").run(String(next));
-  return next;
+
+  return { nextSeason: next, retiredCount: 0 };
 });
 
 // ─── App Lifecycle ─────────────────────────────────────────────────────────────

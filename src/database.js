@@ -79,6 +79,12 @@ db.exec(`
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS champions (
+        season INTEGER PRIMARY KEY,
+        team_id INTEGER NOT NULL,
+        FOREIGN KEY (team_id) REFERENCES teams(id)
+    );
 `);
 
 // Migrate: add position_label column if it doesn't exist
