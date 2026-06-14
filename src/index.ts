@@ -502,26 +502,62 @@ ipcMain.handle('propose-trade', (_event: any, { myPlayerIds, theirPlayerIds, the
 ipcMain.handle('get-team-contracts', (_event: any, teamId: number) => {
   return db.prepare(`
     SELECT p.id, p.first_name, p.last_name, p.position, p.position_label,
-           p.overall_rating, p.age, p.dev_trait,
+           p.overall_rating, p.age, p.dev_trait, p.roster_status,
            c.annual_salary, c.years_remaining, c.years_total,
            c.guaranteed_amount, c.guaranteed_pct,
            c.id as contract_id
     FROM contracts c
     JOIN players p ON c.player_id = p.id
-    WHERE c.team_id = ?
+    WHERE c.team_id = ? AND p.roster_status = 'active'
     ORDER BY c.annual_salary DESC
   `).all(teamId);
 });
 
+ipcMain.handle('get-practice-squad', (_event: any, teamId: number) => {
+  return db.prepare(`
+    SELECT p.id, p.first_name, p.last_name, p.position, p.position_label,
+           p.overall_rating, p.age, p.dev_trait,
+           c.annual_salary, c.years_remaining
+    FROM players p
+    LEFT JOIN contracts c ON c.player_id = p.id
+    WHERE p.team_id = ? AND p.roster_status = 'practice_squad'
+    ORDER BY p.overall_rating DESC
+  `).all(teamId);
+});
+
 ipcMain.handle('get-cap-summary', (_event: any, teamId: number) => {
-  const SALARY_CAP = 279.2; // 2026 NFL salary cap (millions)
-  const result = db.prepare('SELECT COALESCE(SUM(annual_salary), 0) as used_cap FROM contracts WHERE team_id = ?').get(teamId) as any;
+  const SALARY_CAP = 279.2; // 2026 NFL cap (millions)
+  const result = db.prepare(`
+    SELECT COALESCE(SUM(c.annual_salary), 0) as used_cap
+    FROM contracts c
+    JOIN players p ON c.player_id = p.id
+    WHERE c.team_id = ? AND p.roster_status = 'active'
+  `).get(teamId) as any;
   const usedCap = Math.round(result.used_cap * 10) / 10;
   return {
-    total_cap: SALARY_CAP,
-    used_cap: usedCap,
+    total_cap:     SALARY_CAP,
+    used_cap:      usedCap,
     available_cap: Math.round((SALARY_CAP - usedCap) * 10) / 10,
   };
+});
+
+ipcMain.handle('get-roster-spots', (_event: any, teamId: number) => {
+  const counts = db.prepare(`
+    SELECT roster_status, COUNT(*) as count
+    FROM players WHERE team_id = ? GROUP BY roster_status
+  `).all(teamId) as any[];
+  const active = counts.find((r: any) => r.roster_status === 'active')?.count ?? 0;
+  const ps     = counts.find((r: any) => r.roster_status === 'practice_squad')?.count ?? 0;
+  return { active, ps, activeMax: 53, psMax: 16, activeFree: 53 - active, psFree: 16 - ps };
+});
+
+ipcMain.handle('get-free-agents', (_event: any, position?: string) => {
+  const query = position && position !== 'ALL'
+    ? "SELECT id, first_name, last_name, position, position_label, overall_rating, age, dev_trait FROM players WHERE is_free_agent = 1 AND position = ? ORDER BY overall_rating DESC LIMIT 200"
+    : "SELECT id, first_name, last_name, position, position_label, overall_rating, age, dev_trait FROM players WHERE is_free_agent = 1 ORDER BY overall_rating DESC LIMIT 200";
+  return position && position !== 'ALL'
+    ? db.prepare(query).all(position)
+    : db.prepare(query).all();
 });
 
 ipcMain.handle('extend-player', (_event: any, { playerId, years, salary }: {
@@ -529,7 +565,7 @@ ipcMain.handle('extend-player', (_event: any, { playerId, years, salary }: {
 }) => {
   const contract = db.prepare('SELECT * FROM contracts WHERE player_id = ?').get(playerId) as any;
   if (!contract) return { success: false, reason: 'No contract found.' };
-  const guaranteedPct = Math.round(40 + Math.random() * 20); // 40–60% on extensions
+  const guaranteedPct    = Math.round(40 + Math.random() * 20);
   const guaranteedAmount = Math.round(salary * years * (guaranteedPct / 100) * 10) / 10;
   db.prepare('UPDATE contracts SET years_total = ?, years_remaining = ?, annual_salary = ?, guaranteed_amount = ?, guaranteed_pct = ? WHERE player_id = ?')
     .run(years, years, salary, guaranteedAmount, guaranteedPct, playerId);
@@ -538,46 +574,58 @@ ipcMain.handle('extend-player', (_event: any, { playerId, years, salary }: {
 
 ipcMain.handle('release-player', (_event: any, playerId: number) => {
   db.prepare('DELETE FROM contracts WHERE player_id = ?').run(playerId);
-  db.prepare('UPDATE players SET team_id = NULL, is_free_agent = 1 WHERE id = ?').run(playerId);
+  db.prepare("UPDATE players SET team_id = NULL, is_free_agent = 1, roster_status = 'free_agent' WHERE id = ?").run(playerId);
+  return { success: true };
+});
+
+ipcMain.handle('sign-free-agent', (_event: any, { playerId, years, salary }: {
+  playerId: number; years: number; salary: number;
+}) => {
+  const teamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
+  if (!teamRow) return { success: false, reason: 'No franchise selected.' };
+  const teamId = parseInt(teamRow.value);
+
+  const spots = (db.prepare("SELECT COUNT(*) as count FROM players WHERE team_id = ? AND roster_status = 'active'").get(teamId) as any).count;
+  if (spots >= 53) return { success: false, reason: 'Active roster is full (53/53). Release a player first.' };
+
+  const guaranteedPct    = Math.round(30 + Math.random() * 30);
+  const guaranteedAmount = Math.round(salary * years * (guaranteedPct / 100) * 10) / 10;
+
+  db.prepare("UPDATE players SET team_id = ?, is_free_agent = 0, roster_status = 'active' WHERE id = ?").run(teamId, playerId);
+  db.prepare(`INSERT INTO contracts (player_id, team_id, years_total, years_remaining, annual_salary, guaranteed_amount, guaranteed_pct)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(playerId, teamId, years, years, salary, guaranteedAmount, guaranteedPct);
   return { success: true };
 });
 
 // ─── OTC Contract Import ──────────────────────────────────────────────────────
-// Reads a saved copy of the overthecap.com/contracts markdown export.
-// Usage from DevTools: window.api.importOtcContracts('/path/to/contracts-0.md')
+// Usage from DevTools:
+//   window.api.importOtcContracts('/path/to/contracts-0.md')
 
 ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
-  const fs = require('fs');
+  const fs         = require('fs');
   const pathModule = require('path');
-
-  const otcPath = filePath ?? pathModule.join(process.cwd(), 'otc-contracts.md');
+  const otcPath    = filePath ?? pathModule.join(process.cwd(), 'otc-contracts.md');
 
   if (!fs.existsSync(otcPath)) {
-    return { success: false, reason: `File not found at: ${otcPath}` };
+    return { success: false, reason: `File not found: ${otcPath}` };
   }
 
   const content: string = fs.readFileSync(otcPath, 'utf8');
-
   const parseMoney = (s: string): number => parseFloat(s.replace(/[$,]/g, '')) || 0;
 
   const rows: any[] = [];
   for (const line of content.split('\n')) {
-    if (!line.startsWith('|')) continue;
-    if (line.includes('---') || line.includes('Player') || line.includes('Pos.')) continue;
-
+    if (!line.startsWith('|') || line.includes('---') || line.includes('Player') || line.includes('Pos.')) continue;
     const cols = line.split('|').map((c: string) => c.trim()).filter(Boolean);
     if (cols.length < 7) continue;
-
     const nameMatch = cols[0].match(/\[([^\]]+)\]/);
     if (!nameMatch) continue;
-
     const totalValue      = parseMoney(cols[3]);
     const apy             = parseMoney(cols[4]);
     const totalGuaranteed = parseMoney(cols[5]);
     const pctGuaranteed   = parseFloat((cols[7] ?? '0').replace('%', '')) || 0;
-
     if (apy <= 0) continue;
-
     rows.push({
       name:              nameMatch[1],
       yearsRemaining:    Math.max(1, Math.round(totalValue / apy)),
@@ -587,6 +635,7 @@ ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
     });
   }
 
+  // Only update players on active rosters — keeps cap math clean
   const updateContract = db.prepare(`
     UPDATE contracts
     SET years_remaining   = ?,
@@ -595,26 +644,25 @@ ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
         guaranteed_amount = ?,
         guaranteed_pct    = ?
     WHERE player_id = (
-      SELECT id FROM players
-      WHERE first_name || ' ' || last_name = ?
+      SELECT p.id FROM players p
+      WHERE p.first_name || ' ' || p.last_name = ?
+        AND p.roster_status = 'active'
       LIMIT 1
     )
   `);
 
   let matched = 0, skipped = 0;
-  const importTx = db.transaction(() => {
+  const tx = db.transaction(() => {
     for (const row of rows) {
-      const result = updateContract.run(
+      const r = updateContract.run(
         row.yearsRemaining, row.yearsRemaining,
         row.apyMillions, row.guaranteedMillions, row.pctGuaranteed,
         row.name
       );
-      if (result.changes > 0) matched++;
-      else skipped++;
+      if (r.changes > 0) matched++; else skipped++;
     }
   });
-  importTx();
-
+  tx();
   return { success: true, matched, skipped, total: rows.length };
 });
 

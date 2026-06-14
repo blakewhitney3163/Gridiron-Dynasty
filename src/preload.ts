@@ -80,18 +80,30 @@ contextBridge.exposeInMainWorld('api', {
   seedDevTraits: () =>
     ipcRenderer.invoke('seed-dev-traits'),
 
-  // Contracts
+ // Contracts & Roster
   getTeamContracts: (teamId: number) =>
     ipcRenderer.invoke('get-team-contracts', teamId),
 
+  getPracticeSquad: (teamId: number) =>
+    ipcRenderer.invoke('get-practice-squad', teamId),
+
   getCapSummary: (teamId: number) =>
     ipcRenderer.invoke('get-cap-summary', teamId),
+
+  getRosterSpots: (teamId: number) =>
+    ipcRenderer.invoke('get-roster-spots', teamId),
+
+  getFreeAgents: (position?: string) =>
+    ipcRenderer.invoke('get-free-agents', position),
 
   extendPlayer: (payload: { playerId: number; years: number; salary: number }) =>
     ipcRenderer.invoke('extend-player', payload),
 
   releasePlayer: (playerId: number) =>
     ipcRenderer.invoke('release-player', playerId),
+
+  signFreeAgent: (payload: { playerId: number; years: number; salary: number }) =>
+    ipcRenderer.invoke('sign-free-agent', payload),
 
   importOtcContracts: (filePath?: string) =>
     ipcRenderer.invoke('import-otc-contracts', filePath),
