@@ -100,6 +100,17 @@ db.exec(`
     draft_pick INTEGER,
     drafted_by_team_id INTEGER
   );
+
+  CREATE TABLE IF NOT EXISTS depth_chart (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,
+    position_group TEXT NOT NULL,
+    slot INTEGER NOT NULL,
+    UNIQUE(team_id, player_id),
+    FOREIGN KEY (team_id) REFERENCES teams(id),
+    FOREIGN KEY (player_id) REFERENCES players(id)
+  );
 `);
 
 // ─── Player Column Migrations ─────────────────────────────────────────────────
@@ -144,6 +155,21 @@ if (!playerCols.find(c => c.name === 'roster_status')) {
   console.log('roster_status column added');
 }
 
+if (!playerCols.find(c => c.name === 'injury_status')) {
+  db.prepare("ALTER TABLE players ADD COLUMN injury_status TEXT DEFAULT 'healthy'").run();
+  console.log('Players: added injury_status column');
+}
+
+if (!playerCols.find(c => c.name === 'weeks_out')) {
+  db.prepare('ALTER TABLE players ADD COLUMN weeks_out INTEGER DEFAULT 0').run();
+  console.log('Players: added weeks_out column');
+}
+
+if (!playerCols.find(c => c.name === 'injury_type')) {
+  db.prepare('ALTER TABLE players ADD COLUMN injury_type TEXT').run();
+  console.log('Players: added injury_type column');
+}
+
 // ─── Contract Column Migrations ───────────────────────────────────────────────
 
 const contractCols = db.prepare("PRAGMA table_info(contracts)").all();
@@ -158,9 +184,6 @@ if (!contractCols.find(c => c.name === 'guaranteed_pct')) {
 }
 
 // ─── Roster Trimming ──────────────────────────────────────────────────────────
-// Ensures each team has at most 53 active + 16 practice squad players.
-// Extras are released to free agency. Runs once on startup if teams have
-// more than 53 active players (e.g. after initial data load).
 
 const ACTIVE_LIMIT = 53;
 const PS_LIMIT = 16;
@@ -197,19 +220,10 @@ if (oversizedTeams.length > 0) {
 
 // ─── Contract Generation ──────────────────────────────────────────────────────
 
-// Salary max values = elite-tier annual (M). X-Factor multiplier pushes tops to:
-//   QB X-Factor OVR99: ~$63M  |  WR X-Factor OVR99: ~$42M  |  DL X-Factor OVR99: ~$48M
 const SAL_RANGES = {
-  QB:  [1.0, 42],
-  WR:  [1.0, 28],
-  DL:  [1.0, 32],
-  LB:  [1.0, 18],
-  CB:  [1.0, 22],
-  TE:  [1.0, 16],
-  OL:  [1.0, 22],
-  S:   [1.0, 18],
-  RB:  [1.0, 16],
-  K:   [1.0,  4],
+  QB: [1.0, 42], WR: [1.0, 28], DL: [1.0, 32], LB: [1.0, 18],
+  CB: [1.0, 22], TE: [1.0, 16], OL: [1.0, 22], S: [1.0, 18],
+  RB: [1.0, 16], K:  [1.0, 4],
 };
 
 const TRAIT_PREMIUM   = { Normal: 1.0, Star: 1.15, Superstar: 1.3, 'X-Factor': 1.5 };
@@ -234,9 +248,6 @@ function generateContracts() {
   const gen = db.transaction(() => {
     for (const p of activePlayers) {
       const [minSal, maxSal] = SAL_RANGES[p.position] ?? [1.0, 15];
-
-      // Cubic OVR curve with 70-floor — keeps backups on near-minimum deals,
-      // pushes elite players toward realistic top-market salaries.
       const ovrFactor = Math.pow(Math.max(0, (p.overall_rating - 70)) / 29, 2.5);
       let salary = minSal + ovrFactor * (maxSal - minSal);
       salary *= (TRAIT_PREMIUM[p.dev_trait] ?? 1.0);
@@ -250,7 +261,6 @@ function generateContracts() {
         (Math.random() < 0.3 ? 2 : 1);
 
       const yearsRemaining = Math.floor(Math.random() * yearsTotal) + 1;
-
       const [gMin, gMax] = TRAIT_GUARANTEE[p.dev_trait] ?? [10, 35];
       const guaranteedPct = Math.round(gMin + Math.random() * (gMax - gMin));
       const guaranteedAmount = Math.round(salary * yearsTotal * (guaranteedPct / 100) * 10) / 10;
@@ -267,7 +277,6 @@ function generateContracts() {
   console.log(`Contracts: ${activePlayers.length} active + ${psPlayers.length} PS`);
 }
 
-// Run on startup only if contracts table is empty
 const contractCount = db.prepare('SELECT COUNT(*) as count FROM contracts').get().count;
 if (contractCount === 0) generateContracts();
 

@@ -80,7 +80,7 @@ contextBridge.exposeInMainWorld('api', {
   seedDevTraits: () =>
     ipcRenderer.invoke('seed-dev-traits'),
 
- // Contracts & Roster
+  // Contracts & Roster
   getTeamContracts: (teamId: number) =>
     ipcRenderer.invoke('get-team-contracts', teamId),
 
@@ -108,13 +108,13 @@ contextBridge.exposeInMainWorld('api', {
   importOtcContracts: (filePath?: string) =>
     ipcRenderer.invoke('import-otc-contracts', filePath),
 
-   getExpiringContracts: () =>
+  getExpiringContracts: () =>
     ipcRenderer.invoke('get-expiring-contracts'),
 
   resignPlayer: (payload: { playerId: number; years: number; salary: number }) =>
     ipcRenderer.invoke('resign-player', payload),
 
-   getOffseasonStatus: () =>
+  getOffseasonStatus: () =>
     ipcRenderer.invoke('get-offseason-status'),
 
   generateDraftClass: () =>
@@ -135,7 +135,8 @@ contextBridge.exposeInMainWorld('api', {
   completeDraft: () =>
     ipcRenderer.invoke('complete-draft'),
 
-    getDepthChart: (teamId: number) =>
+  // Depth Chart
+  getDepthChart: (teamId: number) =>
     ipcRenderer.invoke('get-depth-chart', teamId),
 
   setDepthChartOrder: (payload: { teamId: number; positionGroup: string; playerIds: number[] }) =>
@@ -143,5 +144,9 @@ contextBridge.exposeInMainWorld('api', {
 
   resetDepthChart: (teamId: number) =>
     ipcRenderer.invoke('reset-depth-chart', teamId),
+
+  // Injuries
+  getInjuryReport: (teamId: number) =>
+    ipcRenderer.invoke('get-injury-report', teamId),
 
 });

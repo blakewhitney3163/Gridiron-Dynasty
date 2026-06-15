@@ -106,7 +106,38 @@ function getPlayerAvailabilityPremium(player: { age: number; position: string; d
 function getTeamTradeProfile(teamId: number): {
   status: string; description: string; acceptanceThreshold: number;
   wins: number; losses: number; avgOverall: number;
-} {
+} 
+
+// ─── Injury Helpers ───────────────────────────────────────────────────────────
+
+const INJURY_TYPES = ['Hamstring', 'Ankle', 'Knee', 'Shoulder', 'Concussion', 'Rib', 'Back', 'Quad', 'Calf', 'Hand'];
+const POS_INJURY_RISK: Record<string, number> = {
+  QB: 0.025, RB: 0.055, WR: 0.035, TE: 0.035,
+  OL: 0.020, DL: 0.025, LB: 0.035, CB: 0.035, S: 0.025, K: 0.008,
+};
+
+function rollInjuries(playerStats: any[]) {
+  for (const stat of playerStats) {
+    const player = db.prepare('SELECT position, injury_status FROM players WHERE id = ?').get(stat.player_id) as any;
+    if (!player || player.injury_status !== 'healthy') continue;
+
+    const risk = POS_INJURY_RISK[player.position] ?? 0.03;
+    if (Math.random() > risk) continue;
+
+    const rand = Math.random();
+    let status: string, weeksOut: number;
+    if      (rand < 0.40) { status = 'questionable'; weeksOut = 1; }
+    else if (rand < 0.72) { status = 'out';          weeksOut = Math.floor(Math.random() * 2) + 2; }
+    else if (rand < 0.92) { status = 'out';          weeksOut = Math.floor(Math.random() * 3) + 3; }
+    else                  { status = 'ir';           weeksOut = Math.floor(Math.random() * 5) + 4; }
+
+    const injuryType = INJURY_TYPES[Math.floor(Math.random() * INJURY_TYPES.length)];
+    db.prepare("UPDATE players SET injury_status = ?, weeks_out = ?, injury_type = ? WHERE id = ?")
+      .run(status, weeksOut, injuryType, stat.player_id);
+  }
+}
+
+{
   const season = getCurrentSeason();
   const record = db.prepare(`
     SELECT
@@ -386,6 +417,8 @@ regressTraits();
   // Retire truly aging low-rated players
   db.prepare(`UPDATE players SET team_id = NULL, is_free_agent = 1 WHERE age >= 38 AND overall_rating < 72 AND is_free_agent = 0`).run();
 
+  // Clear all injuries at season start
+  db.prepare("UPDATE players SET injury_status = 'healthy', weeks_out = 0, injury_type = NULL").run();
   db.prepare("UPDATE settings SET value = ? WHERE key = 'current_season'").run(String(next));
   return { nextSeason: next };
 });
@@ -456,25 +489,53 @@ ipcMain.handle('get-week-matchups', (_event: any, week: number) => {
 
 ipcMain.handle('simulate-week', (_event: any, week: number) => {
   const season = getCurrentSeason();
-  const games = db.prepare(`SELECT id, home_team_id, away_team_id FROM games WHERE season = ? AND week = ? AND is_simulated = 0 AND is_playoff = 0`).all(season, week) as any[];
+  const games = db.prepare(`
+    SELECT id, home_team_id, away_team_id FROM games
+    WHERE season = ? AND week = ? AND is_simulated = 0 AND is_playoff = 0
+  `).all(season, week) as any[];
   if (games.length === 0) return { week, season, gamesSimulated: 0 };
+
+  // Heal players whose weeks_out reaches 0 before this week's games
+  db.prepare(`UPDATE players SET weeks_out = MAX(0, weeks_out - 1) WHERE weeks_out > 0`).run();
+  db.prepare(`UPDATE players SET injury_status = 'healthy', injury_type = NULL WHERE weeks_out = 0 AND injury_status != 'healthy'`).run();
 
   const updateGame = db.prepare('UPDATE games SET home_score = ?, away_score = ?, is_simulated = 1 WHERE id = ?');
   const insertStat = db.prepare(`
-    INSERT INTO stats (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds, interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds)
-    VALUES (@game_id, @player_id, @team_id, @pass_attempts, @completions, @pass_yards, @pass_tds, @interceptions, @rush_attempts, @rush_yards, @rush_tds, @targets, @receptions, @rec_yards, @rec_tds)
+    INSERT INTO stats (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
+      interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds)
+    VALUES (@game_id, @player_id, @team_id, @pass_attempts, @completions, @pass_yards, @pass_tds,
+      @interceptions, @rush_attempts, @rush_yards, @rush_tds, @targets, @receptions, @rec_yards, @rec_tds)
   `);
+
+  const allStats: any[] = [];
+
   const runWeek = db.transaction(() => {
     for (const game of games) {
       const result = simulateGame(game.home_team_id, game.away_team_id);
       updateGame.run(result.homeScore, result.awayScore, game.id);
       for (const stat of [...result.homePlayerStats, ...result.awayPlayerStats]) {
         insertStat.run({ game_id: game.id, ...stat });
+        allStats.push(stat);
       }
     }
   });
   runWeek();
+
+  // Roll injuries from this week's action
+  rollInjuries(allStats);
+
   return { week, season, gamesSimulated: games.length };
+});
+
+ipcMain.handle('get-injury-report', (_event: any, teamId: number) => {
+  return db.prepare(`
+    SELECT p.id, p.first_name, p.last_name, p.position, p.position_label,
+      p.overall_rating, p.age, p.dev_trait,
+      p.injury_status, p.weeks_out, p.injury_type
+    FROM players p
+    WHERE p.team_id = ? AND p.injury_status != 'healthy'
+    ORDER BY CASE p.injury_status WHEN 'ir' THEN 1 WHEN 'out' THEN 2 ELSE 3 END, p.overall_rating DESC
+  `).all(teamId);
 });
 
 ipcMain.handle('get-game-box-score', (_event: any, gameId: number) => {
