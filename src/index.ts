@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
-const db = require('./database');
+const { db, generateContracts } = require('./database');
 const { simulateGame } = require('./simulateGame');
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
@@ -403,8 +403,10 @@ ipcMain.handle('reset-dynasty', () => {
   db.prepare('DELETE FROM games').run();
   db.prepare('DELETE FROM champions').run();
   db.prepare('DELETE FROM contracts').run();
-  db.prepare("UPDATE players SET team_id = (SELECT team_id FROM players p2 WHERE p2.id = players.id), is_free_agent = 0").run();
+  db.prepare("UPDATE players SET is_free_agent = 0 WHERE is_free_agent = 1").run();
+  db.prepare("UPDATE players SET roster_status = 'active' WHERE roster_status = 'free_agent' AND team_id IS NOT NULL").run();
   db.prepare("UPDATE settings SET value = '2025' WHERE key = 'current_season'").run();
+  generateContracts();
   return { success: true };
 });
 
