@@ -121,14 +121,14 @@ function generatePlayerStats(teamId, score, offenseRating) {
   let remainingRecTDs    = passTDs;
 
   receivers.forEach((rec, i) => {
-    const baseShare  = recRatingWeights[i] / recWeightTotal;
-    const recYards   = clamp(randomNormal(passYardsGenerated * baseShare, 18), 0, 180);
+    const baseShare    = recRatingWeights[i] / recWeightTotal;
+    const recYards     = clamp(randomNormal(passYardsGenerated * baseShare, 18), 0, 180);
     const ratingFactor = rec.overall_rating / 75;
-    const targets    = clamp(randomNormal((9 * ratingFactor) - i * 0.8, 2), 1, 14);
-    const catchRate  = Math.min(0.82, Math.max(0.48, 0.55 + (rec.overall_rating - 70) * 0.004));
-    const recs       = clamp(targets * randomNormal(catchRate, 0.06), 0, targets);
-    const tdThreshold = 0.6 - (rec.overall_rating - 70) * 0.005;
-    const recTDs     = remainingRecTDs > 0 && Math.random() > tdThreshold ? 1 : 0;
+    const targets      = clamp(randomNormal((9 * ratingFactor) - i * 0.8, 2), 1, 14);
+    const catchRate    = Math.min(0.82, Math.max(0.48, 0.55 + (rec.overall_rating - 70) * 0.004));
+    const recs         = clamp(targets * randomNormal(catchRate, 0.06), 0, targets);
+    const tdThreshold  = 0.6 - (rec.overall_rating - 70) * 0.005;
+    const recTDs       = remainingRecTDs > 0 && Math.random() > tdThreshold ? 1 : 0;
     if (recTDs) remainingRecTDs--;
 
     stats.push({
@@ -162,16 +162,17 @@ function generateDefensiveStats(teamId, opponentQBInts, defenseRating) {
   const totalPDs     = clamp(randomNormal(7 * defFactor, 2.5), 1, 16);
   const totalINTs    = opponentQBInts;
 
-  // Per-player buckets
-  const pTackles: Record<number, number> = {};
-  const pAssists: Record<number, number> = {};
-  const pSacks:   Record<number, number> = {};
-  const pTFL:     Record<number, number> = {};
-  const pPDs:     Record<number, number> = {};
-  const pINTs:    Record<number, number> = {};
-  const pFFs:     Record<number, number> = {};
-  const pFRs:     Record<number, number> = {};
-  const pDTDs:    Record<number, number> = {};
+  // Per-player buckets (plain objects, no TS types)
+  const pTackles = {};
+  const pAssists = {};
+  const pSacks   = {};
+  const pTFL     = {};
+  const pPDs     = {};
+  const pINTs    = {};
+  const pFFs     = {};
+  const pFRs     = {};
+  const pDTDs    = {};
+
   allDef.forEach(p => {
     pTackles[p.id] = 0; pAssists[p.id] = 0; pSacks[p.id] = 0;
     pTFL[p.id] = 0; pPDs[p.id] = 0; pINTs[p.id] = 0;
@@ -196,7 +197,7 @@ function generateDefensiveStats(teamId, opponentQBInts, defenseRating) {
     });
   }
 
-  // Distribute sacks to DL/LB
+  // Sacks to DL/LB
   const passRushers = [...dls, ...lbs];
   let remSacks = totalSacks;
   passRushers.forEach(p => {
@@ -209,7 +210,7 @@ function generateDefensiveStats(teamId, opponentQBInts, defenseRating) {
     }
   });
 
-  // INTs go to DBs
+  // INTs to DBs
   let remINTs = totalINTs;
   for (const p of dbs) {
     if (remINTs <= 0) break;
@@ -229,7 +230,7 @@ function generateDefensiveStats(teamId, opponentQBInts, defenseRating) {
     remPDs -= pd;
   });
 
-  // Forced fumble / recovery — random defensive player
+  // Forced fumble / recovery
   if (Math.random() < 0.35 && allDef.length > 0) {
     pFFs[allDef[Math.floor(Math.random() * allDef.length)].id] = 1;
   }
@@ -241,11 +242,11 @@ function generateDefensiveStats(teamId, opponentQBInts, defenseRating) {
 
   // Build stat rows
   for (const p of allDef) {
-    const tackles = pTackles[p.id] ?? 0;
-    const sacks   = pSacks[p.id] ?? 0;
-    const ints    = pINTs[p.id] ?? 0;
-    const pds     = pPDs[p.id] ?? 0;
-    const ffs     = pFFs[p.id] ?? 0;
+    const tackles = pTackles[p.id] || 0;
+    const sacks   = pSacks[p.id] || 0;
+    const ints    = pINTs[p.id] || 0;
+    const pds     = pPDs[p.id] || 0;
+    const ffs     = pFFs[p.id] || 0;
     if (tackles === 0 && sacks === 0 && ints === 0 && pds === 0 && ffs === 0) continue;
 
     stats.push({
@@ -254,14 +255,14 @@ function generateDefensiveStats(teamId, opponentQBInts, defenseRating) {
       rush_attempts: 0, rush_yards: 0, rush_tds: 0,
       targets: 0, receptions: 0, rec_yards: 0, rec_tds: 0,
       tackles,
-      assisted_tackles: pAssists[p.id] ?? 0,
+      assisted_tackles: pAssists[p.id] || 0,
       sacks,
-      tfl:                pTFL[p.id] ?? 0,
-      forced_fumbles:     ffs,
-      fumble_recoveries:  pFRs[p.id] ?? 0,
-      def_interceptions:  ints,
-      pass_deflections:   pds,
-      def_tds:            pDTDs[p.id] ?? 0,
+      tfl:               pTFL[p.id] || 0,
+      forced_fumbles:    ffs,
+      fumble_recoveries: pFRs[p.id] || 0,
+      def_interceptions: ints,
+      pass_deflections:  pds,
+      def_tds:           pDTDs[p.id] || 0,
     });
   }
 
@@ -288,11 +289,9 @@ function simulateGame(homeTeamId, awayTeamId) {
   const homeOffStats = generatePlayerStats(homeTeamId, homeScore, homeRatings.offenseRating);
   const awayOffStats = generatePlayerStats(awayTeamId, awayScore, awayRatings.offenseRating);
 
-  // INTs thrown by each QB go to the opposing defense
   const homeQBInts = homeOffStats.find(s => s.pass_attempts > 0)?.interceptions ?? 0;
   const awayQBInts = awayOffStats.find(s => s.pass_attempts > 0)?.interceptions ?? 0;
 
-  // Home defense faces away offense; away defense faces home offense
   const homeDefStats = generateDefensiveStats(homeTeamId, awayQBInts, homeRatings.defenseRating);
   const awayDefStats = generateDefensiveStats(awayTeamId, homeQBInts, awayRatings.defenseRating);
 
