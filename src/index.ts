@@ -598,44 +598,85 @@ ipcMain.handle('sign-free-agent', (_event: any, { playerId, years, salary }: {
   return { success: true };
 });
 
-// ─── OTC Contract Import ──────────────────────────────────────────────────────
-// Usage from DevTools:
-//   window.api.importOtcContracts('/path/to/contracts-0.md')
-
 ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
   const fs         = require('fs');
   const pathModule = require('path');
-  const otcPath    = filePath ?? pathModule.join(process.cwd(), 'otc-contracts.md');
 
-  if (!fs.existsSync(otcPath)) {
-    return { success: false, reason: `File not found: ${otcPath}` };
+  // Auto-discover common filenames in project root
+  let otcPath = filePath;
+  if (!otcPath) {
+    const candidates = ['otc-contracts.html', 'otc-contracts.htm', 'otc-contracts.md', 'Contracts_Over_the_Cap.htm', 'Contracts_Over_the_Cap.html'];
+    for (const name of candidates) {
+      const p = pathModule.join(process.cwd(), name);
+      if (fs.existsSync(p)) { otcPath = p; break; }
+    }
+  }
+  if (!otcPath || !fs.existsSync(otcPath)) {
+    return { success: false, reason: 'OTC file not found. Pass the full path or place the file in the project root.' };
   }
 
-  const content: string = fs.readFileSync(otcPath, 'utf8');
+  const content: string  = fs.readFileSync(otcPath, 'utf8');
   const parseMoney = (s: string): number => parseFloat(s.replace(/[$,]/g, '')) || 0;
+  const isHtml = content.trimStart().startsWith('<!') || content.includes('<table') || content.includes('<tr');
 
   const rows: any[] = [];
-  for (const line of content.split('\n')) {
-    if (!line.startsWith('|') || line.includes('---') || line.includes('Player') || line.includes('Pos.')) continue;
-    const cols = line.split('|').map((c: string) => c.trim()).filter(Boolean);
-    if (cols.length < 7) continue;
-    const nameMatch = cols[0].match(/\[([^\]]+)\]/);
-    if (!nameMatch) continue;
-    const totalValue      = parseMoney(cols[3]);
-    const apy             = parseMoney(cols[4]);
-    const totalGuaranteed = parseMoney(cols[5]);
-    const pctGuaranteed   = parseFloat((cols[7] ?? '0').replace('%', '')) || 0;
-    if (apy <= 0) continue;
-    rows.push({
-      name:              nameMatch[1],
-      yearsRemaining:    Math.max(1, Math.round(totalValue / apy)),
-      apyMillions:       Math.round(apy / 100_000) / 10,
-      guaranteedMillions: Math.round(totalGuaranteed / 100_000) / 10,
-      pctGuaranteed,
-    });
+
+  if (isHtml) {
+    const stripTags = (s: string) =>
+      s.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
+
+    const trRegex = /<tr[\s\S]*?>([\s\S]*?)<\/tr>/gi;
+    let trMatch: RegExpExecArray | null;
+    while ((trMatch = trRegex.exec(content)) !== null) {
+      const cells: string[] = [];
+      const tdRegex = /<td[\s\S]*?>([\s\S]*?)<\/td>/gi;
+      let tdMatch: RegExpExecArray | null;
+      while ((tdMatch = tdRegex.exec(trMatch[1])) !== null) {
+        cells.push(stripTags(tdMatch[1]));
+      }
+      if (cells.length < 7) continue;
+      const name = cells[0];
+      if (!name || name === 'Player' || !name.match(/[A-Za-z]{2}/)) continue;
+      const totalValue      = parseMoney(cells[3]);
+      const apy             = parseMoney(cells[4]);
+      const totalGuaranteed = parseMoney(cells[5]);
+      const pctGuaranteed   = parseFloat((cells[7] ?? '0').replace('%', '')) || 0;
+      if (apy <= 0) continue;
+      rows.push({
+        name,
+        yearsRemaining:     Math.max(1, Math.round(totalValue / apy)),
+        apyMillions:        Math.round(apy / 100_000) / 10,
+        guaranteedMillions: Math.round(totalGuaranteed / 100_000) / 10,
+        pctGuaranteed,
+      });
+    }
+  } else {
+    // Markdown table format
+    for (const line of content.split('\n')) {
+      if (!line.startsWith('|') || line.includes('---') || line.includes('Player') || line.includes('Pos.')) continue;
+      const cols = line.split('|').map((c: string) => c.trim()).filter(Boolean);
+      if (cols.length < 7) continue;
+      const nameMatch = cols[0].match(/\[([^\]]+)\]/);
+      if (!nameMatch) continue;
+      const totalValue      = parseMoney(cols[3]);
+      const apy             = parseMoney(cols[4]);
+      const totalGuaranteed = parseMoney(cols[5]);
+      const pctGuaranteed   = parseFloat((cols[7] ?? '0').replace('%', '')) || 0;
+      if (apy <= 0) continue;
+      rows.push({
+        name:               nameMatch[1],
+        yearsRemaining:     Math.max(1, Math.round(totalValue / apy)),
+        apyMillions:        Math.round(apy / 100_000) / 10,
+        guaranteedMillions: Math.round(totalGuaranteed / 100_000) / 10,
+        pctGuaranteed,
+      });
+    }
   }
 
-  // Only update players on active rosters — keeps cap math clean
+  if (rows.length === 0) {
+    return { success: false, reason: `Parsed 0 rows from ${otcPath} — check file format.` };
+  }
+
   const updateContract = db.prepare(`
     UPDATE contracts
     SET years_remaining   = ?,
@@ -663,7 +704,7 @@ ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
     }
   });
   tx();
-  return { success: true, matched, skipped, total: rows.length };
+  return { success: true, matched, skipped, total: rows.length, file: otcPath };
 });
 
 // ─── Dev Trait Seeding ────────────────────────────────────────────────────────
