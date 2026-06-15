@@ -366,7 +366,36 @@ ipcMain.handle('get-stats', (_event: any, season?: number) => {
     FROM stats st JOIN players p ON st.player_id = p.id JOIN teams t ON st.team_id = t.id JOIN games g ON st.game_id = g.id
     WHERE g.season = ? AND g.is_simulated = 1 AND st.targets > 0 GROUP BY p.id ORDER BY rec_yards DESC LIMIT 15
   `).all(s);
-  return { passing, rushing, receiving };
+    const tackles = db.prepare(`
+    SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
+      p.overall_rating, p.age, p.position, p.dev_trait,
+      t.city || ' ' || t.name AS team_name,
+      SUM(st.tackles) AS tackles, SUM(st.assisted_tackles) AS assisted_tackles,
+      SUM(st.sacks) AS sacks, SUM(st.tfl) AS tfl,
+      SUM(st.forced_fumbles) AS forced_fumbles
+    FROM stats st JOIN players p ON st.player_id = p.id JOIN teams t ON st.team_id = t.id JOIN games g ON st.game_id = g.id
+    WHERE g.season = ? AND g.is_simulated = 1 AND st.tackles > 0 GROUP BY p.id ORDER BY tackles DESC LIMIT 15
+  `).all(s);
+  const sacks = db.prepare(`
+    SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
+      p.overall_rating, p.age, p.position, p.dev_trait,
+      t.city || ' ' || t.name AS team_name,
+      SUM(st.sacks) AS sacks, SUM(st.tfl) AS tfl,
+      SUM(st.forced_fumbles) AS forced_fumbles, SUM(st.tackles) AS tackles
+    FROM stats st JOIN players p ON st.player_id = p.id JOIN teams t ON st.team_id = t.id JOIN games g ON st.game_id = g.id
+    WHERE g.season = ? AND g.is_simulated = 1 AND st.sacks > 0 GROUP BY p.id ORDER BY sacks DESC LIMIT 15
+  `).all(s);
+  const defInterceptions = db.prepare(`
+    SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
+      p.overall_rating, p.age, p.position, p.dev_trait,
+      t.city || ' ' || t.name AS team_name,
+      SUM(st.def_interceptions) AS def_interceptions,
+      SUM(st.pass_deflections) AS pass_deflections,
+      SUM(st.def_tds) AS def_tds, SUM(st.tackles) AS tackles
+    FROM stats st JOIN players p ON st.player_id = p.id JOIN teams t ON st.team_id = t.id JOIN games g ON st.game_id = g.id
+    WHERE g.season = ? AND g.is_simulated = 1 AND (st.def_interceptions > 0 OR st.pass_deflections > 0) GROUP BY p.id ORDER BY def_interceptions DESC, pass_deflections DESC LIMIT 15
+  `).all(s);
+  return { passing, rushing, receiving, tackles, sacks, defInterceptions };
 });
 
 ipcMain.handle('simulate-playoffs', (_event: any, season?: number) => {
@@ -613,9 +642,13 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
   const updateGame = db.prepare('UPDATE games SET home_score = ?, away_score = ?, is_simulated = 1 WHERE id = ?');
   const insertStat = db.prepare(`
     INSERT INTO stats (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
-      interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds)
+      interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds,
+      tackles, assisted_tackles, sacks, tfl, forced_fumbles, fumble_recoveries,
+      def_interceptions, pass_deflections, def_tds)
     VALUES (@game_id, @player_id, @team_id, @pass_attempts, @completions, @pass_yards, @pass_tds,
-      @interceptions, @rush_attempts, @rush_yards, @rush_tds, @targets, @receptions, @rec_yards, @rec_tds)
+      @interceptions, @rush_attempts, @rush_yards, @rush_tds, @targets, @receptions, @rec_yards, @rec_tds,
+      @tackles, @assisted_tackles, @sacks, @tfl, @forced_fumbles, @fumble_recoveries,
+      @def_interceptions, @pass_deflections, @def_tds)
   `);
 
   const allStats: any[] = [];

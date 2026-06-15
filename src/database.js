@@ -170,6 +170,27 @@ if (!playerCols.find(c => c.name === 'injury_type')) {
   console.log('Players: added injury_type column');
 }
 
+// ─── Stat Column Migrations ───────────────────────────────────────────────────
+
+const statCols = db.prepare("PRAGMA table_info(stats)").all();
+const statMigrations = [
+  ['tackles',           'INTEGER DEFAULT 0'],
+  ['assisted_tackles',  'INTEGER DEFAULT 0'],
+  ['sacks',             'REAL DEFAULT 0'],
+  ['tfl',               'INTEGER DEFAULT 0'],
+  ['forced_fumbles',    'INTEGER DEFAULT 0'],
+  ['fumble_recoveries', 'INTEGER DEFAULT 0'],
+  ['def_interceptions', 'INTEGER DEFAULT 0'],
+  ['pass_deflections',  'INTEGER DEFAULT 0'],
+  ['def_tds',           'INTEGER DEFAULT 0'],
+];
+for (const [col, type] of statMigrations) {
+  if (!statCols.find(c => c.name === col)) {
+    db.prepare(`ALTER TABLE stats ADD COLUMN ${col} ${type}`).run();
+    console.log(`Stats: added ${col} column`);
+  }
+}
+
 // ─── Contract Column Migrations ───────────────────────────────────────────────
 
 const contractCols = db.prepare("PRAGMA table_info(contracts)").all();
