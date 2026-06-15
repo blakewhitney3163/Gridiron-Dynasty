@@ -165,6 +165,8 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
   const [playerDecisions, setPlayerDecisions] = useState<Record<number, Decision>>({});
   const [working,         setWorking]         = useState(false);
   const [toast,           setToast]           = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [rosterSearch,    setRosterSearch]    = useState('');
+  const [faSearch,        setFaSearch]        = useState('');
 
   useEffect(() => { loadData(); }, [userTeam.id]);
 
@@ -307,6 +309,11 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
 
   const filtered = contracts
     .filter(c => posFilter === 'ALL' || c.position === posFilter)
+    .filter(c => {
+      if (!rosterSearch.trim()) return true;
+      const q = rosterSearch.toLowerCase();
+      return `${c.first_name} ${c.last_name}`.toLowerCase().includes(q);
+    })
     .sort((a, b) => {
       if (sortBy === 'salary') return b.annual_salary - a.annual_salary;
       if (sortBy === 'years')  return a.years_remaining - b.years_remaining;
@@ -317,6 +324,11 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
 
   const filteredFa = freeAgents
     .filter(f => faPos === 'ALL' || f.position === faPos)
+    .filter(f => {
+      if (!faSearch.trim()) return true;
+      const q = faSearch.toLowerCase();
+      return `${f.first_name} ${f.last_name}`.toLowerCase().includes(q);
+    })
     .sort((a, b) => {
       if (faSortBy === 'age')   return a.age - b.age;
       if (faSortBy === 'value') return fairMarketValue(b.position, b.overall_rating, b.dev_trait) - fairMarketValue(a.position, a.overall_rating, a.dev_trait);
@@ -448,6 +460,16 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
               <option value="ovr">Sort: OVR</option>
               <option value="age">Sort: Age</option>
             </select>
+            <input
+              type="text"
+              placeholder="Search player…"
+              value={rosterSearch}
+              onChange={e => setRosterSearch(e.target.value)}
+              style={{
+                background: '#161616', border: '1px solid #2a2a2a', borderRadius: 5,
+                color: '#ccc', padding: '4px 10px', fontSize: 12, width: 160,
+              }}
+            />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 100px 90px 160px 100px 120px', gap: 8, padding: '6px 12px', fontSize: 10, color: '#333', letterSpacing: 1, borderBottom: '1px solid #1a1a1a', marginBottom: 4 }}>
@@ -641,6 +663,16 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
               <option value="value">Sort: Market Value</option>
               <option value="age">Sort: Age</option>
             </select>
+            <input
+              type="text"
+              placeholder="Search player…"
+              value={faSearch}
+              onChange={e => setFaSearch(e.target.value)}
+              style={{
+                background: '#161616', border: '1px solid #2a2a2a', borderRadius: 5,
+                color: '#ccc', padding: '4px 10px', fontSize: 12, width: 160,
+              }}
+            />
           </div>
 
           {rosterSpots && cap && (
