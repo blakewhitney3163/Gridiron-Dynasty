@@ -39,6 +39,7 @@ export default function App() {
   const [currentSeason,    setCurrentSeason]    = useState<number>(2025);
   const [userTeam,         setUserTeam]         = useState<UserTeam | null | undefined>(undefined);
   const [playoffsComplete, setPlayoffsComplete] = useState(false);
+  const [playoffData,      setPlayoffData]      = useState<any>(null);
 
   useEffect(() => {
     Promise.all([
@@ -55,6 +56,7 @@ export default function App() {
   const handleSeasonAdvance = (nextSeason: number) => {
     setCurrentSeason(nextSeason);
     setPlayoffsComplete(false);
+    setPlayoffData(null);
     setActiveTab('home');
   };
 
@@ -122,10 +124,16 @@ export default function App() {
           />
         )}
         {activeTab === 'standings' && <Standings currentSeason={currentSeason} />}
-        {activeTab === 'teams'     && <Teams currentSeason={currentSeason} />}
+        {activeTab === 'teams'     && <Teams />}
         {activeTab === 'schedule'  && <Schedule currentSeason={currentSeason} />}
         {activeTab === 'stats'     && <Stats currentSeason={currentSeason} />}
-        {activeTab === 'playoffs'  && <Playoffs currentSeason={currentSeason} />}
+        {activeTab === 'playoffs'  && (
+          <Playoffs
+            currentSeason={currentSeason}
+            data={playoffData}
+            setData={setPlayoffData}
+          />
+        )}
         {activeTab === 'trades'    && <Trades userTeam={userTeam} />}
         {activeTab === 'franchise' && <Franchise userTeam={userTeam} currentSeason={currentSeason} />}
         {activeTab === 'draft'     && (
