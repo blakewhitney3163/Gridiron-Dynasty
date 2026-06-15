@@ -1,4 +1,4 @@
-const db = require('./database');
+const { db } = require('./database');
 const fs = require('fs');
 const path = require('path');
 
@@ -33,11 +33,12 @@ function splitName(fullname) {
   return { first, last };
 }
 
-function importFromMadden() {
-  const csvPath = path.join(process.cwd(), 'madden-ratings.csv');
+function importFromMadden(csvPath) {
+  if (!csvPath) csvPath = path.join(process.cwd(), 'src', 'madden-ratings.csv');
+
   if (!fs.existsSync(csvPath)) {
-    console.error('madden-ratings.csv not found in project root');
-    process.exit(1);
+    console.error('madden-ratings.csv not found at:', csvPath);
+    return { imported: 0, error: 'CSV not found' };
   }
 
   console.log('Reading Madden ratings CSV...');
@@ -48,9 +49,8 @@ function importFromMadden() {
   const teamMap = {};
   for (const t of teams) teamMap[t.abbreviation] = t.id;
 
-  db.prepare('DELETE FROM stats').run();
   db.prepare('DELETE FROM players').run();
-  console.log('Cleared existing players and stats');
+  console.log('Cleared existing players');
 
   const insert = db.prepare(`
     INSERT INTO players (team_id, first_name, last_name, position, position_label, age, overall_rating, speed, strength, awareness)
@@ -74,7 +74,7 @@ function importFromMadden() {
       insert.run(
         teamId, first, last,
         position,
-        p.position,   // real Madden position label (LE, RE, MLB, HB, etc.)
+        p.position,
         parseInt(p.age) || 25,
         parseInt(p.overallrating) || 70,
         parseInt(p.speed) || 70,
@@ -87,16 +87,34 @@ function importFromMadden() {
 
   runImport();
 
-  console.log(`\nImported: ${imported} players`);
-  console.log(`Skipped:  ${skipped} (punters, long snappers, unknown teams)`);
+  // Assign dev traits to freshly imported players
+  const allPlayers = db.prepare('SELECT id, overall_rating FROM players').all();
+  const assignTrait = db.prepare("UPDATE players SET dev_trait = ? WHERE id = ?");
+  const assignTraits = db.transaction(() => {
+    for (const player of allPlayers) {
+      const ovr = player.overall_rating;
+      const rand = Math.random();
+      let trait;
+      if (ovr >= 90) {
+        trait = rand < 0.40 ? 'X-Factor' : rand < 0.80 ? 'Superstar' : rand < 0.98 ? 'Star' : 'Normal';
+      } else if (ovr >= 80) {
+        trait = rand < 0.05 ? 'X-Factor' : rand < 0.30 ? 'Superstar' : rand < 0.75 ? 'Star' : 'Normal';
+      } else if (ovr >= 70) {
+        trait = rand < 0.01 ? 'X-Factor' : rand < 0.09 ? 'Superstar' : rand < 0.44 ? 'Star' : 'Normal';
+      } else {
+        trait = rand < 0.002 ? 'X-Factor' : rand < 0.022 ? 'Superstar' : rand < 0.202 ? 'Star' : 'Normal';
+      }
+      assignTrait.run(trait, player.id);
+    }
+  });
+  assignTraits();
 
-  const breakdown = db.prepare(`
-    SELECT position_label, COUNT(*) as count
-    FROM players GROUP BY position_label ORDER BY count DESC
-  `).all();
-
-  console.log('\nPlayers by position:');
-  for (const row of breakdown) console.log(`  ${row.position_label}: ${row.count}`);
+  console.log(`Imported: ${imported} players, dev traits assigned`);
+  return { imported };
 }
 
-importFromMadden();
+if (require.main === module) {
+  importFromMadden();
+}
+
+module.exports = { importFromMadden };

@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 const { db, generateContracts } = require('./database');
+const { importFromMadden } = require('./importfromMadden');
 const { simulateGame } = require('./simulateGame');
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
@@ -631,12 +632,15 @@ ipcMain.handle('get-game-box-score', (_event: any, gameId: number) => {
 });
 
 ipcMain.handle('reset-dynasty', () => {
+  const pathModule = require('path');
+  const csvPath = pathModule.join(app.getAppPath(), 'src', 'madden-ratings.csv');
   db.prepare('DELETE FROM stats').run();
   db.prepare('DELETE FROM games').run();
   db.prepare('DELETE FROM champions').run();
   db.prepare('DELETE FROM contracts').run();
-  db.prepare("UPDATE players SET is_free_agent = 0 WHERE is_free_agent = 1").run();
-  db.prepare("UPDATE players SET roster_status = 'active' WHERE roster_status = 'free_agent' AND team_id IS NOT NULL").run();
+  db.prepare('DELETE FROM depth_chart').run();
+  db.prepare('DELETE FROM draft_prospects').run();
+  importFromMadden(csvPath);
   db.prepare("UPDATE settings SET value = '2025' WHERE key = 'current_season'").run();
   generateContracts();
   balanceRosters();
