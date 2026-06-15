@@ -222,7 +222,7 @@ if (contractCount === 0) {
     for (const p of activePlayers) {
       const [minS, maxS] = SAL[p.position] ?? [0.9, 15];
       // Quadratic OVR curve: only elite OVRs earn elite money
-      const ovrF = Math.pow(Math.max(0, (p.overall_rating - 50)) / 49, 2);
+      const ovrF = Math.pow(Math.max(0, (p.overall_rating - 70)) / 29, 2.5);
       let salary = minS + ovrF * (maxS - minS);
       salary *= (TRAIT_MUL[p.dev_trait] ?? 1.0);
       salary = Math.round(salary * 10) / 10;
