@@ -1,4 +1,4 @@
-const db = require('./database');
+const { db } = require('./database');
 
 function randomNormal(mean, stdDev) {
     let u1 = Math.random();
