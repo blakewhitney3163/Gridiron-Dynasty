@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 
 declare const window: any;
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface Team {
   id: number;
   city: string;
@@ -16,76 +18,341 @@ interface Props {
   currentSeason: number;
 }
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DIVISION_ORDER = [
+  'AFC East', 'AFC North', 'AFC South', 'AFC West',
+  'NFC East', 'NFC North', 'NFC South', 'NFC West',
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function pct(w: number, l: number): string {
+  const g = w + l;
+  return g === 0 ? '.000' : (w / g).toFixed(3);
+}
+
+function gb(leaderW: number, leaderL: number, w: number, l: number): string {
+  const diff = (leaderW - w + l - leaderL) / 2;
+  return diff === 0 ? '—' : diff.toFixed(1);
+}
+
+function getPlayoffSeeds(teams: Team[], conf: string): Team[] {
+  const confTeams = teams.filter(t => t.conference === conf);
+  const divs = [...new Set(confTeams.map(t => t.division))];
+
+  const divWinners: Team[] = divs.map(div => {
+    const divTeams = confTeams.filter(t => t.division === div)
+      .sort((a, b) => b.wins - a.wins || a.losses - b.losses);
+    return divTeams[0];
+  }).filter(Boolean).sort((a, b) => b.wins - a.wins || a.losses - b.losses);
+
+  const divWinnerIds = new Set(divWinners.map(t => t.id));
+  const wildcards = confTeams
+    .filter(t => !divWinnerIds.has(t.id))
+    .sort((a, b) => b.wins - a.wins || a.losses - b.losses)
+    .slice(0, 3);
+
+  return [...divWinners, ...wildcards];
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function DivisionBlock({
+  division,
+  teams,
+  userTeamId,
+  playoffIds,
+}: {
+  division: string;
+  teams: Team[];
+  userTeamId?: number;
+  playoffIds: Set<number>;
+}) {
+  const sorted = [...teams].sort((a, b) => b.wins - a.wins || a.losses - b.losses);
+  const leader = sorted[0];
+
+  return (
+    <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 6, overflow: 'hidden', marginBottom: 12 }}>
+      <div style={{ padding: '8px 14px', background: '#0d0d0d', borderBottom: '1px solid #1a1a1a' }}>
+        <span style={{ fontSize: 10, color: '#444', letterSpacing: 2 }}>{division.toUpperCase()}</span>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ fontSize: 9, color: '#333', textAlign: 'right', letterSpacing: 1 }}>
+            <th style={{ padding: '6px 14px', textAlign: 'left', fontWeight: 'normal' }}>TEAM</th>
+            <th style={{ padding: '6px 10px', fontWeight: 'normal' }}>W</th>
+            <th style={{ padding: '6px 10px', fontWeight: 'normal' }}>L</th>
+            <th style={{ padding: '6px 10px', fontWeight: 'normal' }}>PCT</th>
+            <th style={{ padding: '6px 14px', fontWeight: 'normal' }}>GB</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((team, i) => {
+            const isUser    = team.id === userTeamId;
+            const inPlayoffs = playoffIds.has(team.id);
+            const isLeader  = i === 0;
+            return (
+              <tr key={team.id} style={{
+                borderTop: '1px solid #141414',
+                background: isUser ? '#0f1a0f' : 'transparent',
+              }}>
+                <td style={{ padding: '8px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {inPlayoffs && (
+                      <span style={{
+                        fontSize: 8, color: isLeader ? '#FF8740' : '#4FC3F7',
+                        border: `1px solid ${isLeader ? '#FF8740' : '#4FC3F7'}`,
+                        borderRadius: 2, padding: '0px 3px', minWidth: 14, textAlign: 'center',
+                      }}>
+                        {isLeader ? 'DIV' : 'WC'}
+                      </span>
+                    )}
+                    <span style={{
+                      fontSize: 12,
+                      color: isUser ? '#4caf50' : isLeader ? '#fff' : '#888',
+                      fontWeight: isLeader ? 'bold' : 'normal',
+                    }}>
+                      {team.city} {team.name}
+                      {isUser && <span style={{ fontSize: 9, color: '#4caf50', marginLeft: 6 }}>◆</span>}
+                    </span>
+                  </div>
+                </td>
+                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#4FC3F7', fontWeight: 'bold', fontSize: 12 }}>{team.wins}</td>
+                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#555', fontSize: 12 }}>{team.losses}</td>
+                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#444', fontSize: 11 }}>{pct(team.wins, team.losses)}</td>
+                <td style={{ padding: '8px 14px', textAlign: 'right', color: '#333', fontSize: 11 }}>
+                  {gb(leader.wins, leader.losses, team.wins, team.losses)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PlayoffSeedPanel({ seeds, conf }: { seeds: Team[]; conf: string }) {
+  return (
+    <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 6, overflow: 'hidden', marginBottom: 16 }}>
+      <div style={{ padding: '8px 14px', background: '#0d0d0d', borderBottom: '1px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 10, color: '#444', letterSpacing: 2 }}>{conf} PLAYOFF PICTURE</span>
+        <span style={{ fontSize: 9, color: '#2a2a2a' }}>TOP 7</span>
+      </div>
+      {seeds.map((team, i) => {
+        const isDivWinner = i < 4;
+        const hasBye      = i === 0;
+        return (
+          <div key={team.id} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '7px 14px', borderTop: i === 4 ? '1px dashed #1e1e1e' : '1px solid #141414',
+            background: hasBye ? '#0f1a0a' : 'transparent',
+          }}>
+            <span style={{
+              fontSize: 11, fontWeight: 'bold', width: 18, textAlign: 'center',
+              color: isDivWinner ? '#FF8740' : '#4FC3F7',
+            }}>{i + 1}</span>
+            <span style={{ flex: 1, fontSize: 11, color: '#888' }}>
+              {team.city} {team.name}
+            </span>
+            <span style={{ fontSize: 11, color: '#555' }}>{team.wins}-{team.losses}</span>
+            {hasBye && <span style={{ fontSize: 8, color: '#4caf50', letterSpacing: 1 }}>BYE</span>}
+            {i === 3 && !hasBye && <span style={{ fontSize: 8, color: '#333', letterSpacing: 1 }}>DIV</span>}
+          </div>
+        );
+      })}
+      {seeds.length === 0 && (
+        <div style={{ padding: '12px 14px', fontSize: 11, color: '#333' }}>Simulate games to see seedings</div>
+      )}
+    </div>
+  );
+}
+
+// ─── Standings ────────────────────────────────────────────────────────────────
+
 export default function Standings({ currentSeason }: Props) {
-  const [standings, setStandings] = useState<Team[]>([]);
-  const [viewSeason, setViewSeason] = useState<number>(currentSeason);
+  const [standings,        setStandings]        = useState<Team[]>([]);
+  const [viewSeason,       setViewSeason]       = useState<number>(currentSeason);
   const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
+  const [userTeamId,       setUserTeamId]       = useState<number | undefined>();
+  const [view,             setView]             = useState<'division' | 'conference'>('division');
 
   useEffect(() => {
     window.api.getSeasons().then((seasons: number[]) => setAvailableSeasons(seasons));
+    window.api.getUserTeam().then((t: any) => { if (t) setUserTeamId(t.id); });
   }, []);
 
-  useEffect(() => {
-    setViewSeason(currentSeason);
-  }, [currentSeason]);
+  useEffect(() => { setViewSeason(currentSeason); }, [currentSeason]);
 
   useEffect(() => {
-    window.api.getStandings(viewSeason).then((data: Team[]) => {
-      setStandings(data.sort((a, b) => b.wins - a.wins));
-    });
+    window.api.getStandings(viewSeason).then((data: Team[]) => setStandings(data));
   }, [viewSeason]);
 
-  const conferences = ['AFC', 'NFC'];
+  const afcSeeds = getPlayoffSeeds(standings, 'AFC');
+  const nfcSeeds = getPlayoffSeeds(standings, 'NFC');
+  const playoffIds = new Set([...afcSeeds, ...nfcSeeds].map(t => t.id));
+
+  const divisionsByConf = (conf: string) =>
+    DIVISION_ORDER.filter(d => d.startsWith(conf));
 
   return (
-    <div style={{ padding: '24px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <h2 style={{ color: '#4FC3F7', margin: 0 }}>{viewSeason} Standings</h2>
-        {availableSeasons.length > 1 && (
-          <select
-            value={viewSeason}
-            onChange={e => setViewSeason(Number(e.target.value))}
-            style={{
-              background: '#0f0f23', color: '#4FC3F7', border: '1px solid #333',
-              borderRadius: '4px', padding: '6px 12px', fontSize: '13px', cursor: 'pointer',
-            }}
-          >
-            {availableSeasons.map(s => (
-              <option key={s} value={s}>{s} Season</option>
+    <div style={{ padding: '24px 32px', fontFamily: 'monospace', color: '#ccc', background: '#0d0d0d', minHeight: '100vh' }}>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ fontSize: 20, fontWeight: 'bold', color: '#fff' }}>{viewSeason} Standings</div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {/* View toggle */}
+          <div style={{ display: 'flex', background: '#111', border: '1px solid #1a1a1a', borderRadius: 4, overflow: 'hidden' }}>
+            {(['division', 'conference'] as const).map(v => (
+              <button key={v} onClick={() => setView(v)} style={{
+                padding: '5px 14px', background: view === v ? '#1a2a1a' : 'transparent',
+                border: 'none', color: view === v ? '#4caf50' : '#444',
+                cursor: 'pointer', fontSize: 11, fontFamily: 'monospace',
+                fontWeight: view === v ? 'bold' : 'normal',
+              }}>
+                {v === 'division' ? 'By Division' : 'By Conference'}
+              </button>
             ))}
-          </select>
-        )}
+          </div>
+          {availableSeasons.length > 1 && (
+            <select
+              value={viewSeason}
+              onChange={e => setViewSeason(Number(e.target.value))}
+              style={{
+                background: '#111', color: '#ccc', border: '1px solid #1a1a1a',
+                borderRadius: 4, padding: '5px 12px', fontSize: 11,
+                cursor: 'pointer', fontFamily: 'monospace',
+              }}
+            >
+              {availableSeasons.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
 
-      {conferences.map(conf => (
-        <div key={conf} style={{ marginBottom: '24px' }}>
-          <h3 style={{ color: '#FF8740', marginBottom: '10px', fontSize: '13px', letterSpacing: '1px' }}>{conf}</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ color: '#aaa', textAlign: 'left', borderBottom: '1px solid #333', fontSize: '12px' }}>
-                <th style={{ padding: '8px' }}>Team</th>
-                <th style={{ padding: '8px' }}>W</th>
-                <th style={{ padding: '8px' }}>L</th>
-                <th style={{ padding: '8px' }}>PCT</th>
-              </tr>
-            </thead>
-            <tbody>
-              {standings
-                .filter(t => t.conference === conf)
-                .map((team, i) => (
-                  <tr key={team.id} style={{ borderBottom: '1px solid #1a1a1a' }}>
-                    <td style={{ padding: '8px', color: i === 0 ? '#fff' : '#ccc' }}>{team.city} {team.name}</td>
-                    <td style={{ padding: '8px', color: '#4FC3F7', fontWeight: 'bold' }}>{team.wins}</td>
-                    <td style={{ padding: '8px', color: '#aaa' }}>{team.losses}</td>
-                    <td style={{ padding: '8px', color: '#aaa' }}>
-                      {((team.wins / (team.wins + team.losses)) || 0).toFixed(3)}
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
+      {view === 'division' ? (
+        /* ── Division View ── */
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 280px', gap: 24 }}>
+          {/* AFC */}
+          <div>
+            <div style={{ fontSize: 10, color: '#FF8740', letterSpacing: 2, marginBottom: 12 }}>AFC</div>
+            {divisionsByConf('AFC').map(div => {
+              const divTeams = standings.filter(t => t.division === div);
+              if (divTeams.length === 0) return null;
+              return (
+                <DivisionBlock
+                  key={div}
+                  division={div}
+                  teams={divTeams}
+                  userTeamId={userTeamId}
+                  playoffIds={playoffIds}
+                />
+              );
+            })}
+          </div>
+
+          {/* NFC */}
+          <div>
+            <div style={{ fontSize: 10, color: '#4FC3F7', letterSpacing: 2, marginBottom: 12 }}>NFC</div>
+            {divisionsByConf('NFC').map(div => {
+              const divTeams = standings.filter(t => t.division === div);
+              if (divTeams.length === 0) return null;
+              return (
+                <DivisionBlock
+                  key={div}
+                  division={div}
+                  teams={divTeams}
+                  userTeamId={userTeamId}
+                  playoffIds={playoffIds}
+                />
+              );
+            })}
+          </div>
+
+          {/* Playoff Picture sidebar */}
+          <div>
+            <div style={{ fontSize: 10, color: '#444', letterSpacing: 2, marginBottom: 12 }}>PLAYOFF PICTURE</div>
+            <PlayoffSeedPanel seeds={afcSeeds} conf="AFC" />
+            <PlayoffSeedPanel seeds={nfcSeeds} conf="NFC" />
+            <div style={{ fontSize: 9, color: '#2a2a2a', lineHeight: 1.6 }}>
+              <div>🟠 Division winner seed 1–4</div>
+              <div>🔵 Wildcard seed 5–7</div>
+              <div style={{ color: '#1a3a1a' }}>● Seed 1 receives first-round bye</div>
+            </div>
+          </div>
         </div>
-      ))}
+      ) : (
+        /* ── Conference View ── */
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+          {['AFC', 'NFC'].map(conf => {
+            const confTeams = standings
+              .filter(t => t.conference === conf)
+              .sort((a, b) => b.wins - a.wins || a.losses - b.losses);
+            return (
+              <div key={conf}>
+                <div style={{ fontSize: 10, color: conf === 'AFC' ? '#FF8740' : '#4FC3F7', letterSpacing: 2, marginBottom: 12 }}>{conf}</div>
+                <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 6, overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ fontSize: 9, color: '#333', textAlign: 'right', letterSpacing: 1, borderBottom: '1px solid #1a1a1a' }}>
+                        <th style={{ padding: '6px 14px', textAlign: 'left', fontWeight: 'normal' }}>TEAM</th>
+                        <th style={{ padding: '6px 10px', fontWeight: 'normal' }}>W</th>
+                        <th style={{ padding: '6px 10px', fontWeight: 'normal' }}>L</th>
+                        <th style={{ padding: '6px 10px', fontWeight: 'normal' }}>PCT</th>
+                        <th style={{ padding: '6px 14px', fontWeight: 'normal', textAlign: 'left' }}>DIV</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {confTeams.map((team, i) => {
+                        const seed = [...afcSeeds, ...nfcSeeds].find(s => s.id === team.id);
+                        const seedNum = seed
+                          ? (conf === 'AFC' ? afcSeeds : nfcSeeds).findIndex(s => s.id === team.id) + 1
+                          : null;
+                        const isDivWinner = seedNum !== null && seedNum <= 4;
+                        return (
+                          <tr key={team.id} style={{
+                            borderTop: '1px solid #141414',
+                            background: team.id === userTeamId ? '#0f1a0f' : i === 6 ? '#0a0a0a' : 'transparent',
+                          }}>
+                            <td style={{ padding: '8px 14px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {seedNum && (
+                                  <span style={{
+                                    fontSize: 9, color: isDivWinner ? '#FF8740' : '#4FC3F7',
+                                    width: 14, textAlign: 'center',
+                                  }}>{seedNum}</span>
+                                )}
+                                <span style={{
+                                  fontSize: 12, color: team.id === userTeamId ? '#4caf50' : i < 7 ? '#ccc' : '#444',
+                                }}>
+                                  {team.city} {team.name}
+                                  {team.id === userTeamId && <span style={{ fontSize: 9, color: '#4caf50', marginLeft: 6 }}>◆</span>}
+                                </span>
+                              </div>
+                            </td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', color: '#4FC3F7', fontWeight: 'bold', fontSize: 12 }}>{team.wins}</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', color: '#555', fontSize: 12 }}>{team.losses}</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', color: '#444', fontSize: 11 }}>{pct(team.wins, team.losses)}</td>
+                            <td style={{ padding: '8px 14px', textAlign: 'left', fontSize: 10, color: '#333' }}>{team.division.replace(conf + ' ', '')}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {/* Playoff cutline */}
+                  <div style={{ padding: '4px 14px', borderTop: '1px dashed #1e1e1e', fontSize: 9, color: '#2a2a2a' }}>
+                    — playoff cutline —
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
