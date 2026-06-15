@@ -617,12 +617,83 @@ ipcMain.handle('sign-free-agent', (_event: any, { playerId, years, salary }: {
   const spots = (db.prepare("SELECT COUNT(*) as count FROM players WHERE team_id = ? AND roster_status = 'active'").get(teamId) as any).count;
   if (spots >= 53) return { success: false, reason: 'Active roster is full (53/53). Release a player first.' };
 
-  const guaranteedPct    = Math.round(30 + Math.random() * 30);
+  const player = db.prepare('SELECT id, overall_rating, age, position, dev_trait FROM players WHERE id = ?').get(playerId) as any;
+  if (!player) return { success: false, reason: 'Player not found.' };
+
+  // ── Fair market value (mirrors Franchise.tsx fairMarketValue) ──────────────
+  const marketRates: Record<string, [number, number][]> = {
+    QB: [[99,65],[93,50],[88,35],[83,20],[78,10],[73,4],[70,1.5]],
+    WR: [[99,45],[93,35],[88,25],[83,16],[78,8],[73,3],[70,1.5]],
+    DL: [[99,38],[93,30],[88,22],[83,14],[78,7],[73,3],[70,1.5]],
+    CB: [[99,32],[93,25],[88,18],[83,11],[78,5],[73,2.5],[70,1.5]],
+    OL: [[99,36],[93,30],[88,24],[83,18],[78,9],[73,3],[70,1.5]],
+    LB: [[99,26],[93,20],[88,15],[83,9],[78,4.5],[73,2],[70,1.5]],
+    TE: [[99,24],[93,19],[88,14],[83,8],[78,4],[73,2],[70,1.5]],
+    S:  [[99,22],[93,17],[88,12],[83,7],[78,3.5],[73,1.8],[70,1.5]],
+    RB: [[99,18],[93,14],[88,10],[83,6],[78,3],[73,1.5],[70,1.2]],
+    K:  [[99,8],[93,6],[88,5],[83,4],[78,3],[73,2],[70,1]],
+  };
+  const traitMul: Record<string, number> = { Normal: 1.0, Star: 1.1, Superstar: 1.25, 'X-Factor': 1.45 };
+  const rates = marketRates[player.position] ?? marketRates['LB'];
+  let baseMarket = rates[rates.length - 1][1];
+  for (let i = 0; i < rates.length - 1; i++) {
+    const [highOvr, highSal] = rates[i];
+    const [lowOvr, lowSal]   = rates[i + 1];
+    if (player.overall_rating >= lowOvr) {
+      const t = (player.overall_rating - lowOvr) / (highOvr - lowOvr);
+      baseMarket = lowSal + t * (highSal - lowSal);
+      break;
+    }
+  }
+  const fairMarket = Math.round(baseMarket * (traitMul[player.dev_trait] ?? 1.0) * 10) / 10;
+  const ratio = salary / Math.max(fairMarket, 1);
+
+  // ── Base acceptance probability ────────────────────────────────────────────
+  let acceptChance =
+    ratio >= 1.00 ? 1.00 :
+    ratio >= 0.85 ? 0.90 :
+    ratio >= 0.70 ? 0.60 :
+    ratio >= 0.50 ? 0.20 : 0.00;
+
+  // ── Modifiers ──────────────────────────────────────────────────────────────
+  // Older players have less leverage — more willing to take a discount
+  if (player.age >= 33) acceptChance = Math.min(1, acceptChance + 0.15);
+  if (player.age >= 36) acceptChance = Math.min(1, acceptChance + 0.15);
+
+  // Elite traits know their worth — harder to lowball
+  if (player.dev_trait === 'X-Factor')  acceptChance = Math.max(0, acceptChance - 0.20);
+  if (player.dev_trait === 'Superstar') acceptChance = Math.max(0, acceptChance - 0.10);
+
+  // Contending team is a draw — players take slight discount to chase a ring
+  const season = getCurrentSeason();
+  const record = db.prepare(`
+    SELECT
+      SUM(CASE WHEN (home_team_id = ? AND home_score > away_score) OR (away_team_id = ? AND away_score > home_score) THEN 1 ELSE 0 END) as wins,
+      COUNT(*) as played
+    FROM games WHERE (home_team_id = ? OR away_team_id = ?) AND season = ? AND is_simulated = 1 AND is_playoff = 0
+  `).get(teamId, teamId, teamId, teamId, season) as any;
+  const winPct = record?.played >= 4 ? record.wins / record.played : 0.5;
+  if (winPct >= 0.65) acceptChance = Math.min(1, acceptChance + 0.08);
+
+  // ── Decision ───────────────────────────────────────────────────────────────
+  const accepted = Math.random() < acceptChance;
+
+  if (!accepted) {
+    const reason =
+      ratio < 0.50 ? `Insulted by the offer. ${player.dev_trait === 'X-Factor' || player.dev_trait === 'Superstar' ? 'Elite players' : 'Players'} don\'t sign for that salary.` :
+      ratio < 0.70 ? `Not enough money. Looking for closer to ${fairMarket.toFixed(1)}M/yr on the open market.` :
+      ratio < 0.85 ? `Decided to explore other options. Try sweetening the offer slightly.` :
+      `Chose to sign elsewhere. Sometimes it just doesn\'t work out.`;
+    return { success: false, reason };
+  }
+
+  // ── Execute signing ────────────────────────────────────────────────────────
+  const guaranteedPct = Math.round(30 + Math.random() * 30);
   const guaranteedAmount = Math.round(salary * years * (guaranteedPct / 100) * 10) / 10;
 
   db.prepare("UPDATE players SET team_id = ?, is_free_agent = 0, roster_status = 'active' WHERE id = ?").run(teamId, playerId);
   db.prepare(`INSERT INTO contracts (player_id, team_id, years_total, years_remaining, annual_salary, guaranteed_amount, guaranteed_pct)
-              VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`)
     .run(playerId, teamId, years, years, salary, guaranteedAmount, guaranteedPct);
   return { success: true };
 });
