@@ -160,7 +160,8 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
   const [pendingResigns,     setPendingResigns]     = useState(0);
   const [draftComplete,      setDraftComplete]      = useState(false);
   const [draftGenerated,     setDraftGenerated]     = useState(false);
-  const [injuryReport,       setInjuryReport]       = useState<InjuredPlayer[]>([]);
+   const [injuryReport,       setInjuryReport]       = useState<InjuredPlayer[]>([]);
+  const [retiredPlayers,     setRetiredPlayers]     = useState<{ name: string; position: string; age: number; ovr: number }[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -300,11 +301,12 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
     setBoxScoreLoading(false);
   };
 
-  const handleAdvance = async () => {
+   const handleAdvance = async () => {
     setAdvancing(true);
     const result = await window.api.advanceSeason();
     setAdvancing(false);
     setConfirming(false);
+    if (result.retired?.length > 0) setRetiredPlayers(result.retired);
     onSeasonAdvance(result.nextSeason);
   };
 
@@ -401,6 +403,25 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
           )}
         </div>
       </div>
+
+  {/* Retirements */}
+      {retiredPlayers.length > 0 && (
+        <div style={{ background: '#110a0a', border: '1px solid #2a1a1a', borderRadius: 8, padding: '14px 20px', marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: '#e57373', letterSpacing: 2 }}>RETIREMENTS — {currentSeason - 1} OFFSEASON</div>
+            <button onClick={() => setRetiredPlayers([])} style={{ fontSize: 10, background: 'none', border: 'none', color: '#444', cursor: 'pointer' }}>dismiss</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 6 }}>
+            {retiredPlayers.map((p, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                <span style={{ color: '#555', fontSize: 10, width: 28 }}>{p.position}</span>
+                <span style={{ color: '#888' }}>{p.name}</span>
+                <span style={{ color: '#444', fontSize: 10, marginLeft: 'auto' }}>Age {p.age} · {p.ovr} OVR</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ─── Offseason Checklist ─────────────────────── */}
       {allWeeksDone && playoffsComplete && (

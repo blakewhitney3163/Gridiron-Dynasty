@@ -435,13 +435,13 @@ ipcMain.handle('advance-season', () => {
   const current = getCurrentSeason();
   const next = current + 1;
 
-  db.prepare('UPDATE players SET age = age + 1 WHERE is_free_agent = 0').run();
+  // Age every non-retired player including free agents
+  db.prepare("UPDATE players SET age = age + 1 WHERE roster_status != 'retired'").run();
 
   const players = db.prepare(
-    'SELECT id, age, overall_rating, dev_trait FROM players WHERE is_free_agent = 0 AND team_id IS NOT NULL'
+    "SELECT id, age, overall_rating, speed, strength, awareness, dev_trait, position FROM players WHERE roster_status != 'retired'"
   ).all() as any[];
 
-  const updateOvr = db.prepare('UPDATE players SET overall_rating = ? WHERE id = ?');
   const progressionTable: Record<string, Record<string, [number, number]>> = {
     young:   { Normal: [0, 1],  Star: [1, 2],  Superstar: [2, 3],  'X-Factor': [3, 4] },
     rising:  { Normal: [0, 1],  Star: [0, 2],  Superstar: [1, 2],  'X-Factor': [2, 3] },
@@ -451,59 +451,96 @@ ipcMain.handle('advance-season', () => {
     veteran: { Normal: [-4,-3], Star: [-3,-2], Superstar: [-3,-2], 'X-Factor': [-2,-1] },
   };
 
+  const updatePlayer = db.prepare('UPDATE players SET overall_rating = ?, speed = ?, awareness = ? WHERE id = ?');
+
   const progressPlayers = db.transaction(() => {
     for (const p of players) {
       const trait = p.dev_trait ?? 'Normal';
-      const bracket = p.age <= 23 ? 'young' : p.age <= 26 ? 'rising' : p.age <= 29 ? 'prime' : p.age <= 32 ? 'decline' : p.age <= 35 ? 'old' : 'veteran';
+      const bracket =
+        p.age <= 23 ? 'young' : p.age <= 26 ? 'rising' : p.age <= 29 ? 'prime' :
+        p.age <= 32 ? 'decline' : p.age <= 35 ? 'old' : 'veteran';
       const [min, max] = progressionTable[bracket][trait] ?? [0, 0];
-      const change = Math.floor(Math.random() * (max - min + 1)) + min;
-      updateOvr.run(Math.max(40, Math.min(99, p.overall_rating + change)), p.id);
+      const ovrChange = Math.floor(Math.random() * (max - min + 1)) + min;
+      const newOvr = Math.max(40, Math.min(99, p.overall_rating + ovrChange));
+
+      // Speed declines with age
+      let speedChange = 0;
+      if      (p.age >= 34)                        speedChange = -(Math.floor(Math.random() * 2) + 1);
+      else if (p.age >= 31 && Math.random() < 0.6) speedChange = -1;
+      else if (p.age >= 29 && Math.random() < 0.2) speedChange = -1;
+      const newSpeed = Math.max(40, Math.min(99, (p.speed ?? 70) + speedChange));
+
+      // Awareness improves young, slight decline late career
+      let awarenessChange = 0;
+      if      (p.age <= 26 && Math.random() < 0.4) awarenessChange = 1;
+      else if (p.age >= 35 && Math.random() < 0.3) awarenessChange = -1;
+      const newAwareness = Math.max(40, Math.min(99, (p.awareness ?? 70) + awarenessChange));
+
+      updatePlayer.run(newOvr, newSpeed, newAwareness, p.id);
     }
   });
   progressPlayers();
 
-  // Dev trait regression — older/declining players can lose their trait
-  const devDowngrade = db.prepare('UPDATE players SET dev_trait = ? WHERE id = ?');
-  const allRostered = db.prepare(
-    'SELECT id, age, overall_rating, dev_trait FROM players WHERE team_id IS NOT NULL'
-  ).all() as any[];
-
-  const regressTraits = db.transaction(() => {
-    for (const p of allRostered) {
-      const trait = p.dev_trait;
+  // Dev trait regression AND breakout upgrades
+  const setTrait = db.prepare('UPDATE players SET dev_trait = ? WHERE id = ?');
+  const traitChanges = db.transaction(() => {
+    for (const p of players) {
+      const trait = p.dev_trait ?? 'Normal';
       const rand = Math.random();
       if (trait === 'X-Factor') {
-        const shouldDowngrade = p.age >= 32 || p.overall_rating < 88 || rand < 0.04;
-        if (shouldDowngrade) devDowngrade.run('Superstar', p.id);
+        if (p.age >= 32 || p.overall_rating < 88 || rand < 0.04) setTrait.run('Superstar', p.id);
       } else if (trait === 'Superstar') {
-        const shouldDowngrade = p.age >= 34 || p.overall_rating < 82 || rand < 0.05;
-        if (shouldDowngrade) devDowngrade.run('Star', p.id);
+        if (p.age >= 34 || p.overall_rating < 82 || rand < 0.05) setTrait.run('Star', p.id);
       } else if (trait === 'Star') {
-        const shouldDowngrade = p.age >= 36 || p.overall_rating < 76 || rand < 0.06;
-        if (shouldDowngrade) devDowngrade.run('Normal', p.id);
+        if      (p.age >= 36 || p.overall_rating < 76 || rand < 0.06) setTrait.run('Normal', p.id);
+        else if (p.age <= 27 && p.overall_rating >= 84 && rand < 0.05) setTrait.run('Superstar', p.id);
+      } else {
+        if      (p.age <= 26 && p.overall_rating >= 76 && rand < 0.08) setTrait.run('Star', p.id);
+        else if (p.age <= 24 && p.overall_rating >= 83 && rand < 0.04) setTrait.run('Superstar', p.id);
       }
     }
   });
-  regressTraits();
+  traitChanges();
 
-  // Decrement contract years, release expired players as free agents
+  // Retirement — probabilistic by age
+  const retireCandidates = db.prepare(
+    "SELECT id, first_name, last_name, position, age, overall_rating FROM players WHERE age >= 33 AND roster_status != 'retired'"
+  ).all() as any[];
+
+  const retired: { name: string; position: string; age: number; ovr: number }[] = [];
+  const retirePlayers = db.transaction(() => {
+    for (const p of retireCandidates) {
+      let chance =
+        p.age >= 40 ? 0.95 :
+        p.age >= 38 ? 0.75 :
+        p.age >= 36 ? 0.40 :
+        p.age >= 34 ? 0.18 : 0.07;
+      if (p.overall_rating < 72) chance = Math.min(0.95, chance * 1.5);
+      if (Math.random() < chance) {
+        db.prepare("UPDATE players SET roster_status = 'retired', team_id = NULL, is_free_agent = 0 WHERE id = ?").run(p.id);
+        db.prepare('DELETE FROM contracts WHERE player_id = ?').run(p.id);
+        retired.push({ name: `${p.first_name} ${p.last_name}`, position: p.position, age: p.age, ovr: p.overall_rating });
+      }
+    }
+  });
+  retirePlayers();
+
+  // Decrement contract years, release expired players to free agency
   db.prepare('UPDATE contracts SET years_remaining = years_remaining - 1').run();
   const expiredPlayers = db.prepare('SELECT player_id FROM contracts WHERE years_remaining <= 0').all() as any[];
   const expireContracts = db.transaction(() => {
     for (const { player_id } of expiredPlayers) {
       db.prepare('DELETE FROM contracts WHERE player_id = ?').run(player_id);
-      db.prepare('UPDATE players SET team_id = NULL, is_free_agent = 1 WHERE id = ?').run(player_id);
+      db.prepare("UPDATE players SET team_id = NULL, is_free_agent = 1, roster_status = 'free_agent' WHERE id = ?").run(player_id);
     }
   });
   expireContracts();
 
-  // Retire truly aging low-rated players
-  db.prepare(`UPDATE players SET team_id = NULL, is_free_agent = 1 WHERE age >= 38 AND overall_rating < 72 AND is_free_agent = 0`).run();
-
-  // Clear all injuries at season start
+  // Clear injuries for new season
   db.prepare("UPDATE players SET injury_status = 'healthy', weeks_out = 0, injury_type = NULL").run();
   db.prepare("UPDATE settings SET value = ? WHERE key = 'current_season'").run(String(next));
-  return { nextSeason: next };
+
+  return { nextSeason: next, retired };
 });
 
 // ─── Week-by-Week Simulation ──────────────────────────────────────────────────
