@@ -350,16 +350,41 @@ ipcMain.handle('generate-schedule', () => {
   const season = getCurrentSeason();
   const existing = (db.prepare('SELECT COUNT(*) as count FROM games WHERE season = ? AND is_playoff = 0').get(season) as any).count;
   if (existing > 0) return { alreadyExists: true, season };
-  const teams = db.prepare('SELECT id FROM teams').all() as any[];
+
+  const teams = (db.prepare('SELECT id FROM teams').all() as any[]).map((t: any) => t.id);
   const insertGame = db.prepare('INSERT INTO games (season, week, home_team_id, away_team_id, is_simulated) VALUES (?, ?, ?, ?, 0)');
+
+  // 18 weeks, 17 games per team — each team gets exactly one bye week.
+  // Bye weeks are distributed across weeks 5–14 (4 teams off per week = 14 games that week).
+  // Weeks 1–4 and 15–18 are full (16 games each).
+  //
+  // Bye assignment: shuffle teams, assign in groups of 4 to bye weeks 5–14.
+
+  const shuffledForByes = [...teams].sort(() => Math.random() - 0.5);
+  const byeWeekMap: Record<number, number> = {}; // teamId -> bye week
+  for (let i = 0; i < shuffledForByes.length; i++) {
+    const byeWeek = 5 + Math.floor(i / 4); // weeks 5–12 get 4 teams each (32/4 = 8 bye weeks)
+    byeWeekMap[shuffledForByes[i]] = byeWeek;
+  }
+
   const create = db.transaction(() => {
-    for (let week = 1; week <= 17; week++) {
-      const shuffled = [...teams].sort(() => Math.random() - 0.5);
-      for (let i = 0; i < shuffled.length; i += 2) {
-        insertGame.run(season, week, shuffled[i].id, shuffled[i + 1].id);
+    for (let week = 1; week <= 18; week++) {
+      // Teams playing this week (not on bye)
+      const playing = teams.filter((id: number) => byeWeekMap[id] !== week);
+
+      // Shuffle and pair them up
+      const shuffled = [...playing].sort(() => Math.random() - 0.5);
+
+      // If odd count somehow (shouldn't happen), drop last team
+      const pairs = Math.floor(shuffled.length / 2);
+      for (let i = 0; i < pairs; i++) {
+        const home = shuffled[i * 2];
+        const away = shuffled[i * 2 + 1];
+        insertGame.run(season, week, home, away);
       }
     }
   });
+
   create();
   return { season, created: true, alreadyExists: false };
 });

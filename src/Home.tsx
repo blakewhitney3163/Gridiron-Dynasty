@@ -188,15 +188,15 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
       } else if (seasonDone && !champForSeason) {
         const [seeds, weekData] = await Promise.all([
           window.api.getPlayoffSeeds(),
-          window.api.getWeekMatchups(17),
+          window.api.getWeekMatchups(18),
         ]);
-        if (!cancelled) { setPlayoffSeeds(seeds); setMatchups(weekData); setViewWeek(17); }
+        if (!cancelled) { setPlayoffSeeds(seeds); setMatchups(weekData); setViewWeek(18); }
       } else if (seasonDone && champForSeason) {
         const [results, weekData] = await Promise.all([
           window.api.getPlayoffs(currentSeason),
-          window.api.getWeekMatchups(17),
+          window.api.getWeekMatchups(18),
         ]);
-        if (!cancelled) { setPlayoffResults(results); setMatchups(weekData); setViewWeek(17); }
+        if (!cancelled) { setPlayoffResults(results); setMatchups(weekData); setViewWeek(18); }
       }
 
       if (!cancelled) setLoading(false);
@@ -259,7 +259,7 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
   };
 
   const handleViewWeek = async (week: number) => {
-    if (week < 1 || week > 17) return;
+    if (week < 1 || week > 18) return;
     setViewWeek(week);
     setBoxScore(null);
     const data = await window.api.getWeekMatchups(week);
@@ -314,7 +314,7 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
               ? `${currentSeason} season complete`
               : allWeeksDone
               ? 'Regular season complete — playoffs ready'
-              : `Week ${currentWeek} of 17 up next`}
+              : `Week ${currentWeek} of 18 up next`}
           </div>
           {userRecord && (
             <div style={{ fontSize: 12, color: '#FF8740', marginTop: 4 }}>
@@ -413,11 +413,13 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
             }}>→ Franchise</button>
           </div>
 
-          {/* Free Agency */}
+          {/* Free Agency — optional */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid #1a1a1a' }}>
-            <span style={{ fontSize: 16, width: 20, textAlign: 'center', color: '#555' }}>○</span>
+            <span style={{ fontSize: 9, width: 20, textAlign: 'center', color: '#444', letterSpacing: 0.5 }}>OPT</span>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, color: '#666' }}>Free Agency</div>
+              <div style={{ fontSize: 12, color: '#555' }}>
+                Free Agency <span style={{ fontSize: 9, color: '#333', marginLeft: 6, letterSpacing: 1 }}>OPTIONAL</span>
+              </div>
               <div style={{ fontSize: 10, color: '#444', marginTop: 2 }}>Sign replacements for departing players</div>
             </div>
             <button onClick={() => onNavigate('franchise')} style={{
@@ -462,7 +464,7 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
             <div style={{ textAlign: 'center', padding: '48px 0', color: '#333' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>🏈</div>
               <div style={{ fontSize: 14, marginBottom: 6 }}>No schedule for {currentSeason} yet.</div>
-              <div style={{ fontSize: 12 }}>Click "Start {currentSeason} Season" to generate all 17 weeks.</div>
+              <div style={{ fontSize: 12 }}>Click "Start {currentSeason} Season" to generate all 18 weeks.</div>
             </div>
           ) : allWeeksDone && playoffsComplete ? (
             <PlayoffResultsView results={playoffResults} champion={currentChampion} />
@@ -475,8 +477,8 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
                 <button onClick={() => handleViewWeek(viewWeek - 1)} disabled={viewWeek <= 1}
                   style={{ padding: '4px 12px', background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4, color: viewWeek <= 1 ? '#333' : '#888', cursor: viewWeek <= 1 ? 'not-allowed' : 'pointer', fontSize: 12 }}>←</button>
                 <span style={{ fontSize: 13, color: '#888', letterSpacing: 1 }}>WEEK {viewWeek}</span>
-                <button onClick={() => handleViewWeek(viewWeek + 1)} disabled={viewWeek >= 17}
-                  style={{ padding: '4px 12px', background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4, color: viewWeek >= 17 ? '#333' : '#888', cursor: viewWeek >= 17 ? 'not-allowed' : 'pointer', fontSize: 12 }}>→</button>
+                <button onClick={() => handleViewWeek(viewWeek + 1)} disabled={viewWeek >= 18}
+                  style={{ padding: '4px 12px', background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4, color: viewWeek >= 18 ? '#333' : '#888', cursor: viewWeek >= 18 ? 'not-allowed' : 'pointer', fontSize: 12 }}>→</button>
                 {matchups.length > 0 && (
                   <span style={{ fontSize: 10, color: weekIsPlayed ? '#4caf50' : '#FF8740', letterSpacing: 1 }}>
                     ● {weekIsPlayed ? 'FINAL' : 'UPCOMING'}
