@@ -135,4 +135,13 @@ contextBridge.exposeInMainWorld('api', {
   completeDraft: () =>
     ipcRenderer.invoke('complete-draft'),
 
+    getDepthChart: (teamId: number) =>
+    ipcRenderer.invoke('get-depth-chart', teamId),
+
+  setDepthChartOrder: (payload: { teamId: number; positionGroup: string; playerIds: number[] }) =>
+    ipcRenderer.invoke('set-depth-chart-order', payload),
+
+  resetDepthChart: (teamId: number) =>
+    ipcRenderer.invoke('reset-depth-chart', teamId),
+
 });

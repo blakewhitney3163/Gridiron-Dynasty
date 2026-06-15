@@ -11,6 +11,18 @@ function clamp(val, min, max) {
     return Math.max(min, Math.min(max, Math.round(val)));
 }
 
+function getDepthChartStarters(teamId) {
+  const rows = db.prepare(`
+    SELECT p.id, p.position, p.overall_rating
+    FROM depth_chart dc
+    JOIN players p ON dc.player_id = p.id
+    WHERE dc.team_id = ? AND dc.slot = 1 AND p.roster_status = 'active'
+  `).all(teamId);
+  const byGroup = {};
+  for (const r of rows) byGroup[r.position] = r;
+  return byGroup;
+}
+
 function getTeamRatings(teamId) {
     const players = db.prepare(`SELECT position, overall_rating FROM players WHERE team_id = ?`).all(teamId);
     const offense = players.filter(p => ["QB", "RB", "WR", "TE", "OL"].includes(p.position));
@@ -24,10 +36,33 @@ function generatePlayerStats(teamId, score, offenseRating) {
     const stats = [];
     const teamRatingFactor = offenseRating / 75;
 
-    const qb  = db.prepare(`SELECT id, overall_rating FROM players WHERE team_id = ? AND position = 'QB' ORDER BY overall_rating DESC LIMIT 1`).get(teamId);
-    const rbs = db.prepare(`SELECT id, overall_rating FROM players WHERE team_id = ? AND position = 'RB' ORDER BY overall_rating DESC LIMIT 2`).all(teamId);
-    const wrs = db.prepare(`SELECT id, overall_rating FROM players WHERE team_id = ? AND position = 'WR' ORDER BY overall_rating DESC LIMIT 4`).all(teamId);
-    const tes = db.prepare(`SELECT id, overall_rating FROM players WHERE team_id = ? AND position = 'TE' ORDER BY overall_rating DESC LIMIT 2`).all(teamId);
+    const starters = getDepthChartStarters(teamId);
+const qb = starters['QB'] ??
+  db.prepare(`SELECT id, overall_rating FROM players WHERE team_id = ? AND position = 'QB' ORDER BY overall_rating DESC LIMIT 1`).get(teamId);
+const rbs = db.prepare(`
+  SELECT p.id, p.overall_rating FROM depth_chart dc
+  JOIN players p ON dc.player_id = p.id
+  WHERE dc.team_id = ? AND dc.position_group = 'RB' AND p.roster_status = 'active'
+  ORDER BY dc.slot LIMIT 2
+`).all(teamId).length > 0
+  ? db.prepare(`SELECT p.id, p.overall_rating FROM depth_chart dc JOIN players p ON dc.player_id = p.id WHERE dc.team_id = ? AND dc.position_group = 'RB' AND p.roster_status = 'active' ORDER BY dc.slot LIMIT 2`).all(teamId)
+  : db.prepare(`SELECT id, overall_rating FROM players WHERE team_id = ? AND position = 'RB' ORDER BY overall_rating DESC LIMIT 2`).all(teamId);
+const wrs = db.prepare(`
+  SELECT p.id, p.overall_rating FROM depth_chart dc
+  JOIN players p ON dc.player_id = p.id
+  WHERE dc.team_id = ? AND dc.position_group = 'WR' AND p.roster_status = 'active'
+  ORDER BY dc.slot LIMIT 4
+`).all(teamId).length > 0
+  ? db.prepare(`SELECT p.id, p.overall_rating FROM depth_chart dc JOIN players p ON dc.player_id = p.id WHERE dc.team_id = ? AND dc.position_group = 'WR' AND p.roster_status = 'active' ORDER BY dc.slot LIMIT 4`).all(teamId)
+  : db.prepare(`SELECT id, overall_rating FROM players WHERE team_id = ? AND position = 'WR' ORDER BY overall_rating DESC LIMIT 4`).all(teamId);
+const tes = db.prepare(`
+  SELECT p.id, p.overall_rating FROM depth_chart dc
+  JOIN players p ON dc.player_id = p.id
+  WHERE dc.team_id = ? AND dc.position_group = 'TE' AND p.roster_status = 'active'
+  ORDER BY dc.slot LIMIT 2
+`).all(teamId).length > 0
+  ? db.prepare(`SELECT p.id, p.overall_rating FROM depth_chart dc JOIN players p ON dc.player_id = p.id WHERE dc.team_id = ? AND dc.position_group = 'TE' AND p.roster_status = 'active' ORDER BY dc.slot LIMIT 2`).all(teamId)
+  : db.prepare(`SELECT id, overall_rating FROM players WHERE team_id = ? AND position = 'TE' ORDER BY overall_rating DESC LIMIT 2`).all(teamId);
 
     const totalTDs = Math.max(0, Math.round(score / 7));
     const passTDs  = clamp(Math.round(totalTDs * 0.6), 0, totalTDs);

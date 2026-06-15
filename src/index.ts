@@ -5,6 +5,52 @@ const { simulateGame } = require('./simulateGame');
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
+// ─── Depth Chart Table ────────────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS depth_chart (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,
+    position_group TEXT NOT NULL,
+    slot INTEGER NOT NULL,
+    UNIQUE(team_id, player_id),
+    FOREIGN KEY (team_id) REFERENCES teams(id),
+    FOREIGN KEY (player_id) REFERENCES players(id)
+  )
+`);
+
+const POSITION_TO_GROUP: Record<string, string> = {
+  QB: 'QB',
+  RB: 'RB', HB: 'RB', FB: 'RB',
+  WR: 'WR', TE: 'TE',
+  LT: 'OL', LG: 'OL', C: 'OL', RG: 'OL', RT: 'OL', OL: 'OL',
+  LE: 'DL', RE: 'DL', DT: 'DL', IDL: 'DL', DL: 'DL',
+  MLB: 'LB', OLB: 'LB', LOLB: 'LB', ROLB: 'LB', WILL: 'LB', MIKE: 'LB', LB: 'LB',
+  CB: 'CB', FS: 'S', SS: 'S', S: 'S', K: 'K',
+};
+
+function initDepthChart(teamId: number) {
+  const existing = (db.prepare('SELECT COUNT(*) as count FROM depth_chart WHERE team_id = ?').get(teamId) as any).count;
+  if (existing > 0) return;
+  const players = db.prepare(`
+    SELECT id, position, position_label FROM players
+    WHERE team_id = ? AND roster_status = 'active'
+    ORDER BY overall_rating DESC
+  `).all(teamId) as any[];
+  const insert = db.prepare('INSERT OR IGNORE INTO depth_chart (team_id, player_id, position_group, slot) VALUES (?, ?, ?, ?)');
+  const groupSlots: Record<string, number> = {};
+  const run = db.transaction(() => {
+    for (const p of players) {
+      const pos = p.position_label || p.position;
+      const group = POSITION_TO_GROUP[pos];
+      if (!group) continue;
+      groupSlots[group] = (groupSlots[group] ?? 0) + 1;
+      insert.run(teamId, p.id, group, groupSlots[group]);
+    }
+  });
+  run();
+}
+
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
@@ -1089,6 +1135,46 @@ ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
   });
   tx();
   return { success: true, matched, skipped, total: rows.length, file: otcPath, sampleNames: rows.slice(0, 8).map(r => r.name) };
+});
+
+// ─── Depth Chart ──────────────────────────────────────────────────────────────
+
+ipcMain.handle('get-depth-chart', (_event: any, teamId: number) => {
+  initDepthChart(teamId);
+  const rows = db.prepare(`
+    SELECT dc.position_group, dc.slot, dc.player_id,
+      p.first_name, p.last_name, p.position, p.position_label,
+      p.overall_rating, p.age, p.dev_trait, p.speed, p.strength, p.awareness
+    FROM depth_chart dc
+    JOIN players p ON dc.player_id = p.id
+    WHERE dc.team_id = ? AND p.roster_status = 'active'
+    ORDER BY dc.position_group, dc.slot
+  `).all(teamId) as any[];
+  const grouped: Record<string, any[]> = {};
+  for (const row of rows) {
+    if (!grouped[row.position_group]) grouped[row.position_group] = [];
+    grouped[row.position_group].push(row);
+  }
+  return grouped;
+});
+
+ipcMain.handle('set-depth-chart-order', (_event: any, { teamId, positionGroup, playerIds }: {
+  teamId: number; positionGroup: string; playerIds: number[];
+}) => {
+  const update = db.prepare('UPDATE depth_chart SET slot = ? WHERE team_id = ? AND player_id = ? AND position_group = ?');
+  const run = db.transaction(() => {
+    playerIds.forEach((playerId: number, idx: number) => {
+      update.run(idx + 1, teamId, playerId, positionGroup);
+    });
+  });
+  run();
+  return { success: true };
+});
+
+ipcMain.handle('reset-depth-chart', (_event: any, teamId: number) => {
+  db.prepare('DELETE FROM depth_chart WHERE team_id = ?').run(teamId);
+  initDepthChart(teamId);
+  return { success: true };
 });
 
 // ─── Dev Trait Seeding ────────────────────────────────────────────────────────
