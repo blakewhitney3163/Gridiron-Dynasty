@@ -9,10 +9,11 @@ import TeamSelection from './TeamSelection';
 import Trades from './Trades';
 import Franchise from './Franchise';
 import Draft from './Draft';
+import DepthChart from './DepthChart';
 
 declare const window: any;
 
-type Tab = 'home' | 'standings' | 'teams' | 'schedule' | 'stats' | 'playoffs' | 'trades' | 'franchise' | 'draft';
+type Tab = 'home' | 'standings' | 'teams' | 'schedule' | 'stats' | 'playoffs' | 'trades' | 'franchise' | 'draft' | 'depth';
 
 interface UserTeam {
   id: number;
@@ -32,6 +33,7 @@ const BASE_TABS: { id: Tab; label: string }[] = [
   { id: 'playoffs',  label: 'Playoffs' },
   { id: 'trades',    label: 'Trades' },
   { id: 'franchise', label: 'Franchise' },
+  { id: 'depth', label: 'Depth Chart' },
 ];
 
 export default function App() {
@@ -136,6 +138,7 @@ export default function App() {
         )}
         {activeTab === 'trades'    && <Trades userTeam={userTeam} />}
         {activeTab === 'franchise' && <Franchise userTeam={userTeam} currentSeason={currentSeason} />}
+        {actuveTab === 'depth' && <DepthChart userTeam={userTeam} />}
         {activeTab === 'draft'     && (
           <Draft
             userTeam={userTeam}
