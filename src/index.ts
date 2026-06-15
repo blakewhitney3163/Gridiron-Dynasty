@@ -41,6 +41,13 @@ db.exec(`
   )
 `);
 
+
+// Auto-balance rosters on startup if FA pool is empty
+{
+  const faCount = (db.prepare('SELECT COUNT(*) as count FROM players WHERE is_free_agent = 1').get() as any).count;
+  if (faCount === 0) balanceRosters();
+}
+
 const POSITION_TO_GROUP: Record<string, string> = {
   QB: 'QB',
   RB: 'RB', HB: 'RB', FB: 'RB',
@@ -72,6 +79,37 @@ function initDepthChart(teamId: number) {
   });
   run();
 }
+
+
+function balanceRosters() {
+  const teams = db.prepare('SELECT id FROM teams').all() as any[];
+  const run = db.transaction(() => {
+    for (const team of teams) {
+      const players = db.prepare(`
+        SELECT id FROM players
+        WHERE team_id = ? AND roster_status IN ('active', 'practice_squad')
+        ORDER BY overall_rating DESC
+      `).all(team.id) as any[];
+      players.forEach((p: any, i: number) => {
+        if (i < 53) {
+          db.prepare(`UPDATE players SET roster_status = 'active' WHERE id = ?`).run(p.id);
+        } else if (i < 69) {
+          db.prepare(`UPDATE players SET roster_status = 'practice_squad' WHERE id = ?`).run(p.id);
+        } else {
+          db.prepare(`UPDATE players SET team_id = NULL, is_free_agent = 1, roster_status = 'free_agent' WHERE id = ?`).run(p.id);
+          db.prepare('DELETE FROM contracts WHERE player_id = ?').run(p.id);
+        }
+      });
+    }
+  });
+  run();
+}
+
+ipcMain.handle('balance-rosters', () => {
+  balanceRosters();
+  const faCount = (db.prepare('SELECT COUNT(*) as count FROM players WHERE is_free_agent = 1').get() as any).count;
+  return { success: true, freeAgents: faCount };
+});
 
 if (require('electron-squirrel-startup')) {
   app.quit();
@@ -601,6 +639,7 @@ ipcMain.handle('reset-dynasty', () => {
   db.prepare("UPDATE players SET roster_status = 'active' WHERE roster_status = 'free_agent' AND team_id IS NOT NULL").run();
   db.prepare("UPDATE settings SET value = '2025' WHERE key = 'current_season'").run();
   generateContracts();
+  balanceRosters();
   return { success: true };
 });
 
