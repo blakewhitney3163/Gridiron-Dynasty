@@ -1681,7 +1681,7 @@ ipcMain.handle('reset-depth-chart', (_event: any, teamId: number) => {
 
 ipcMain.handle('get-alltime-leaders', () => {
   const historical = db.prepare(`
-    SELECT player_name, team_display as team_name, position, games_played,
+    SELECT category, player_name, team_display as team_name, position, games_played,
            pass_yards, pass_tds, interceptions, completions, pass_attempts,
            rush_yards, rush_tds, rush_attempts, rec_yards, rec_tds, receptions, 0 as targets,
            tackles, assisted_tackles, sacks, 0 as tfl, def_interceptions, pass_deflections, forced_fumbles,
@@ -1714,7 +1714,7 @@ ipcMain.handle('get-alltime-leaders', () => {
 
   const result: any = {};
   for (const [cat, sortKey] of Object.entries(sortBy)) {
-    const combined = [...historical.filter((r: any) => r.category === cat || !r.category), ...ingame];
+    const combined = [...historical.filter((r: any) => r.category === cat), ...ingame];
     const sorted = combined.sort((a: any, b: any) => {
       const av = sortKey === '_total_tds'
         ? (a.pass_tds + a.rush_tds + a.rec_tds)
@@ -1731,7 +1731,7 @@ ipcMain.handle('get-alltime-leaders', () => {
 
 ipcMain.handle('get-season-records', () => {
   const historical = db.prepare(`
-    SELECT player_name, team_display as team_name, position, season, games_played,
+    SELECT category, player_name, team_display as team_name, position, season, games_played,
            pass_yards, pass_tds, interceptions, completions, pass_attempts,
            rush_yards, rush_tds, rush_attempts, rec_yards, rec_tds, receptions, 0 as targets,
            tackles, assisted_tackles, sacks, 0 as tfl, def_interceptions, pass_deflections, forced_fumbles,
