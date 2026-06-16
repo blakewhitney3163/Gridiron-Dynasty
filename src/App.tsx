@@ -10,10 +10,11 @@ import Trades from './Trades';
 import Franchise from './Franchise';
 import Draft from './Draft';
 import DepthChart from './DepthChart';
+import Records from './Records';
 
 declare const window: any;
 
-type Tab = 'home' | 'standings' | 'teams' | 'schedule' | 'stats' | 'playoffs' | 'trades' | 'franchise' | 'draft' | 'depth';
+type Tab = 'home' | 'standings' | 'teams' | 'schedule' | 'stats' | 'playoffs' | 'trades' | 'franchise' | 'draft' | 'depth' | 'records';
 
 interface UserTeam {
   id: number;
@@ -30,10 +31,11 @@ const BASE_TABS: { id: Tab; label: string }[] = [
   { id: 'teams',     label: 'Teams' },
   { id: 'schedule',  label: 'Schedule' },
   { id: 'stats',     label: 'Stats' },
+  { id: 'records',   label: 'Records' },
   { id: 'playoffs',  label: 'Playoffs' },
   { id: 'trades',    label: 'Trades' },
   { id: 'franchise', label: 'Franchise' },
-  { id: 'depth', label: 'Depth Chart' },
+  { id: 'depth',     label: 'Depth Chart' },
 ];
 
 export default function App() {
@@ -129,6 +131,7 @@ export default function App() {
         {activeTab === 'teams'     && <Teams />}
         {activeTab === 'schedule'  && <Schedule currentSeason={currentSeason} />}
         {activeTab === 'stats'     && <Stats currentSeason={currentSeason} />}
+        {activeTab === 'records'   && <Records />}
         {activeTab === 'playoffs'  && (
           <Playoffs
             currentSeason={currentSeason}
@@ -138,7 +141,7 @@ export default function App() {
         )}
         {activeTab === 'trades'    && <Trades userTeam={userTeam} />}
         {activeTab === 'franchise' && <Franchise userTeam={userTeam} currentSeason={currentSeason} />}
-        {activeTab === 'depth' && <DepthChart userTeam={userTeam} />}
+        {activeTab === 'depth'     && <DepthChart userTeam={userTeam} />}
         {activeTab === 'draft'     && (
           <Draft
             userTeam={userTeam}

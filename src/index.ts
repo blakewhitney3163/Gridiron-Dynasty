@@ -42,6 +42,14 @@ db.exec(`
   )
 `);
 
+// Migrate career_stats_history to include defensive stat columns
+['tackles','assisted_tackles','forced_fumbles','fumble_recoveries',
+ 'def_interceptions','pass_deflections','def_tds'].forEach(col => {
+  try { db.exec(`ALTER TABLE career_stats_history ADD COLUMN ${col} INTEGER DEFAULT 0`); } catch (_) {}
+});
+try { db.exec(`ALTER TABLE career_stats_history ADD COLUMN sacks REAL DEFAULT 0`); } catch (_) {}
+try { db.exec(`ALTER TABLE career_stats_history ADD COLUMN tfl  REAL DEFAULT 0`); } catch (_) {}
+
 
 // Auto-balance rosters on startup if FA pool is empty
 {
@@ -264,7 +272,10 @@ ipcMain.handle('get-player-stats', (_event: any, playerId: number) => {
       SUM(s.pass_attempts) as pass_attempts, SUM(s.completions) as completions,
       SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds, SUM(s.interceptions) as interceptions,
       SUM(s.rush_attempts) as rush_attempts, SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds,
-      SUM(s.targets) as targets, SUM(s.receptions) as receptions, SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds
+      SUM(s.targets) as targets, SUM(s.receptions) as receptions, SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
+      SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
+      SUM(s.sacks) as sacks, SUM(s.tfl) as tfl,
+      SUM(s.def_interceptions) as def_interceptions, SUM(s.pass_deflections) as pass_deflections
     FROM stats s JOIN games g ON s.game_id = g.id WHERE s.player_id = ? AND g.season = ?
   `).get(playerId, season);
 });
@@ -279,14 +290,18 @@ ipcMain.handle('get-player-career-stats', (_event: any, playerId: number) => {
       SUM(s.rush_attempts) as rush_attempts, SUM(s.rush_yards) as rush_yards,
       SUM(s.rush_tds) as rush_tds,
       SUM(s.targets) as targets, SUM(s.receptions) as receptions,
-      SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds
+      SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
+      SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
+      SUM(s.sacks) as sacks, SUM(s.tfl) as tfl,
+      SUM(s.def_interceptions) as def_interceptions, SUM(s.pass_deflections) as pass_deflections
     FROM stats s JOIN games g ON s.game_id = g.id
     WHERE s.player_id = ? GROUP BY g.season
   `).all(playerId) as any[];
 
   const history = db.prepare(`
     SELECT season, games, completions, pass_attempts, pass_yards, pass_tds, interceptions,
-      rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds
+      rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds,
+      tackles, assisted_tackles, sacks, tfl, def_interceptions, pass_deflections
     FROM career_stats_history WHERE player_id = ?
   `).all(playerId) as any[];
 
@@ -366,7 +381,7 @@ ipcMain.handle('get-stats', (_event: any, season?: number) => {
     FROM stats st JOIN players p ON st.player_id = p.id JOIN teams t ON st.team_id = t.id JOIN games g ON st.game_id = g.id
     WHERE g.season = ? AND g.is_simulated = 1 AND st.targets > 0 GROUP BY p.id ORDER BY rec_yards DESC LIMIT 15
   `).all(s);
-    const tackles = db.prepare(`
+  const tackles = db.prepare(`
     SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
       p.overall_rating, p.age, p.position, p.dev_trait,
       t.city || ' ' || t.name AS team_name,
@@ -492,14 +507,12 @@ ipcMain.handle('advance-season', () => {
       const ovrChange = Math.floor(Math.random() * (max - min + 1)) + min;
       const newOvr = Math.max(40, Math.min(99, p.overall_rating + ovrChange));
 
-      // Speed declines with age
       let speedChange = 0;
       if      (p.age >= 34)                        speedChange = -(Math.floor(Math.random() * 2) + 1);
       else if (p.age >= 31 && Math.random() < 0.6) speedChange = -1;
       else if (p.age >= 29 && Math.random() < 0.2) speedChange = -1;
       const newSpeed = Math.max(40, Math.min(99, (p.speed ?? 70) + speedChange));
 
-      // Awareness improves young, slight decline late career
       let awarenessChange = 0;
       if      (p.age <= 26 && Math.random() < 0.4) awarenessChange = 1;
       else if (p.age >= 35 && Math.random() < 0.3) awarenessChange = -1;
@@ -567,6 +580,44 @@ ipcMain.handle('advance-season', () => {
 
   // Clear injuries for new season
   db.prepare("UPDATE players SET injury_status = 'healthy', weeks_out = 0, injury_type = NULL").run();
+
+  // Archive current season stats to career_stats_history before bumping the season
+  db.prepare(`
+    INSERT INTO career_stats_history (
+      player_id, season, games,
+      completions, pass_attempts, pass_yards, pass_tds, interceptions,
+      rush_attempts, rush_yards, rush_tds,
+      targets, receptions, rec_yards, rec_tds,
+      tackles, assisted_tackles, sacks, tfl,
+      forced_fumbles, fumble_recoveries, def_interceptions, pass_deflections, def_tds
+    )
+    SELECT s.player_id, g.season,
+      COUNT(DISTINCT s.game_id),
+      SUM(s.completions),        SUM(s.pass_attempts),   SUM(s.pass_yards),
+      SUM(s.pass_tds),           SUM(s.interceptions),
+      SUM(s.rush_attempts),      SUM(s.rush_yards),      SUM(s.rush_tds),
+      SUM(s.targets),            SUM(s.receptions),      SUM(s.rec_yards),      SUM(s.rec_tds),
+      SUM(s.tackles),            SUM(s.assisted_tackles), SUM(s.sacks),         SUM(s.tfl),
+      SUM(s.forced_fumbles),     SUM(s.fumble_recoveries),
+      SUM(s.def_interceptions),  SUM(s.pass_deflections), SUM(s.def_tds)
+    FROM stats s JOIN games g ON s.game_id = g.id
+    WHERE g.season = ? AND g.is_simulated = 1
+    GROUP BY s.player_id, g.season
+    ON CONFLICT(player_id, season) DO UPDATE SET
+      games = excluded.games,
+      completions = excluded.completions,         pass_attempts = excluded.pass_attempts,
+      pass_yards = excluded.pass_yards,           pass_tds = excluded.pass_tds,
+      interceptions = excluded.interceptions,     rush_attempts = excluded.rush_attempts,
+      rush_yards = excluded.rush_yards,           rush_tds = excluded.rush_tds,
+      targets = excluded.targets,                 receptions = excluded.receptions,
+      rec_yards = excluded.rec_yards,             rec_tds = excluded.rec_tds,
+      tackles = excluded.tackles,                 assisted_tackles = excluded.assisted_tackles,
+      sacks = excluded.sacks,                     tfl = excluded.tfl,
+      forced_fumbles = excluded.forced_fumbles,   fumble_recoveries = excluded.fumble_recoveries,
+      def_interceptions = excluded.def_interceptions,
+      pass_deflections = excluded.pass_deflections, def_tds = excluded.def_tds
+  `).run(current);
+
   db.prepare("UPDATE settings SET value = ? WHERE key = 'current_season'").run(String(next));
 
   return { nextSeason: next, retired };
@@ -582,8 +633,6 @@ ipcMain.handle('generate-schedule', () => {
   const teams = (db.prepare('SELECT id FROM teams').all() as any[]).map((t: any) => t.id);
   const insertGame = db.prepare('INSERT INTO games (season, week, home_team_id, away_team_id, is_simulated) VALUES (?, ?, ?, ?, 0)');
 
-  // 18 weeks, 17 games per team — each team gets exactly one bye week.
-  // Bye weeks are distributed across weeks 5–12 (4 teams off per week = 8 bye weeks).
   const shuffledForByes = [...teams].sort(() => Math.random() - 0.5);
   const byeWeekMap: Record<number, number> = {};
   for (let i = 0; i < shuffledForByes.length; i++) {
@@ -635,7 +684,6 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
   `).all(season, week) as any[];
   if (games.length === 0) return { week, season, gamesSimulated: 0 };
 
-  // Heal players whose weeks_out reaches 0 before this week's games
   db.prepare(`UPDATE players SET weeks_out = MAX(0, weeks_out - 1) WHERE weeks_out > 0`).run();
   db.prepare(`UPDATE players SET injury_status = 'healthy', injury_type = NULL WHERE weeks_out = 0 AND injury_status != 'healthy'`).run();
 
@@ -665,7 +713,6 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
   });
   runWeek();
 
-  // Roll injuries from this week's action
   rollInjuries(allStats);
 
   return { week, season, gamesSimulated: games.length };
@@ -710,6 +757,7 @@ ipcMain.handle('reset-dynasty', () => {
   db.prepare('DELETE FROM contracts').run();
   db.prepare('DELETE FROM depth_chart').run();
   db.prepare('DELETE FROM draft_prospects').run();
+  db.prepare('DELETE FROM career_stats_history').run();
   importFromMadden(csvPath);
   db.prepare("UPDATE settings SET value = '2025' WHERE key = 'current_season'").run();
   generateContracts();
@@ -1537,6 +1585,80 @@ ipcMain.handle('seed-dev-traits', () => {
   setTrait('Bo',      'Nix',       'Star');
   setTrait('Dak',     'Prescott',  'Star');
   return { success: true };
+});
+
+// ─── Historical Records ────────────────────────────────────────────────────────
+
+ipcMain.handle('get-alltime-leaders', () => {
+  const base = `
+    SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
+      p.position, p.age, p.overall_rating, p.dev_trait,
+      COALESCE(t.city || ' ' || t.name, 'Retired') AS team_name,
+      COUNT(DISTINCT g.season) as seasons_played,
+      COUNT(DISTINCT s.game_id) as games_played,
+      SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
+      SUM(s.interceptions) as interceptions,
+      SUM(s.completions) as completions, SUM(s.pass_attempts) as pass_attempts,
+      SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds,
+      SUM(s.rush_attempts) as rush_attempts,
+      SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
+      SUM(s.receptions) as receptions, SUM(s.targets) as targets,
+      SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
+      SUM(s.sacks) as sacks, SUM(s.tfl) as tfl,
+      SUM(s.def_interceptions) as def_interceptions,
+      SUM(s.pass_deflections) as pass_deflections,
+      SUM(s.forced_fumbles) as forced_fumbles
+    FROM stats s
+    JOIN players p ON s.player_id = p.id
+    LEFT JOIN teams t ON p.team_id = t.id
+    JOIN games g ON s.game_id = g.id
+    WHERE g.is_simulated = 1
+    GROUP BY p.id
+  `;
+  const passing   = db.prepare(`${base} HAVING pass_yards   > 0 ORDER BY pass_yards   DESC LIMIT 20`).all();
+  const rushing   = db.prepare(`${base} HAVING rush_yards   > 0 ORDER BY rush_yards   DESC LIMIT 20`).all();
+  const receiving = db.prepare(`${base} HAVING rec_yards    > 0 ORDER BY rec_yards    DESC LIMIT 20`).all();
+  const tds       = db.prepare(`${base} HAVING (pass_tds + rush_tds + rec_tds) > 0 ORDER BY (pass_tds + rush_tds + rec_tds) DESC LIMIT 20`).all();
+  const tackles   = db.prepare(`${base} HAVING tackles      > 0 ORDER BY tackles      DESC LIMIT 20`).all();
+  const sacks     = db.prepare(`${base} HAVING sacks        > 0 ORDER BY sacks        DESC LIMIT 20`).all();
+  const defInts   = db.prepare(`${base} HAVING def_interceptions > 0 ORDER BY def_interceptions DESC LIMIT 20`).all();
+  return { passing, rushing, receiving, tds, tackles, sacks, defInts };
+});
+
+ipcMain.handle('get-season-records', () => {
+  const base = `
+    SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
+      p.position, p.age, p.overall_rating, p.dev_trait,
+      COALESCE(t.city || ' ' || t.name, 'Retired') AS team_name,
+      g.season,
+      COUNT(DISTINCT s.game_id) as games_played,
+      SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
+      SUM(s.interceptions) as interceptions,
+      SUM(s.completions) as completions, SUM(s.pass_attempts) as pass_attempts,
+      SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds,
+      SUM(s.rush_attempts) as rush_attempts,
+      SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
+      SUM(s.receptions) as receptions, SUM(s.targets) as targets,
+      SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
+      SUM(s.sacks) as sacks, SUM(s.tfl) as tfl,
+      SUM(s.def_interceptions) as def_interceptions,
+      SUM(s.pass_deflections) as pass_deflections,
+      SUM(s.forced_fumbles) as forced_fumbles
+    FROM stats s
+    JOIN players p ON s.player_id = p.id
+    LEFT JOIN teams t ON p.team_id = t.id
+    JOIN games g ON s.game_id = g.id
+    WHERE g.is_simulated = 1
+    GROUP BY p.id, g.season
+  `;
+  const passing   = db.prepare(`${base} HAVING pass_yards   > 0 ORDER BY pass_yards   DESC LIMIT 20`).all();
+  const rushing   = db.prepare(`${base} HAVING rush_yards   > 0 ORDER BY rush_yards   DESC LIMIT 20`).all();
+  const receiving = db.prepare(`${base} HAVING rec_yards    > 0 ORDER BY rec_yards    DESC LIMIT 20`).all();
+  const tds       = db.prepare(`${base} HAVING (pass_tds + rush_tds + rec_tds) > 0 ORDER BY (pass_tds + rush_tds + rec_tds) DESC LIMIT 20`).all();
+  const tackles   = db.prepare(`${base} HAVING tackles      > 0 ORDER BY tackles      DESC LIMIT 20`).all();
+  const sacks     = db.prepare(`${base} HAVING sacks        > 0 ORDER BY sacks        DESC LIMIT 20`).all();
+  const defInts   = db.prepare(`${base} HAVING def_interceptions > 0 ORDER BY def_interceptions DESC LIMIT 20`).all();
+  return { passing, rushing, receiving, tds, tackles, sacks, defInts };
 });
 
 // ─── App Lifecycle ─────────────────────────────────────────────────────────────

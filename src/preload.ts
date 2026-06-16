@@ -101,6 +101,7 @@ contextBridge.exposeInMainWorld('api', {
 
   releasePlayer: (playerId: number) =>
     ipcRenderer.invoke('release-player', playerId),
+
   promoteFromPs: (playerId: number) =>
     ipcRenderer.invoke('promote-from-ps', playerId),
 
@@ -148,10 +149,17 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('reset-depth-chart', teamId),
 
   importNflverseStats: () =>
-  ipcRenderer.invoke('import-nflverse-stats'),
+    ipcRenderer.invoke('import-nflverse-stats'),
 
   // Injuries
   getInjuryReport: (teamId: number) =>
     ipcRenderer.invoke('get-injury-report', teamId),
+
+  // Historical Records
+  getAlltimeLeaders: () =>
+    ipcRenderer.invoke('get-alltime-leaders'),
+
+  getSeasonRecords: () =>
+    ipcRenderer.invoke('get-season-records'),
 
 });
