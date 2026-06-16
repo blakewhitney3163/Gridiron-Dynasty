@@ -56,7 +56,26 @@ if (teamCount === 0) {
   generateContracts();
   console.log('Fresh DB: players and contracts generated');
 }
-
+db.exec(`
+  CREATE TABLE IF NOT EXISTS historical_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    record_type TEXT NOT NULL,
+    category TEXT NOT NULL,
+    rank INTEGER NOT NULL,
+    player_name TEXT NOT NULL,
+    team_display TEXT,
+    position TEXT,
+    season INTEGER,
+    games_played INTEGER DEFAULT 0,
+    pass_yards INTEGER DEFAULT 0, pass_tds INTEGER DEFAULT 0, interceptions INTEGER DEFAULT 0,
+    completions INTEGER DEFAULT 0, pass_attempts INTEGER DEFAULT 0,
+    rush_yards INTEGER DEFAULT 0, rush_tds INTEGER DEFAULT 0, rush_attempts INTEGER DEFAULT 0,
+    rec_yards INTEGER DEFAULT 0, rec_tds INTEGER DEFAULT 0, receptions INTEGER DEFAULT 0,
+    tackles INTEGER DEFAULT 0, assisted_tackles INTEGER DEFAULT 0,
+    sacks REAL DEFAULT 0, def_interceptions INTEGER DEFAULT 0,
+    pass_deflections INTEGER DEFAULT 0, forced_fumbles INTEGER DEFAULT 0
+  )
+`);
 const histCount = (db.prepare('SELECT COUNT(*) as cnt FROM historical_records').get() as any).cnt;
 if (histCount === 0) {
   const pathModule = require('path');
@@ -135,27 +154,6 @@ db.exec(`
     rec_yards INTEGER DEFAULT 0,
     rec_tds INTEGER DEFAULT 0,
     UNIQUE(player_id, season)
-  )
-`);
-// Historical Records
-db.exec(`
-  CREATE TABLE IF NOT EXISTS historical_records (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    record_type TEXT NOT NULL,
-    category TEXT NOT NULL,
-    rank INTEGER NOT NULL,
-    player_name TEXT NOT NULL,
-    team_display TEXT,
-    position TEXT,
-    season INTEGER,
-    games_played INTEGER DEFAULT 0,
-    pass_yards INTEGER DEFAULT 0, pass_tds INTEGER DEFAULT 0, interceptions INTEGER DEFAULT 0,
-    completions INTEGER DEFAULT 0, pass_attempts INTEGER DEFAULT 0,
-    rush_yards INTEGER DEFAULT 0, rush_tds INTEGER DEFAULT 0, rush_attempts INTEGER DEFAULT 0,
-    rec_yards INTEGER DEFAULT 0, rec_tds INTEGER DEFAULT 0, receptions INTEGER DEFAULT 0,
-    tackles INTEGER DEFAULT 0, assisted_tackles INTEGER DEFAULT 0,
-    sacks REAL DEFAULT 0, def_interceptions INTEGER DEFAULT 0,
-    pass_deflections INTEGER DEFAULT 0, forced_fumbles INTEGER DEFAULT 0
   )
 `);
 
