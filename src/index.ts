@@ -57,6 +57,48 @@ if (teamCount === 0) {
   console.log('Fresh DB: players and contracts generated');
 }
 
+const histCount = (db.prepare('SELECT COUNT(*) as cnt FROM historical_records').get() as any).cnt;
+if (histCount === 0) {
+  const pathModule = require('path');
+  const fs = require('fs');
+  const parseHistoricalCSV = (filePath: string, recordType: string) => {
+    if (!fs.existsSync(filePath)) { console.error('Missing:', filePath); return; }
+    const lines = fs.readFileSync(filePath, 'utf8').split('\n').filter((l: string) => l.trim());
+    const headers = lines[0].split(',').map((h: string) => h.trim());
+    const insert = db.prepare(`
+      INSERT INTO historical_records
+        (record_type, category, rank, player_name, team_display, position, season, games_played,
+         pass_yards, pass_tds, interceptions, completions, pass_attempts,
+         rush_yards, rush_tds, rush_attempts, rec_yards, rec_tds, receptions,
+         tackles, assisted_tackles, sacks, def_interceptions, pass_deflections, forced_fumbles)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const run = db.transaction(() => {
+      for (const line of lines.slice(1)) {
+        const v = line.split(',');
+        const r: any = {};
+        headers.forEach((h: string, i: number) => r[h] = v[i]?.trim() ?? '');
+        insert.run(
+          recordType, r.category, parseInt(r.rank) || 0, r.player_name, r.team_display, r.position,
+          r.season ? parseInt(r.season) : null, parseInt(r.games_played) || 0,
+          parseInt(r.pass_yards) || 0, parseInt(r.pass_tds) || 0, parseInt(r.interceptions) || 0,
+          parseInt(r.completions) || 0, parseInt(r.pass_attempts) || 0,
+          parseInt(r.rush_yards) || 0, parseInt(r.rush_tds) || 0, parseInt(r.rush_attempts) || 0,
+          parseInt(r.rec_yards) || 0, parseInt(r.rec_tds) || 0, parseInt(r.receptions) || 0,
+          parseInt(r.tackles) || 0, parseInt(r.assisted_tackles) || 0,
+          parseFloat(r.sacks) || 0, parseInt(r.def_interceptions) || 0,
+          parseInt(r.pass_deflections) || 0, parseInt(r.forced_fumbles) || 0
+        );
+      }
+    });
+    run();
+    console.log(`Historical records seeded: ${recordType}`);
+  };
+  const dataDir = pathModule.join(process.cwd(), 'src', 'data');
+  parseHistoricalCSV(pathModule.join(dataDir, 'nfl-alltime-records.csv'), 'alltime');
+  parseHistoricalCSV(pathModule.join(dataDir, 'nfl-season-records.csv'), 'season');
+}
+
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
@@ -93,6 +135,27 @@ db.exec(`
     rec_yards INTEGER DEFAULT 0,
     rec_tds INTEGER DEFAULT 0,
     UNIQUE(player_id, season)
+  )
+`);
+// Historical Records
+db.exec(`
+  CREATE TABLE IF NOT EXISTS historical_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    record_type TEXT NOT NULL,
+    category TEXT NOT NULL,
+    rank INTEGER NOT NULL,
+    player_name TEXT NOT NULL,
+    team_display TEXT,
+    position TEXT,
+    season INTEGER,
+    games_played INTEGER DEFAULT 0,
+    pass_yards INTEGER DEFAULT 0, pass_tds INTEGER DEFAULT 0, interceptions INTEGER DEFAULT 0,
+    completions INTEGER DEFAULT 0, pass_attempts INTEGER DEFAULT 0,
+    rush_yards INTEGER DEFAULT 0, rush_tds INTEGER DEFAULT 0, rush_attempts INTEGER DEFAULT 0,
+    rec_yards INTEGER DEFAULT 0, rec_tds INTEGER DEFAULT 0, receptions INTEGER DEFAULT 0,
+    tackles INTEGER DEFAULT 0, assisted_tackles INTEGER DEFAULT 0,
+    sacks REAL DEFAULT 0, def_interceptions INTEGER DEFAULT 0,
+    pass_deflections INTEGER DEFAULT 0, forced_fumbles INTEGER DEFAULT 0
   )
 `);
 
@@ -1619,321 +1682,105 @@ ipcMain.handle('reset-depth-chart', (_event: any, teamId: number) => {
 // ─── Historical Records ────────────────────────────────────────────────────────
 
 ipcMain.handle('get-alltime-leaders', () => {
-  const baseSelect = `
-    p.id as player_id,
-    p.first_name || ' ' || p.last_name AS player_name,
-    p.position, p.age, p.overall_rating, p.dev_trait,
-    COALESCE(t.city || ' ' || t.name, 'Retired') AS team_name
-  `;
+  const historical = db.prepare(`
+    SELECT player_name, team_display as team_name, position, games_played,
+           pass_yards, pass_tds, interceptions, completions, pass_attempts,
+           rush_yards, rush_tds, rush_attempts, rec_yards, rec_tds, receptions, 0 as targets,
+           tackles, assisted_tackles, sacks, 0 as tfl, def_interceptions, pass_deflections, forced_fumbles,
+           1 as is_historical, 0 as overall_rating, 'Normal' as dev_trait, 0 as player_id, NULL as age
+    FROM historical_records WHERE record_type = 'alltime'
+  `).all() as any[];
 
-  const passing = db.prepare(`
-    SELECT ${baseSelect},
-      SUM(COALESCE(csh.games,0) + COALESCE(live.games,0)) AS games_played,
-      SUM(COALESCE(csh.pass_yards,0) + COALESCE(live.pass_yards,0)) AS pass_yards,
-      SUM(COALESCE(csh.pass_tds,0) + COALESCE(live.pass_tds,0)) AS pass_tds,
-      SUM(COALESCE(csh.interceptions,0) + COALESCE(live.interceptions,0)) AS interceptions,
-      SUM(COALESCE(csh.completions,0) + COALESCE(live.completions,0)) AS completions,
-      SUM(COALESCE(csh.pass_attempts,0) + COALESCE(live.pass_attempts,0)) AS pass_attempts,
-      0 AS rush_yards, 0 AS rush_tds, 0 AS rush_attempts,
-      0 AS rec_yards, 0 AS rec_tds, 0 AS receptions, 0 AS targets,
-      0 AS tackles, 0 AS assisted_tackles, 0 AS sacks, 0 AS tfl,
-      0 AS def_interceptions, 0 AS pass_deflections, 0 AS forced_fumbles
-    FROM players p
+  const ingame = db.prepare(`
+    SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
+           t.name as team_name, p.overall_rating, p.age, p.position, p.dev_trait,
+           SUM(h.games) as games_played,
+           SUM(h.pass_yards) as pass_yards, SUM(h.pass_tds) as pass_tds, SUM(h.interceptions) as interceptions,
+           SUM(h.completions) as completions, SUM(h.pass_attempts) as pass_attempts,
+           SUM(h.rush_yards) as rush_yards, SUM(h.rush_tds) as rush_tds, SUM(h.rush_attempts) as rush_attempts,
+           SUM(h.rec_yards) as rec_yards, SUM(h.rec_tds) as rec_tds, SUM(h.receptions) as receptions, 0 as targets,
+           SUM(h.tackles) as tackles, SUM(h.assisted_tackles) as assisted_tackles,
+           SUM(h.sacks) as sacks, 0 as tfl, SUM(h.def_interceptions) as def_interceptions,
+           SUM(h.pass_deflections) as pass_deflections, SUM(h.forced_fumbles) as forced_fumbles,
+           0 as is_historical
+    FROM career_stats_history h
+    JOIN players p ON h.player_id = p.id
     LEFT JOIN teams t ON p.team_id = t.id
-    LEFT JOIN (
-      SELECT player_id,
-        SUM(games) as games, SUM(pass_yards) as pass_yards, SUM(pass_tds) as pass_tds,
-        SUM(interceptions) as interceptions, SUM(completions) as completions, SUM(pass_attempts) as pass_attempts
-      FROM career_stats_history GROUP BY player_id
-    ) csh ON csh.player_id = p.id
-    LEFT JOIN (
-      SELECT s.player_id,
-        COUNT(DISTINCT s.game_id) as games, SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
-        SUM(s.interceptions) as interceptions, SUM(s.completions) as completions, SUM(s.pass_attempts) as pass_attempts
-      FROM stats s JOIN games g ON s.game_id = g.id WHERE g.is_simulated = 1 GROUP BY s.player_id
-    ) live ON live.player_id = p.id
-    WHERE (COALESCE(csh.pass_yards,0) + COALESCE(live.pass_yards,0)) > 0
     GROUP BY p.id
-    ORDER BY pass_yards DESC LIMIT 25
-  `).all();
+  `).all() as any[];
 
-  const rushing = db.prepare(`
-    SELECT ${baseSelect},
-      SUM(COALESCE(csh.games,0) + COALESCE(live.games,0)) AS games_played,
-      SUM(COALESCE(csh.rush_yards,0) + COALESCE(live.rush_yards,0)) AS rush_yards,
-      SUM(COALESCE(csh.rush_tds,0) + COALESCE(live.rush_tds,0)) AS rush_tds,
-      SUM(COALESCE(csh.rush_attempts,0) + COALESCE(live.rush_attempts,0)) AS rush_attempts,
-      0 AS pass_yards, 0 AS pass_tds, 0 AS interceptions, 0 AS completions, 0 AS pass_attempts,
-      0 AS rec_yards, 0 AS rec_tds, 0 AS receptions, 0 AS targets,
-      0 AS tackles, 0 AS assisted_tackles, 0 AS sacks, 0 AS tfl,
-      0 AS def_interceptions, 0 AS pass_deflections, 0 AS forced_fumbles
-    FROM players p
-    LEFT JOIN teams t ON p.team_id = t.id
-    LEFT JOIN (
-      SELECT player_id, SUM(games) as games, SUM(rush_yards) as rush_yards, SUM(rush_tds) as rush_tds, SUM(rush_attempts) as rush_attempts
-      FROM career_stats_history GROUP BY player_id
-    ) csh ON csh.player_id = p.id
-    LEFT JOIN (
-      SELECT s.player_id, COUNT(DISTINCT s.game_id) as games, SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds, SUM(s.rush_attempts) as rush_attempts
-      FROM stats s JOIN games g ON s.game_id = g.id WHERE g.is_simulated = 1 GROUP BY s.player_id
-    ) live ON live.player_id = p.id
-    WHERE (COALESCE(csh.rush_yards,0) + COALESCE(live.rush_yards,0)) > 0
-    GROUP BY p.id
-    ORDER BY rush_yards DESC LIMIT 25
-  `).all();
+  const sortBy: Record<string, string> = {
+    passing: 'pass_yards', rushing: 'rush_yards', receiving: 'rec_yards',
+    tds: '_total_tds', tackles: 'tackles', sacks: 'sacks', defInts: 'def_interceptions',
+  };
 
-  const receiving = db.prepare(`
-    SELECT ${baseSelect},
-      SUM(COALESCE(csh.games,0) + COALESCE(live.games,0)) AS games_played,
-      SUM(COALESCE(csh.rec_yards,0) + COALESCE(live.rec_yards,0)) AS rec_yards,
-      SUM(COALESCE(csh.rec_tds,0) + COALESCE(live.rec_tds,0)) AS rec_tds,
-      SUM(COALESCE(csh.receptions,0) + COALESCE(live.receptions,0)) AS receptions,
-      SUM(COALESCE(csh.targets,0) + COALESCE(live.targets,0)) AS targets,
-      0 AS pass_yards, 0 AS pass_tds, 0 AS interceptions, 0 AS completions, 0 AS pass_attempts,
-      0 AS rush_yards, 0 AS rush_tds, 0 AS rush_attempts,
-      0 AS tackles, 0 AS assisted_tackles, 0 AS sacks, 0 AS tfl,
-      0 AS def_interceptions, 0 AS pass_deflections, 0 AS forced_fumbles
-    FROM players p
-    LEFT JOIN teams t ON p.team_id = t.id
-    LEFT JOIN (
-      SELECT player_id, SUM(games) as games, SUM(rec_yards) as rec_yards, SUM(rec_tds) as rec_tds, SUM(receptions) as receptions, SUM(targets) as targets
-      FROM career_stats_history GROUP BY player_id
-    ) csh ON csh.player_id = p.id
-    LEFT JOIN (
-      SELECT s.player_id, COUNT(DISTINCT s.game_id) as games, SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds, SUM(s.receptions) as receptions, SUM(s.targets) as targets
-      FROM stats s JOIN games g ON s.game_id = g.id WHERE g.is_simulated = 1 GROUP BY s.player_id
-    ) live ON live.player_id = p.id
-    WHERE (COALESCE(csh.rec_yards,0) + COALESCE(live.rec_yards,0)) > 0
-    GROUP BY p.id
-    ORDER BY rec_yards DESC LIMIT 25
-  `).all();
-
-  const tds = db.prepare(`
-    SELECT ${baseSelect},
-      SUM(COALESCE(csh.games,0) + COALESCE(live.games,0)) AS games_played,
-      SUM(COALESCE(csh.pass_tds,0) + COALESCE(live.pass_tds,0)) AS pass_tds,
-      SUM(COALESCE(csh.rush_tds,0) + COALESCE(live.rush_tds,0)) AS rush_tds,
-      SUM(COALESCE(csh.rec_tds,0) + COALESCE(live.rec_tds,0)) AS rec_tds,
-      0 AS pass_yards, 0 AS interceptions, 0 AS completions, 0 AS pass_attempts,
-      0 AS rush_yards, 0 AS rush_attempts,
-      0 AS rec_yards, 0 AS receptions, 0 AS targets,
-      0 AS tackles, 0 AS assisted_tackles, 0 AS sacks, 0 AS tfl,
-      0 AS def_interceptions, 0 AS pass_deflections, 0 AS forced_fumbles
-    FROM players p
-    LEFT JOIN teams t ON p.team_id = t.id
-    LEFT JOIN (
-      SELECT player_id, SUM(games) as games, SUM(pass_tds) as pass_tds, SUM(rush_tds) as rush_tds, SUM(rec_tds) as rec_tds
-      FROM career_stats_history GROUP BY player_id
-    ) csh ON csh.player_id = p.id
-    LEFT JOIN (
-      SELECT s.player_id, COUNT(DISTINCT s.game_id) as games, SUM(s.pass_tds) as pass_tds, SUM(s.rush_tds) as rush_tds, SUM(s.rec_tds) as rec_tds
-      FROM stats s JOIN games g ON s.game_id = g.id WHERE g.is_simulated = 1 GROUP BY s.player_id
-    ) live ON live.player_id = p.id
-    WHERE (COALESCE(csh.pass_tds,0)+COALESCE(live.pass_tds,0)+COALESCE(csh.rush_tds,0)+COALESCE(live.rush_tds,0)+COALESCE(csh.rec_tds,0)+COALESCE(live.rec_tds,0)) > 0
-    GROUP BY p.id
-    ORDER BY (
-      SUM(COALESCE(csh.pass_tds,0)+COALESCE(live.pass_tds,0)) +
-      SUM(COALESCE(csh.rush_tds,0)+COALESCE(live.rush_tds,0)) +
-      SUM(COALESCE(csh.rec_tds,0)+COALESCE(live.rec_tds,0))
-    ) DESC LIMIT 25
-  `).all();
-
-  const tackles = db.prepare(`
-    SELECT ${baseSelect},
-      SUM(COALESCE(csh.games,0) + COALESCE(live.games,0)) AS games_played,
-      SUM(COALESCE(csh.tackles,0) + COALESCE(live.tackles,0)) AS tackles,
-      SUM(COALESCE(csh.assisted_tackles,0) + COALESCE(live.assisted_tackles,0)) AS assisted_tackles,
-      SUM(COALESCE(csh.sacks,0) + COALESCE(live.sacks,0)) AS sacks,
-      SUM(COALESCE(csh.tfl,0) + COALESCE(live.tfl,0)) AS tfl,
-      0 AS pass_yards, 0 AS pass_tds, 0 AS interceptions, 0 AS completions, 0 AS pass_attempts,
-      0 AS rush_yards, 0 AS rush_tds, 0 AS rush_attempts,
-      0 AS rec_yards, 0 AS rec_tds, 0 AS receptions, 0 AS targets,
-      0 AS def_interceptions, 0 AS pass_deflections, 0 AS forced_fumbles
-    FROM players p
-    LEFT JOIN teams t ON p.team_id = t.id
-    LEFT JOIN (
-      SELECT player_id, SUM(games) as games, SUM(tackles) as tackles, SUM(assisted_tackles) as assisted_tackles, SUM(sacks) as sacks, SUM(tfl) as tfl
-      FROM career_stats_history GROUP BY player_id
-    ) csh ON csh.player_id = p.id
-    LEFT JOIN (
-      SELECT s.player_id, COUNT(DISTINCT s.game_id) as games, SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles, SUM(s.sacks) as sacks, SUM(s.tfl) as tfl
-      FROM stats s JOIN games g ON s.game_id = g.id WHERE g.is_simulated = 1 GROUP BY s.player_id
-    ) live ON live.player_id = p.id
-    WHERE (COALESCE(csh.tackles,0) + COALESCE(live.tackles,0)) > 0
-    GROUP BY p.id
-    ORDER BY tackles DESC LIMIT 25
-  `).all();
-
-  const sacks = db.prepare(`
-    SELECT ${baseSelect},
-      SUM(COALESCE(csh.games,0) + COALESCE(live.games,0)) AS games_played,
-      SUM(COALESCE(csh.sacks,0) + COALESCE(live.sacks,0)) AS sacks,
-      SUM(COALESCE(csh.tfl,0) + COALESCE(live.tfl,0)) AS tfl,
-      SUM(COALESCE(csh.forced_fumbles,0) + COALESCE(live.forced_fumbles,0)) AS forced_fumbles,
-      SUM(COALESCE(csh.tackles,0) + COALESCE(live.tackles,0)) AS tackles,
-      0 AS pass_yards, 0 AS pass_tds, 0 AS interceptions, 0 AS completions, 0 AS pass_attempts,
-      0 AS rush_yards, 0 AS rush_tds, 0 AS rush_attempts,
-      0 AS rec_yards, 0 AS rec_tds, 0 AS receptions, 0 AS targets,
-      0 AS assisted_tackles, 0 AS def_interceptions, 0 AS pass_deflections
-    FROM players p
-    LEFT JOIN teams t ON p.team_id = t.id
-    LEFT JOIN (
-      SELECT player_id, SUM(games) as games, SUM(sacks) as sacks, SUM(tfl) as tfl, SUM(forced_fumbles) as forced_fumbles, SUM(tackles) as tackles
-      FROM career_stats_history GROUP BY player_id
-    ) csh ON csh.player_id = p.id
-    LEFT JOIN (
-      SELECT s.player_id, COUNT(DISTINCT s.game_id) as games, SUM(s.sacks) as sacks, SUM(s.tfl) as tfl, SUM(s.forced_fumbles) as forced_fumbles, SUM(s.tackles) as tackles
-      FROM stats s JOIN games g ON s.game_id = g.id WHERE g.is_simulated = 1 GROUP BY s.player_id
-    ) live ON live.player_id = p.id
-    WHERE (COALESCE(csh.sacks,0) + COALESCE(live.sacks,0)) > 0
-    GROUP BY p.id
-    ORDER BY sacks DESC LIMIT 25
-  `).all();
-
-  const defInts = db.prepare(`
-    SELECT ${baseSelect},
-      SUM(COALESCE(csh.games,0) + COALESCE(live.games,0)) AS games_played,
-      SUM(COALESCE(csh.def_interceptions,0) + COALESCE(live.def_interceptions,0)) AS def_interceptions,
-      SUM(COALESCE(csh.pass_deflections,0) + COALESCE(live.pass_deflections,0)) AS pass_deflections,
-      SUM(COALESCE(csh.tackles,0) + COALESCE(live.tackles,0)) AS tackles,
-      0 AS pass_yards, 0 AS pass_tds, 0 AS interceptions, 0 AS completions, 0 AS pass_attempts,
-      0 AS rush_yards, 0 AS rush_tds, 0 AS rush_attempts,
-      0 AS rec_yards, 0 AS rec_tds, 0 AS receptions, 0 AS targets,
-      0 AS assisted_tackles, 0 AS sacks, 0 AS tfl, 0 AS forced_fumbles
-    FROM players p
-    LEFT JOIN teams t ON p.team_id = t.id
-    LEFT JOIN (
-      SELECT player_id, SUM(games) as games, SUM(def_interceptions) as def_interceptions, SUM(pass_deflections) as pass_deflections, SUM(tackles) as tackles
-      FROM career_stats_history GROUP BY player_id
-    ) csh ON csh.player_id = p.id
-    LEFT JOIN (
-      SELECT s.player_id, COUNT(DISTINCT s.game_id) as games, SUM(s.def_interceptions) as def_interceptions, SUM(s.pass_deflections) as pass_deflections, SUM(s.tackles) as tackles
-      FROM stats s JOIN games g ON s.game_id = g.id WHERE g.is_simulated = 1 GROUP BY s.player_id
-    ) live ON live.player_id = p.id
-    WHERE (COALESCE(csh.def_interceptions,0) + COALESCE(live.def_interceptions,0)) > 0
-    GROUP BY p.id
-    ORDER BY def_interceptions DESC LIMIT 25
-  `).all();
-
-  return { passing, rushing, receiving, tds, tackles, sacks, defInts };
+  const result: any = {};
+  for (const [cat, sortKey] of Object.entries(sortBy)) {
+    const combined = [...historical.filter((r: any) => r.category === cat || !r.category), ...ingame];
+    const sorted = combined.sort((a: any, b: any) => {
+      const av = sortKey === '_total_tds'
+        ? (a.pass_tds + a.rush_tds + a.rec_tds)
+        : (parseFloat(a[sortKey]) || 0);
+      const bv = sortKey === '_total_tds'
+        ? (b.pass_tds + b.rush_tds + b.rec_tds)
+        : (parseFloat(b[sortKey]) || 0);
+      return bv - av;
+    }).slice(0, 15);
+    result[cat] = sorted;
+  }
+  return result;
 });
 
 ipcMain.handle('get-season-records', () => {
-  const baseSelect = `
-    p.id as player_id,
-    p.first_name || ' ' || p.last_name AS player_name,
-    p.position, p.age, p.overall_rating, p.dev_trait,
-    COALESCE(t.city || ' ' || t.name, 'Retired') AS team_name
-  `;
+  const historical = db.prepare(`
+    SELECT player_name, team_display as team_name, position, season, games_played,
+           pass_yards, pass_tds, interceptions, completions, pass_attempts,
+           rush_yards, rush_tds, rush_attempts, rec_yards, rec_tds, receptions, 0 as targets,
+           tackles, assisted_tackles, sacks, 0 as tfl, def_interceptions, pass_deflections, forced_fumbles,
+           1 as is_historical, 0 as overall_rating, 'Normal' as dev_trait, 0 as player_id, NULL as age
+    FROM historical_records WHERE record_type = 'season'
+  `).all() as any[];
 
-  const passing = db.prepare(`
-    SELECT ${baseSelect}, csh.season,
-      csh.games AS games_played,
-      csh.pass_yards, csh.pass_tds, csh.interceptions, csh.completions, csh.pass_attempts,
-      0 AS rush_yards, 0 AS rush_tds, 0 AS rush_attempts,
-      0 AS rec_yards, 0 AS rec_tds, 0 AS receptions, 0 AS targets,
-      0 AS tackles, 0 AS assisted_tackles, 0 AS sacks, 0 AS tfl,
-      0 AS def_interceptions, 0 AS pass_deflections, 0 AS forced_fumbles
-    FROM career_stats_history csh
-    JOIN players p ON csh.player_id = p.id
+  const ingame = db.prepare(`
+    SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
+           t.name as team_name, p.overall_rating, p.age, p.position, p.dev_trait,
+           g.season, COUNT(DISTINCT s.game_id) as games_played,
+           SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds, SUM(s.interceptions) as interceptions,
+           SUM(s.completions) as completions, SUM(s.pass_attempts) as pass_attempts,
+           SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds, SUM(s.rush_attempts) as rush_attempts,
+           SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds, SUM(s.receptions) as receptions, 0 as targets,
+           SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
+           SUM(s.sacks) as sacks, 0 as tfl, SUM(s.def_interceptions) as def_interceptions,
+           SUM(s.pass_deflections) as pass_deflections, SUM(s.forced_fumbles) as forced_fumbles,
+           0 as is_historical
+    FROM stats s
+    JOIN players p ON s.player_id = p.id
+    JOIN games g ON s.game_id = g.id
     LEFT JOIN teams t ON p.team_id = t.id
-    WHERE csh.pass_yards > 0
-    ORDER BY csh.pass_yards DESC LIMIT 25
-  `).all();
+    WHERE g.is_playoff = 0
+    GROUP BY p.id, g.season
+  `).all() as any[];
 
-  const rushing = db.prepare(`
-    SELECT ${baseSelect}, csh.season,
-      csh.games AS games_played,
-      csh.rush_yards, csh.rush_tds, csh.rush_attempts,
-      0 AS pass_yards, 0 AS pass_tds, 0 AS interceptions, 0 AS completions, 0 AS pass_attempts,
-      0 AS rec_yards, 0 AS rec_tds, 0 AS receptions, 0 AS targets,
-      0 AS tackles, 0 AS assisted_tackles, 0 AS sacks, 0 AS tfl,
-      0 AS def_interceptions, 0 AS pass_deflections, 0 AS forced_fumbles
-    FROM career_stats_history csh
-    JOIN players p ON csh.player_id = p.id
-    LEFT JOIN teams t ON p.team_id = t.id
-    WHERE csh.rush_yards > 0
-    ORDER BY csh.rush_yards DESC LIMIT 25
-  `).all();
+  const sortBy: Record<string, string> = {
+    passing: 'pass_yards', rushing: 'rush_yards', receiving: 'rec_yards',
+    tds: '_total_tds', tackles: 'tackles', sacks: 'sacks', defInts: 'def_interceptions',
+  };
 
-  const receiving = db.prepare(`
-    SELECT ${baseSelect}, csh.season,
-      csh.games AS games_played,
-      csh.rec_yards, csh.rec_tds, csh.receptions, csh.targets,
-      0 AS pass_yards, 0 AS pass_tds, 0 AS interceptions, 0 AS completions, 0 AS pass_attempts,
-      0 AS rush_yards, 0 AS rush_tds, 0 AS rush_attempts,
-      0 AS tackles, 0 AS assisted_tackles, 0 AS sacks, 0 AS tfl,
-      0 AS def_interceptions, 0 AS pass_deflections, 0 AS forced_fumbles
-    FROM career_stats_history csh
-    JOIN players p ON csh.player_id = p.id
-    LEFT JOIN teams t ON p.team_id = t.id
-    WHERE csh.rec_yards > 0
-    ORDER BY csh.rec_yards DESC LIMIT 25
-  `).all();
-
-  const tds = db.prepare(`
-    SELECT ${baseSelect}, csh.season,
-      csh.games AS games_played,
-      csh.pass_tds, csh.rush_tds, csh.rec_tds,
-      (csh.pass_tds + csh.rush_tds + csh.rec_tds) AS total_tds,
-      0 AS pass_yards, 0 AS interceptions, 0 AS completions, 0 AS pass_attempts,
-      0 AS rush_yards, 0 AS rush_attempts,
-      0 AS rec_yards, 0 AS receptions, 0 AS targets,
-      0 AS tackles, 0 AS assisted_tackles, 0 AS sacks, 0 AS tfl,
-      0 AS def_interceptions, 0 AS pass_deflections, 0 AS forced_fumbles
-    FROM career_stats_history csh
-    JOIN players p ON csh.player_id = p.id
-    LEFT JOIN teams t ON p.team_id = t.id
-    WHERE (csh.pass_tds + csh.rush_tds + csh.rec_tds) > 0
-    ORDER BY total_tds DESC LIMIT 25
-  `).all();
-
-  const tackles = db.prepare(`
-    SELECT ${baseSelect}, csh.season,
-      csh.games AS games_played,
-      csh.tackles, csh.assisted_tackles, csh.sacks, csh.tfl,
-      0 AS pass_yards, 0 AS pass_tds, 0 AS interceptions, 0 AS completions, 0 AS pass_attempts,
-      0 AS rush_yards, 0 AS rush_tds, 0 AS rush_attempts,
-      0 AS rec_yards, 0 AS rec_tds, 0 AS receptions, 0 AS targets,
-      0 AS def_interceptions, 0 AS pass_deflections, 0 AS forced_fumbles
-    FROM career_stats_history csh
-    JOIN players p ON csh.player_id = p.id
-    LEFT JOIN teams t ON p.team_id = t.id
-    WHERE csh.tackles > 0
-    ORDER BY csh.tackles DESC LIMIT 25
-  `).all();
-
-  const sacks = db.prepare(`
-    SELECT ${baseSelect}, csh.season,
-      csh.games AS games_played,
-      csh.sacks, csh.tfl, csh.forced_fumbles, csh.tackles,
-      0 AS pass_yards, 0 AS pass_tds, 0 AS interceptions, 0 AS completions, 0 AS pass_attempts,
-      0 AS rush_yards, 0 AS rush_tds, 0 AS rush_attempts,
-      0 AS rec_yards, 0 AS rec_tds, 0 AS receptions, 0 AS targets,
-      0 AS assisted_tackles, 0 AS def_interceptions, 0 AS pass_deflections
-    FROM career_stats_history csh
-    JOIN players p ON csh.player_id = p.id
-    LEFT JOIN teams t ON p.team_id = t.id
-    WHERE csh.sacks > 0
-    ORDER BY csh.sacks DESC LIMIT 25
-  `).all();
-
-  const defInts = db.prepare(`
-    SELECT ${baseSelect}, csh.season,
-      csh.games AS games_played,
-      csh.def_interceptions, csh.pass_deflections, csh.tackles,
-      0 AS pass_yards, 0 AS pass_tds, 0 AS interceptions, 0 AS completions, 0 AS pass_attempts,
-      0 AS rush_yards, 0 AS rush_tds, 0 AS rush_attempts,
-      0 AS rec_yards, 0 AS rec_tds, 0 AS receptions, 0 AS targets,
-      0 AS assisted_tackles, 0 AS sacks, 0 AS tfl, 0 AS forced_fumbles
-    FROM career_stats_history csh
-    JOIN players p ON csh.player_id = p.id
-    LEFT JOIN teams t ON p.team_id = t.id
-    WHERE csh.def_interceptions > 0
-    ORDER BY csh.def_interceptions DESC LIMIT 25
-  `).all();
-
-  return { passing, rushing, receiving, tds, tackles, sacks, defInts };
+  const result: any = {};
+  for (const [cat, sortKey] of Object.entries(sortBy)) {
+    const combined = [...historical.filter((r: any) => r.category === cat), ...ingame];
+    const sorted = combined.sort((a: any, b: any) => {
+      const av = sortKey === '_total_tds'
+        ? (a.pass_tds + a.rush_tds + a.rec_tds)
+        : (parseFloat(a[sortKey]) || 0);
+      const bv = sortKey === '_total_tds'
+        ? (b.pass_tds + b.rush_tds + b.rec_tds)
+        : (parseFloat(b[sortKey]) || 0);
+      return bv - av;
+    }).slice(0, 15);
+    result[cat] = sorted;
+  }
+  return result;
 });
 
 ipcMain.handle('get-season-awards', (_event: any, season: number) => {
