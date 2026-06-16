@@ -113,7 +113,7 @@ if (histCount === 0) {
     run();
     console.log(`Historical records seeded: ${recordType}`);
   };
-  const dataDir = pathModule.join(process.cwd(), 'src', 'data');
+  const dataDir = pathModule.join(app.getAppPath(), 'src', 'data');
   parseHistoricalCSV(pathModule.join(dataDir, 'nfl-alltime-records.csv'), 'alltime');
   parseHistoricalCSV(pathModule.join(dataDir, 'nfl-season-records.csv'), 'season');
 }
