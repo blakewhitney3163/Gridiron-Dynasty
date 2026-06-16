@@ -47,4 +47,25 @@ tackles,5,NaVorro Bowman,San Francisco 49ers,MLB,2013,16,0,0,0,0,0,0,0,0,0,0,0,1
 tackles,6,Paul Posluszny,Jacksonville Jaguars,LB,2012,16,0,0,0,0,0,0,0,0,0,0,0,145,53,0,0,0,0
 tackles,7,Lavonte David,Tampa Bay Buccaneers,LB,2012,16,0,0,0,0,0,0,0,0,0,0,0,138,49,0,0,0,0
 tackles,8,Derrick Johnson,Kansas City Chiefs,LB,2009,16,0,0,0,0,0,0,0,0,0,0,0,137,50,0,0,0,0
-tackles,9,Brian Urlacher,Chicago Bears,MLB,2002,16,0,0,0,0,0,0,0,0,0,0,0
+tackles,9,Brian Urlacher,Chicago Bears,MLB,2002,16,0,0,0,0,0,0,0,0,0,0,0,130,47,0,0,0,0
+tackles,10,Bobby Wagner,Seattle Seahawks,MLB,2016,16,0,0,0,0,0,0,0,0,0,0,0,167,44,3,0,0,0
+sacks,1,Michael Strahan,New York Giants,DE,2001,16,0,0,0,0,0,0,0,0,0,0,0,52,0,22.5,0,0,4
+sacks,2,Mark Gastineau,New York Jets,DE,1984,16,0,0,0,0,0,0,0,0,0,0,0,74,0,22,0,0,0
+sacks,3,Reggie White,Philadelphia Eagles,DE,1987,12,0,0,0,0,0,0,0,0,0,0,0,96,0,21,0,0,0
+sacks,4,Chris Doleman,Minnesota Vikings,DE,1989,16,0,0,0,0,0,0,0,0,0,0,0,88,0,21,0,0,0
+sacks,5,Lawrence Taylor,New York Giants,LB,1986,16,0,0,0,0,0,0,0,0,0,0,0,105,0,20.5,0,0,0
+sacks,6,Derrick Thomas,Kansas City Chiefs,LB,1990,16,0,0,0,0,0,0,0,0,0,0,0,86,0,20,0,0,0
+sacks,7,Justin Houston,Kansas City Chiefs,LB,2014,16,0,0,0,0,0,0,0,0,0,0,0,58,0,22,0,0,0
+sacks,8,Dwight Freeney,Indianapolis Colts,DE,2004,16,0,0,0,0,0,0,0,0,0,0,0,55,0,16,0,0,0
+sacks,9,Khalil Mack,Oakland Raiders,DE,2016,16,0,0,0,0,0,0,0,0,0,0,0,71,0,15,0,0,0
+sacks,10,Jevon Kearse,Tennessee Titans,DE,1999,16,0,0,0,0,0,0,0,0,0,0,0,64,0,14.5,0,0,0
+defInts,1,Dick Night Train Lane,Los Angeles Rams,CB,1952,12,0,0,0,0,0,0,0,0,0,0,0,0,0,0,14,14,0
+defInts,2,Lester Hayes,Oakland Raiders,CB,1980,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,13,13,0
+defInts,3,Dan Sandifer,Washington Redskins,DB,1948,12,0,0,0,0,0,0,0,0,0,0,0,0,0,0,13,13,0
+defInts,4,Everson Walls,Dallas Cowboys,CB,1981,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,11,11,0
+defInts,5,Ed Reed,Baltimore Ravens,S,2004,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,14,0
+defInts,6,Mark Carrier,Chicago Bears,S,1990,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,10,0
+defInts,7,Antonio Cromartie,San Diego Chargers,CB,2007,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,24,0
+defInts,8,Deion Sanders,Dallas Cowboys,CB,1998,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,12,0
+defInts,9,Rod Woodson,Pittsburgh Steelers,CB,1993,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,8,12,0
+defInts,10,Darren Sharper,Green Bay Packers,S,1997,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,9,0
