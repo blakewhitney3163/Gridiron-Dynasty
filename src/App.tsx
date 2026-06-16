@@ -64,7 +64,7 @@ useEffect(() => {
       setHasSave(true);
       window.api.checkSetupDone().then((done: boolean) => {
         setUserTeam(team);
-        setScreen(done ? 'game' : 'setup');
+        setScreen(done ? 'start' : 'setup');
         if (!done) runSetup();
       });
     }
