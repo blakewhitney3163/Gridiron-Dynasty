@@ -3,6 +3,16 @@ const { db, generateContracts } = require('./database');
 const { importFromMadden } = require('./importfromMadden');
 const { simulateGame } = require('./simulateGame');
 
+// Auto-seed teams if fresh DB
+const teamCount = (db.prepare('SELECT COUNT(*) as cnt FROM teams').get() as any).cnt;
+if (teamCount === 0) {
+  const pathModule = require('path');
+  const csvPath = pathModule.join(app.getAppPath(), 'src', 'madden-ratings.csv');
+  importFromMadden(csvPath);
+  generateContracts();
+  console.log('Fresh DB: teams seeded from Madden CSV');
+}
+
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 

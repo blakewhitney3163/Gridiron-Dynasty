@@ -166,7 +166,6 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
     const init = async () => {
       setLoading(true);
       setBoxScore(null);
-      setConfirmReset(false);
       setConfirming(false);
       setPlayoffSeeds(null);
       setPlayoffResults(null);
