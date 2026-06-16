@@ -263,39 +263,39 @@ export default function App() {
       </div>
 
       <div style={{ padding: 20 }}>
-        {activeTab === 'home' && (
-          <Home
-            userTeam={userTeam} currentSeason={currentSeason}
-            onTabChange={tab => setActiveTab(tab as Tab)}
-            onPlayoffsComplete={() => setPlayoffsComplete(true)}
-          />
-        )}
-        {activeTab === 'standings' && <Standings currentSeason={currentSeason} />}
-        {activeTab === 'teams' && <Teams currentSeason={currentSeason} />}
-        {activeTab === 'schedule' && <Schedule currentSeason={currentSeason} />}
-        {activeTab === 'stats' && <Stats currentSeason={currentSeason} />}
-        {activeTab === 'records' && <Records />}
-        {activeTab === 'playoffs' && (
-          <Playoffs
-            currentSeason={currentSeason} userTeam={userTeam}
-            playoffData={playoffData} onPlayoffDataChange={setPlayoffData}
-          />
-        )}
-        {activeTab === 'trades' && <Trades userTeam={userTeam} currentSeason={currentSeason} />}
-        {activeTab === 'franchise' && (
-          <Franchise
-            userTeam={userTeam} currentSeason={currentSeason}
-            onSeasonAdvance={handleSeasonAdvance}
-          />
-        )}
-        {activeTab === 'depth' && <DepthChart userTeam={userTeam} />}
-        {activeTab === 'draft' && (
-          <Draft
-            userTeam={userTeam} currentSeason={currentSeason}
-            onDraftComplete={() => setActiveTab('home')}
-          />
-        )}
-      </div>
+  {activeTab === 'home' && (
+    <Home
+      userTeam={userTeam} currentSeason={currentSeason}
+      onNavigate={tab => setActiveTab(tab as Tab)}
+      onSeasonAdvance={handleSeasonAdvance}
+      onPlayoffsComplete={() => setPlayoffsComplete(true)}
+    />
+  )}
+  {activeTab === 'standings' && <Standings currentSeason={currentSeason} />}
+  {activeTab === 'teams' && <Teams />}
+  {activeTab === 'schedule' && <Schedule currentSeason={currentSeason} />}
+  {activeTab === 'stats' && <Stats currentSeason={currentSeason} />}
+  {activeTab === 'records' && <Records />}
+  {activeTab === 'playoffs' && (
+    <Playoffs
+      currentSeason={currentSeason}
+      data={playoffData}
+      setData={setPlayoffData}
+    />
+  )}
+  {activeTab === 'trades' && <Trades userTeam={userTeam} />}
+  {activeTab === 'franchise' && (
+    <Franchise userTeam={userTeam} currentSeason={currentSeason} />
+  )}
+  {activeTab === 'depth' && <DepthChart userTeam={userTeam} />}
+  {activeTab === 'draft' && (
+    <Draft
+      userTeam={userTeam} currentSeason={currentSeason}
+      onDraftComplete={() => setActiveTab('home')}
+    />
+  )}
+</div>
+    
     </div>
   );
 
