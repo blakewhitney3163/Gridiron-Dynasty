@@ -83,7 +83,7 @@ function generatePlayerStats(teamId, score, offenseRating) {
     const combinedFactor  = (teamRatingFactor + qbRatingFactor) / 2;
     // throw_power boosts deep-ball yards
     const powerBonus      = (attr(qb, 'throw_power') - 75) * 0.8;
-    passYardsGenerated    = clamp(randomNormal((250 + powerBonus) * combinedFactor, 50), 60, 450);
+    passYardsGenerated    = clamp(randomNormal((220 + powerBonus) * combinedFactor, 50), 60, 450);
 
     const passAttempts    = clamp(randomNormal(34, 5), 20, 50);
     // throw_accuracy drives completion %
