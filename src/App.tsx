@@ -47,25 +47,29 @@ export default function App() {
   const [setupSteps, setSetupSteps] = useState<SetupStep[]>([]);
   const [setupComplete, setSetupComplete] = useState(false);
 
-  useEffect(() => {
-    Promise.all([
-      window.api.getCurrentSeason(),
-      window.api.getUserTeam(),
-      window.api.getOffseasonStatus(),
-    ]).then(([season, team, offseason]: [number, UserTeam | null, any]) => {
-      setCurrentSeason(season);
-      setPlayoffsComplete(offseason.playoffsComplete ?? false);
-      if (!team) {
-        setScreen('start');
-      } else {
-        window.api.checkSetupDone().then((done: boolean) => {
-          setUserTeam(team);
-          setScreen(done ? 'game' : 'setup');
-          if (!done) runSetup();
-        });
-      }
-    });
-  }, []);
+  const [hasSave, setHasSave] = useState(false);
+
+useEffect(() => {
+  Promise.all([
+    window.api.getCurrentSeason(),
+    window.api.getUserTeam(),
+    window.api.getOffseasonStatus(),
+  ]).then(([season, team, offseason]: [number, UserTeam | null, any]) => {
+    setCurrentSeason(season);
+    setPlayoffsComplete(offseason.playoffsComplete ?? false);
+    if (!team) {
+      setHasSave(false);
+      setScreen('start');
+    } else {
+      setHasSave(true);
+      window.api.checkSetupDone().then((done: boolean) => {
+        setUserTeam(team);
+        setScreen(done ? 'game' : 'setup');
+        if (!done) runSetup();
+      });
+    }
+  });
+}, []);
 
   const markStep = (label: string, done: boolean) => {
     setSetupSteps(prev => {
@@ -125,30 +129,31 @@ export default function App() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: 280 }}>
-          <button
-            onClick={() => setScreen('team-select')}
-            style={{
-              padding: '16px 24px', fontSize: 13, fontWeight: 'bold', letterSpacing: 3,
-              background: '#4caf50', color: '#000', border: 'none', borderRadius: 4,
-              cursor: 'pointer', fontFamily: 'monospace',
-            }}
-          >
-            NEW DYNASTY
-          </button>
-          <button
-            onClick={async () => {
-              const team = await window.api.getUserTeam();
-              if (team) { setUserTeam(team); setScreen('game'); }
-            }}
-            style={{
-              padding: '16px 24px', fontSize: 13, fontWeight: 'bold', letterSpacing: 3,
-              background: 'transparent', color: '#555', border: '1px solid #222', borderRadius: 4,
-              cursor: 'pointer', fontFamily: 'monospace',
-            }}
-          >
-            CONTINUE
-          </button>
-        </div>
+  <button
+    onClick={() => setScreen('team-select')}
+    style={{
+      padding: '16px 24px', fontSize: 13, fontWeight: 'bold', letterSpacing: 3,
+      background: '#4caf50', color: '#000', border: 'none', borderRadius: 4,
+      cursor: 'pointer', fontFamily: 'monospace',
+    }}
+  >
+    NEW DYNASTY
+  </button>
+  <button
+    disabled={!hasSave}
+    onClick={() => { if (hasSave) setScreen('game'); }}
+    style={{
+      padding: '16px 24px', fontSize: 13, fontWeight: 'bold', letterSpacing: 3,
+      background: 'transparent',
+      color: hasSave ? '#555' : '#222',
+      border: `1px solid ${hasSave ? '#333' : '#1a1a1a'}`,
+      borderRadius: 4, cursor: hasSave ? 'pointer' : 'default',
+      fontFamily: 'monospace',
+    }}
+  >
+    {hasSave ? 'CONTINUE' : 'NO SAVED DYNASTY'}
+  </button>
+</div>
       </div>
     );
   }

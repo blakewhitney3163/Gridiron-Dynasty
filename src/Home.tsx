@@ -151,8 +151,6 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
   const [champions,          setChampions]          = useState<Champion[]>([]);
   const [confirming,         setConfirming]         = useState(false);
   const [advancing,          setAdvancing]          = useState(false);
-  const [confirmReset,       setConfirmReset]       = useState(false);
-  const [resetting,          setResetting]          = useState(false);
   const [playoffSeeds,       setPlayoffSeeds]       = useState<{ afc: SeedEntry[]; nfc: SeedEntry[] } | null>(null);
   const [playoffResults,     setPlayoffResults]     = useState<PlayoffGame[] | null>(null);
   const [simulatingPlayoffs, setSimulatingPlayoffs] = useState(false);
@@ -310,14 +308,6 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
     onSeasonAdvance(result.nextSeason);
   };
 
-  const handleReset = async () => {
-    setResetting(true);
-    await window.api.resetDynasty();
-    setResetting(false);
-    setConfirmReset(false);
-    onSeasonAdvance(2025);
-  };
-
   const allWeeksDone    = hasSchedule && currentWeek === null;
   const currentChampion = champions.find(c => c.season === currentSeason);
   const playoffsComplete = !!currentChampion;
@@ -346,21 +336,6 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
           {userRecord && (
             <div style={{ fontSize: 12, color: '#FF8740', marginTop: 4 }}>
               {userTeam.name}: {userRecord.wins}-{userRecord.losses}
-            </div>
-          )}
-          {!confirmReset && (
-            <button onClick={() => setConfirmReset(true)}
-              style={{ fontSize: 11, color: '#3a3a3a', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline', marginTop: 8 }}>
-              ↺ reset dynasty
-            </button>
-          )}
-          {confirmReset && (
-            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 11, color: '#555' }}>⚠ Deletes all games, stats & champions. Resets to 2025.</span>
-              <button onClick={handleReset} disabled={resetting} style={smallBtn('#3a0a0a', '#e57373', resetting)}>
-                {resetting ? 'Resetting...' : 'Confirm Reset'}
-              </button>
-              <button onClick={() => setConfirmReset(false)} style={smallBtn('#222', '#777', false)}>Cancel</button>
             </div>
           )}
         </div>
