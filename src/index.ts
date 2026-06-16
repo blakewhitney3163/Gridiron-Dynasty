@@ -1871,7 +1871,7 @@ ipcMain.handle('get-team-needs', (_: any, teamId: number) => {
 
   const roster = db.prepare(`
     SELECT position, overall_rating FROM players
-    WHERE team_id = ? AND is_free_agent = 0 AND on_practice_squad = 0
+    WHERE team_id = ? AND is_free_agent = 0 AND roster_status = 'active'
     ORDER BY overall_rating DESC
   `).all(teamId) as { position: string; overall_rating: number }[];
 
