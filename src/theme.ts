@@ -1,22 +1,22 @@
 // Central color palette — import as: import { T } from './theme';
 export const T = {
-  // Backgrounds — charcoal base like OOTP
-  bgPage:   '#444',   // main charcoal background
-  bgPanel:  '#4e4e4e',   // panels, lists
-  bgCard:   '#585858',   // cards, rows, elevated
-  bgInput:  '#474747',   // inputs, selects
-  bgDeep:   '#333',   // deepest/darkest elements
+  // Backgrounds
+  bgPage:   '#444',
+  bgPanel:  '#4e4e4e',
+  bgCard:   '#585858',
+  bgInput:  '#474747',
+  bgDeep:   '#333',
 
-  // Borders
-  borderFaint:  '#444',
-  borderMid:    '#505050',
-  borderStrong: '#5e5e5e',
+  // Borders — these were broken (same value as bgPage)
+  borderFaint:  '#5a5a5a',
+  borderMid:    '#686868',
+  borderStrong: '#787878',
 
-  // Text — bright white like OOTP
+  // Text
   textPrimary:   '#f0f0f0',
   textSecondary: '#b5b5b5',
-  textMuted:     '#888',
-  textDim:       '#666',
+  textMuted:     '#999',
+  textDim:       '#777',
 
   // Accents (unchanged)
   gold:   '#FFD700',
@@ -25,11 +25,11 @@ export const T = {
   orange: '#FF8740',
   red:    '#e57373',
 
-  // Tinted panel backgrounds — dark steel blue for section headers (OOTP-style)
-  bgGreen:    '#1a3020',
-  bgBlue:     '#1c2a40',
-  bgOrange:   '#3a2010',
-  bgGold:     '#3a3010',
-  bgRed:      '#3a1515',
-  bgSelected: '#1e3055',
+  // Tinted backgrounds — lightened to work with charcoal base
+  bgGreen:    '#2d4a35',
+  bgBlue:     '#2d3f5a',
+  bgOrange:   '#4a3020',
+  bgGold:     '#4a4020',
+  bgRed:      '#4a2525',
+  bgSelected: '#2d4570',
 } as const;
