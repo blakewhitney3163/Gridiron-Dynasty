@@ -108,14 +108,18 @@ function PlayerCard({ player, currentSeason, onClose }: { player: SelectedPlayer
   const [careerStats, setCareerStats] = useState<CareerSeasonStats[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+   useEffect(() => {
     setLoading(true);
     Promise.all([
       window.api.getPlayerStats(player.player_id),
       window.api.getPlayerCareerStats(player.player_id),
     ]).then(([season, career]: [SeasonStats, CareerSeasonStats[]]) => {
-      setSeasonStats(season);
+      setSeasonStats(season ?? null);
       setCareerStats(career ?? []);
+      setLoading(false);
+    }).catch(() => {
+      setSeasonStats(null);
+      setCareerStats([]);
       setLoading(false);
     });
   }, [player.player_id]);

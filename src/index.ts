@@ -1439,16 +1439,29 @@ ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
       while ((cellMatch = cellReCopy.exec(rowMatch[1])) !== null) {
         cells.push(stripTags(cellMatch[1]));
       }
-      if (cells.length >= 5) {
-        const aav = parseMoney(cells[3]);
-        const years = parseInt(cells[2]) || 0;
-        const gtd = parseMoney(cells[4]);
-        if (aav > 0 && years > 0) {
-          rows.push({ name: cells[0], position: cells[1] ?? '', aav, years, guaranteed: gtd });
-        }
+      if (cells.length < 5) continue;
+      const cell2AsYears = parseInt(cells[2]);
+      const isFormatA = cell2AsYears >= 1 && cell2AsYears <= 15 && parseMoney(cells[3]) > 0;
+      let name: string, position: string, aav: number, years: number, gtd: number;
+      name = cells[0];
+      position = cells[1] ?? '';
+      if (isFormatA) {
+        years = cell2AsYears;
+        aav = parseMoney(cells[3]);
+        gtd = parseMoney(cells[4]);
+      } else {
+        const totalValue = parseMoney(cells[3]);
+        aav = parseMoney(cells[4]);
+        gtd = parseMoney(cells[5] ?? '0');
+        years = aav > 0 ? Math.round(totalValue / aav) : 0;
+        if (years < 1 || years > 15) years = 0;
+      }
+      if (aav > 0 && years > 0) {
+        rows.push({ name, position, aav, years, guaranteed: gtd });
       }
     }
   } else {
+  else {
     for (const line of content.split('\n')) {
       const parts = line.split(',');
       if (parts.length >= 4) {
@@ -1514,15 +1527,23 @@ ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
 
 ipcMain.handle('get-depth-chart', (_event: any, teamId: number) => {
   initDepthChart(teamId);
-  return db.prepare(`
-    SELECT dc.position_group, dc.slot, p.id, p.first_name, p.last_name,
+  const rows = db.prepare(`
+    SELECT dc.position_group, dc.slot, p.id as player_id, p.first_name, p.last_name,
            p.position, p.position_label, p.overall_rating, p.age, p.dev_trait,
-           p.injury_status, p.weeks_out
+           p.speed, p.strength, p.awareness,
+           p.injury_status, p.weeks_out, p.injury_type
     FROM depth_chart dc
     JOIN players p ON dc.player_id = p.id
     WHERE dc.team_id = ?
     ORDER BY dc.position_group, dc.slot
-  `).all(teamId);
+  `).all(teamId) as any[];
+  const grouped: Record<string, any[]> = {};
+  for (const row of rows) {
+    const g = row.position_group;
+    if (!grouped[g]) grouped[g] = [];
+    grouped[g].push(row);
+  }
+  return grouped;
 });
 
 ipcMain.handle('set-depth-chart-order', (_event: any, { teamId, positionGroup, playerIds }: {
