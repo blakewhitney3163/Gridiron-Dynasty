@@ -989,6 +989,16 @@ ipcMain.handle('get-team-status', (_event: any, teamId: number) => {
 ipcMain.handle('propose-trade', (_event: any, { myPlayerIds, theirPlayerIds, theirTeamId }: {
   myPlayerIds: number[]; theirPlayerIds: number[]; theirTeamId: number;
 }) => {
+    const TRADE_DEADLINE_WEEK = 8;
+  const _season = getCurrentSeason();
+  const _totalGames = (db.prepare('SELECT COUNT(*) as count FROM games WHERE season = ? AND is_playoff = 0').get(_season) as any).count;
+  if (_totalGames > 0) {
+    const _weekRow = db.prepare('SELECT MIN(week) as week FROM games WHERE season = ? AND is_simulated = 0 AND is_playoff = 0').get(_season) as any;
+    const _currentWeek = _weekRow?.week;
+    if (!_currentWeek || _currentWeek > TRADE_DEADLINE_WEEK) {
+      return { accepted: false, reason: 'The trade deadline has passed (after Week 8). Trades reopen in the offseason.' };
+    }
+  }
   const myTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
   if (!myTeamRow) return { accepted: false, reason: 'No franchise selected.' };
   const myTeamId = parseInt(myTeamRow.value);

@@ -106,16 +106,19 @@ export default function Trades({ userTeam }: Props) {
   const [result, setResult]             = useState<TradeResult | null>(null);
   const [proposing, setProposing]       = useState(false);
   const [needs, setNeeds]               = useState<TeamNeed[]>([]);
+  const [weekInfo, setWeekInfo] = useState<{ hasSchedule: boolean; currentWeek: number | null } | null>(null);
 
   useEffect(() => {
     Promise.all([
       window.api.getTeams(),
       window.api.getRoster(userTeam.id),
       window.api.getTeamNeeds(userTeam.id),
-    ]).then(([allTeams, roster, n]: [Team[], Player[], TeamNeed[]]) => {
+      window.api.getCurrentWeek(),
+    ]).then(([allTeams, roster, n, wi]: [Team[], Player[], TeamNeed[], any]) => {
       setTeams(allTeams.filter(t => t.id !== userTeam.id));
       setMyRoster(roster);
       setNeeds(n);
+      setWeekInfo(wi);
     });
   }, [userTeam.id]);
 
@@ -181,6 +184,9 @@ export default function Trades({ userTeam }: Props) {
   const canPropose    = mySelected.length > 0 && theirSelected.length > 0 && selectedTeamId !== null;
   const selectedTeam  = teams.find(t => t.id === selectedTeamId);
   const statusMeta    = STATUS_META[teamStatus?.status ?? ''] ?? STATUS_META['Neutral'];
+  const DEADLINE = 8;
+  const isPastDeadline = !!(weekInfo?.hasSchedule && (!weekInfo.currentWeek || weekInfo.currentWeek > DEADLINE));
+  const weeksToDeadline = weekInfo?.currentWeek ? Math.max(0, DEADLINE - weekInfo.currentWeek + 1) : null;
 
   const threshold = teamStatus?.acceptanceThreshold ?? -8;
   const margin    = (myValue - theirValue) - threshold;
@@ -223,6 +229,24 @@ export default function Trades({ userTeam }: Props) {
         </div>
       </div>
 
+       {/* Deadline Banner */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '7px 14px',
+        background: isPastDeadline ? '#1a0505' : '#0a1a0a',
+        border: `1px solid ${isPastDeadline ? '#e5737333' : '#4caf5033'}`,
+        borderRadius: 6, marginBottom: 10,
+      }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: isPastDeadline ? '#e57373' : '#4caf50' }}>
+          {isPastDeadline ? '🔒 TRADE DEADLINE PASSED' : '🟢 TRADES OPEN'}
+        </span>
+        <span style={{ color: '#444', fontSize: 11 }}>
+          {isPastDeadline
+            ? 'Trades are locked after Week 8 · Reopen in the offseason'
+            : weeksToDeadline !== null
+              ? `Deadline is Week 8 · ${weeksToDeadline} week${weeksToDeadline !== 1 ? 's' : ''} remaining`
+              : 'Deadline is Week 8 of the regular season'}
+        </span>
+      </div>
       {/* Team Needs Strip */}
       {needs.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 6, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -236,6 +260,7 @@ export default function Trades({ userTeam }: Props) {
             }}>{n.position}</span>
           ))}
         </div>
+      )}
       )}
 
       {!selectedTeamId ? (
@@ -373,7 +398,7 @@ export default function Trades({ userTeam }: Props) {
               </div>
               <button
                 onClick={handlePropose}
-                disabled={!canPropose || proposing}
+                disabled={!canPropose || proposing || isPastDeadline}
                 style={{
                   padding: '8px 20px', background: canPropose ? '#1a3a1a' : '#111',
                   border: `1px solid ${canPropose ? '#4caf50' : '#2a2a2a'}`,

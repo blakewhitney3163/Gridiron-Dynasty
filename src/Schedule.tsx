@@ -48,6 +48,9 @@ export default function Schedule({ currentSeason }: Props) {
             }}
           >
             Week {week}
+              {week === 8 && (
+                <span style={{ display: 'block', fontSize: 8, color: '#FF8740', letterSpacing: 0.5, marginTop: 1 }}>DEADLINE</span>
+              )}
           </div>
         ))}
       </div>
