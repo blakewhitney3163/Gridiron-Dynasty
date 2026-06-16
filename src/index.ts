@@ -1457,7 +1457,7 @@ ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
         if (years < 1 || years > 15) years = 0;
       }
       if (aav > 0 && years > 0) {
-        rows.push({ name, position, aav, years, guaranteed: gtd });
+        rows.push({ name, position, aav: aav / 1_000_000, years, guaranteed: gtd / 1_000_000 });
       }
     }
   } else {
@@ -1467,7 +1467,7 @@ ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
         const aav = parseMoney(parts[3]);
         const years = parseInt(parts[2]) || 0;
         if (aav > 0 && years > 0) {
-          rows.push({ name: parts[0].trim(), position: parts[1]?.trim() ?? '', aav, years, guaranteed: parseMoney(parts[4] ?? '0') });
+          rows.push({ name: parts[0].trim(), position: parts[1]?.trim() ?? '', aav: aav / 1_000_000, years, guaranteed: parseMoney(parts[4] ?? '0') / 1_000_000 });
         }
       }
     }
