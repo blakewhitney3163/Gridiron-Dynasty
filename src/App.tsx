@@ -243,11 +243,20 @@ useEffect(() => {
           {userTeam.city} {userTeam.name}
         </span>
         <button
-          onClick={() => setUserTeam(null) as any || setScreen('start')}
-          style={{ fontSize: 10, color: '#333', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-        >
-          change
-        </button>
+  onClick={async () => {
+    if (window.confirm('Start a new dynasty? This will wipe all current progress.')) {
+      await window.api.resetSave();
+      setUserTeam(null);
+      setHasSave(false);
+      setSetupSteps([]);
+      setSetupComplete(false);
+      setScreen('start');
+    }
+  }}
+  style={{ fontSize: 10, color: '#333', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+>
+  new dynasty
+</button>
         <span style={{ marginLeft: 'auto', fontSize: 11, color: '#444' }}>
           {currentSeason} Season
         </span>
