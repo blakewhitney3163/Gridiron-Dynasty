@@ -6,11 +6,55 @@ const { simulateGame } = require('./simulateGame');
 // Auto-seed teams if fresh DB
 const teamCount = (db.prepare('SELECT COUNT(*) as cnt FROM teams').get() as any).cnt;
 if (teamCount === 0) {
+  const insertTeam = db.prepare(
+    'INSERT INTO teams (city, name, abbreviation, conference, division) VALUES (?, ?, ?, ?, ?)'
+  );
+  const NFL_TEAMS = [
+    ['Baltimore', 'Ravens', 'BAL', 'AFC', 'North'],
+    ['Cincinnati', 'Bengals', 'CIN', 'AFC', 'North'],
+    ['Cleveland', 'Browns', 'CLE', 'AFC', 'North'],
+    ['Pittsburgh', 'Steelers', 'PIT', 'AFC', 'North'],
+    ['Houston', 'Texans', 'HOU', 'AFC', 'South'],
+    ['Indianapolis', 'Colts', 'IND', 'AFC', 'South'],
+    ['Jacksonville', 'Jaguars', 'JAX', 'AFC', 'South'],
+    ['Tennessee', 'Titans', 'TEN', 'AFC', 'South'],
+    ['Buffalo', 'Bills', 'BUF', 'AFC', 'East'],
+    ['Miami', 'Dolphins', 'MIA', 'AFC', 'East'],
+    ['New England', 'Patriots', 'NE', 'AFC', 'East'],
+    ['New York', 'Jets', 'NYJ', 'AFC', 'East'],
+    ['Denver', 'Broncos', 'DEN', 'AFC', 'West'],
+    ['Kansas City', 'Chiefs', 'KC', 'AFC', 'West'],
+    ['Las Vegas', 'Raiders', 'LV', 'AFC', 'West'],
+    ['Los Angeles', 'Chargers', 'LAC', 'AFC', 'West'],
+    ['Chicago', 'Bears', 'CHI', 'NFC', 'North'],
+    ['Detroit', 'Lions', 'DET', 'NFC', 'North'],
+    ['Green Bay', 'Packers', 'GB', 'NFC', 'North'],
+    ['Minnesota', 'Vikings', 'MIN', 'NFC', 'North'],
+    ['Atlanta', 'Falcons', 'ATL', 'NFC', 'South'],
+    ['Carolina', 'Panthers', 'CAR', 'NFC', 'South'],
+    ['New Orleans', 'Saints', 'NO', 'NFC', 'South'],
+    ['Tampa Bay', 'Buccaneers', 'TB', 'NFC', 'South'],
+    ['Dallas', 'Cowboys', 'DAL', 'NFC', 'East'],
+    ['New York', 'Giants', 'NYG', 'NFC', 'East'],
+    ['Philadelphia', 'Eagles', 'PHI', 'NFC', 'East'],
+    ['Washington', 'Commanders', 'WAS', 'NFC', 'East'],
+    ['Arizona', 'Cardinals', 'ARI', 'NFC', 'West'],
+    ['Los Angeles', 'Rams', 'LAR', 'NFC', 'West'],
+    ['San Francisco', '49ers', 'SF', 'NFC', 'West'],
+    ['Seattle', 'Seahawks', 'SEA', 'NFC', 'West'],
+  ];
+  db.transaction(() => {
+    for (const [city, name, abbr, conf, div] of NFL_TEAMS) {
+      insertTeam.run(city, name, abbr, conf, div);
+    }
+  })();
+  console.log('32 NFL teams seeded');
+
   const pathModule = require('path');
   const csvPath = pathModule.join(app.getAppPath(), 'src', 'madden-ratings.csv');
   importFromMadden(csvPath);
   generateContracts();
-  console.log('Fresh DB: teams seeded from Madden CSV');
+  console.log('Fresh DB: players and contracts generated');
 }
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
