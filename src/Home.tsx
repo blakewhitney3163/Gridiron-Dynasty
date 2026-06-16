@@ -381,7 +381,7 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
 
   {/* Retirements */}
       {retiredPlayers.length > 0 && (
-        <div style={{ background: '#110a0a', border: '1px solid #2a1a1a', borderRadius: 8, padding: '14px 20px', marginBottom: 20 }}>
+        <div style={{ background: T.bgRed, border: '1px solid #2a1a1a', borderRadius: 8, padding: '14px 20px', marginBottom: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div style={{ fontSize: 10, color: '#e57373', letterSpacing: 2 }}>RETIREMENTS — {currentSeason - 1} OFFSEASON</div>
             <button onClick={() => setRetiredPlayers([])} style={{ fontSize: 10, background: 'none', border: 'none', color: T.textDim, cursor: 'pointer' }}>dismiss</button>

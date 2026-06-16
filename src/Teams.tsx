@@ -54,7 +54,7 @@ function getOvrColor(ovr: number): string {
 
 function StatBox({ label, value }: { label: string; value: any }) {
   return (
-    <div style={{ background: '#12122a', borderRadius: '6px', padding: '10px', textAlign: 'center' }}>
+    <div style={{ background: T.bgCard, borderRadius: '6px', padding: '10px', textAlign: 'center' }}>
       <div style={{ color: '#fff', fontWeight: 'bold', fontSize: '18px' }}>{value ?? '—'}</div>
       <div style={{ color: T.textSecondary, fontSize: '11px', marginTop: '2px' }}>{label}</div>
     </div>
@@ -160,7 +160,7 @@ export default function Teams() {
     <div style={{ display: 'flex', height: 'calc(100vh - 90px)' }}>
 
       {/* Team list */}
-      <div style={{ width: '200px', background: '#0f0f23', borderRight: `1px solid ${T.borderStrong}`, overflowY: 'auto', flexShrink: 0 }}>
+      <div style={{ width: '200px', background: T.bgPanel, borderRight: `1px solid ${T.borderStrong}`, overflowY: 'auto', flexShrink: 0 }}>
         {conferences.map(conf => (
           <div key={conf}>
             <div style={{ padding: '10px 14px', color: '#FF8740', fontWeight: 'bold', fontSize: '12px', borderBottom: `1px solid ${T.borderFaint}` }}>
@@ -206,7 +206,7 @@ export default function Teams() {
                 onClick={() => { setSelectedPosition(pos); setSelectedPlayer(null); }}
                 style={{
                   padding: '4px 12px', borderRadius: '4px', border: 'none', cursor: 'pointer',
-                  background: selectedPosition === pos ? '#4FC3F7' : T.bgBlue,
+                  background: selectedPosition === pos ? '#4FC3F7' : T.bgCard,
                   color: selectedPosition === pos ? '#000' : T.textSecondary,
                   fontWeight: selectedPosition === pos ? 'bold' : 'normal',
                   fontSize: '12px',
@@ -246,7 +246,7 @@ export default function Teams() {
 
             {/* Player profile */}
             {selectedPlayer && (
-              <div style={{ flex: 1, overflowY: 'auto', padding: '20px', background: '#0a0a1a' }}>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '20px', background: T.bgCard }}>
                 <button
                   onClick={() => setSelectedPlayer(null)}
                   style={{ float: 'right', background: 'none', border: 'none', color: T.textSecondary, cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}
@@ -279,7 +279,7 @@ export default function Teams() {
                       { label: 'Strength', value: selectedPlayer.strength },
                       { label: 'Awareness', value: selectedPlayer.awareness },
                     ].map(attr => (
-                      <div key={attr.label} style={{ background: '#12122a', borderRadius: '6px', padding: '10px', textAlign: 'center' }}>
+                      <div key={attr.label} style={{ background: T.bgCard, borderRadius: '6px', padding: '10px', textAlign: 'center' }}>
                         <div style={{ color: getOvrColor(attr.value), fontWeight: 'bold', fontSize: '20px' }}>{attr.value}</div>
                         <div style={{ color: T.textSecondary, fontSize: '11px', marginTop: '2px' }}>{attr.label}</div>
                       </div>
@@ -297,7 +297,7 @@ export default function Teams() {
                           onClick={() => setStatsView(v)}
                           style={{
                             padding: '5px 14px', borderRadius: '4px', border: 'none', cursor: 'pointer',
-                            background: statsView === v ? '#4FC3F7' : T.bgBlue,
+                            background: statsView === v ? '#4FC3F7' : T.bgCard,
                             color: statsView === v ? '#000' : T.textSecondary,
                             fontWeight: statsView === v ? 'bold' : 'normal',
                             fontSize: '12px',

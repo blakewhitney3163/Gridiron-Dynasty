@@ -97,7 +97,7 @@ function StatGroup({ label, children }: { label: string; children: React.ReactNo
 
 function StatRow({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #111', fontSize: 12 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: `1px solid ${T.borderMid}`, fontSize: 12 }}>
       <span style={{ color: T.textDim }}>{label}</span>
       <span style={{ color: color ?? T.textPrimary, fontWeight: 'bold' }}>{value}</span>
     </div>
@@ -135,7 +135,7 @@ function PlayerCard({ player, currentSeason, onClose }: { player: SelectedPlayer
     <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
       <div style={{ position: 'relative', width: 420, background: T.bgPage, borderLeft: `1px solid ${T.borderFaint}`, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '20px 20px 16px', borderBottom: `1px solid ${T.borderFaint}`, background: '#0a0a0a' }}>
+        <div style={{ padding: '20px 20px 16px', borderBottom: `1px solid ${T.borderFaint}`, background: T.bgPanel }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <div>
               <div style={{ fontSize: 18, fontWeight: 'bold', color: '#fff', marginBottom: 4 }}>{player.player_name}</div>
@@ -203,7 +203,7 @@ function PlayerCard({ player, currentSeason, onClose }: { player: SelectedPlayer
                     </thead>
                     <tbody>
                       {careerStats.map((s, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid #111', background: s.season === currentSeason ? T.bgGreen : 'transparent' }}>
+                        <tr key={i} style={{ borderBottom: `1px solid ${T.borderMid}`, background: s.season === currentSeason ? T.bgGreen : 'transparent' }}>
                           <td style={{ padding: '5px 6px', color: s.season === currentSeason ? '#4caf50' : T.textMuted }}>{s.season}</td>
                           <td style={{ padding: '5px 6px', color: T.textDim, textAlign: 'right' }}>{s.games ?? 0}</td>
                           {showPassing && <><td style={{ padding: '5px 6px', color: T.textPrimary, textAlign: 'right' }}>{s.pass_yards ?? 0}</td><td style={{ padding: '5px 6px', color: '#81C784', textAlign: 'right' }}>{s.pass_tds ?? 0}</td><td style={{ padding: '5px 6px', color: '#e57373', textAlign: 'right' }}>{s.interceptions ?? 0}</td></>}

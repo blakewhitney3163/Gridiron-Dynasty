@@ -113,7 +113,7 @@ useEffect(() => {
   if (screen === 'start') {
     return (
       <div style={{
-        minHeight: '100vh', background: '#060606',
+        minHeight: '100vh', background: T.bgPage,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         fontFamily: 'monospace',
       }}>
@@ -168,7 +168,7 @@ useEffect(() => {
   if (screen === 'setup') {
     return (
       <div style={{
-        minHeight: '100vh', background: '#060606',
+        minHeight: '100vh', background: T.bgPage,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         fontFamily: 'monospace',
       }}>
@@ -220,7 +220,7 @@ useEffect(() => {
   if (screen === 'loading' || !userTeam) {
     return (
       <div style={{
-        minHeight: '100vh', background: '#060606', display: 'flex',
+        minHeight: '100vh', background: T.bgPage, display: 'flex',
         alignItems: 'center', justifyContent: 'center',
         fontFamily: 'monospace', color: T.borderStrong, fontSize: 11, letterSpacing: 3,
       }}>
@@ -231,10 +231,10 @@ useEffect(() => {
 
   // ── Main Game ─────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', color: T.textPrimary, fontFamily: 'monospace' }}>
+    <div style={{ minHeight: '100vh', background: T.bgPage, color: T.textPrimary, fontFamily: 'monospace' }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 16, padding: '10px 20px',
-        borderBottom: '1px solid #111', background: '#060606',
+        borderBottom: `1px solid ${T.borderMid}`, background: T.bgPage,
       }}>
         <span style={{ fontSize: 13, fontWeight: 'bold', color: '#4caf50', letterSpacing: 2 }}>
           NFL SIMULATOR
@@ -263,7 +263,7 @@ useEffect(() => {
         </span>
       </div>
 
-      <div style={{ display: 'flex', borderBottom: '1px solid #111', background: '#060606', overflowX: 'auto' }}>
+      <div style={{ display: 'flex', borderBottom: `1px solid ${T.borderMid}`, background: T.bgPage, overflowX: 'auto' }}>
         {tabs.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
             padding: '11px 22px', background: 'none', border: 'none', cursor: 'pointer',

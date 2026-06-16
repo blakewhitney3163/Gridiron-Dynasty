@@ -233,7 +233,7 @@ export default function Trades({ userTeam }: Props) {
        {/* Deadline Banner */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10, padding: '7px 14px',
-        background: isPastDeadline ? '#1a0505' : T.bgGreen,
+        background: isPastDeadline ? T.bgRed : T.bgGreen,
         border: `1px solid ${isPastDeadline ? '#e5737333' : '#4caf5033'}`,
         borderRadius: 6, marginBottom: 10,
       }}>
@@ -380,7 +380,7 @@ export default function Trades({ userTeam }: Props) {
             {/* Value bar */}
             {canPropose && myValue > 0 && theirValue > 0 && (
               <div style={{ marginTop: 12 }}>
-                <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: '#0a0a0a' }}>
+                <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: T.bgDeep }}>
                   <div style={{ width: `${(myValue / (myValue + theirValue)) * 100}%`, background: '#e57373' }} />
                   <div style={{ flex: 1, background: '#4FC3F7' }} />
                 </div>

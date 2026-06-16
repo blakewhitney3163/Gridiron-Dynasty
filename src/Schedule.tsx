@@ -31,7 +31,7 @@ export default function Schedule({ currentSeason }: Props) {
     <div style={{ display: 'flex', height: 'calc(100vh - 90px)' }}>
 
       {/* Week selector */}
-      <div style={{ width: '140px', background: '#0f0f23', borderRight: `1px solid ${T.borderStrong}`, overflowY: 'auto', flexShrink: 0 }}>
+      <div style={{ width: '140px', background: T.bgPanel, borderRight: `1px solid ${T.borderStrong}`, overflowY: 'auto', flexShrink: 0 }}>
         <div style={{ padding: '10px 14px', color: '#FF8740', fontWeight: 'bold', fontSize: '12px', borderBottom: `1px solid ${T.borderFaint}` }}>
           WEEK
         </div>
@@ -65,7 +65,7 @@ export default function Schedule({ currentSeason }: Props) {
           weekGames.map(game => {
             const homeWon = game.home_score > game.away_score;
             return (
-              <div key={game.id} style={{ background: '#0f0f23', border: `1px solid ${T.borderFaint}`, borderRadius: '8px', padding: '14px 18px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div key={game.id} style={{ background: T.bgPanel, border: `1px solid ${T.borderFaint}`, borderRadius: '8px', padding: '14px 18px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div style={{ flex: 1, textAlign: 'right' }}>
                   <span style={{ color: homeWon ? '#fff' : T.textMuted, fontSize: '14px' }}>{game.home_team}</span>
                 </div>
