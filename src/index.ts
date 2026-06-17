@@ -181,6 +181,11 @@ db.exec(`
     is_used INTEGER DEFAULT 0,
     UNIQUE(original_team_id, season, round)
   )
+  // after the pick_assets CREATE TABLE block
+try { db.exec(`CREATE TABLE IF NOT EXISTS team_trade_overrides (
+  team_id INTEGER PRIMARY KEY,
+  status  TEXT    NOT NULL
+)`); } catch (_) {}
 `);
 
 // Auto-balance rosters on startup if FA pool is empty
@@ -381,39 +386,88 @@ function getPlayerAvailabilityPremium(player: { age: number; position: string; d
   return premium;
 }
 
+const STATUS_META_BACKEND: Record<string, { description: string; acceptanceThreshold: number }> = {
+  Contender:  { description: 'Competing for a title — demands full value in any deal.',      acceptanceThreshold: -3  },
+  Buyer:      { description: 'Looking to add a piece for a playoff push.',                    acceptanceThreshold: -8  },
+  Neutral:    { description: 'No strong inclination to buy or sell right now.',               acceptanceThreshold: -8  },
+  Seller:     { description: 'Moving veterans for future assets — open to dealing.',          acceptanceThreshold: -18 },
+  Rebuilding: { description: 'Tearing it down. Will move anyone for the right offer.',        acceptanceThreshold: -22 },
+};
+
 function getTeamTradeProfile(teamId: number): {
   status: string; description: string; acceptanceThreshold: number;
-  wins: number; losses: number; avgOverall: number;
+  wins: number; losses: number; avgOverall: number; isOverridden: boolean;
 } {
   const season = getCurrentSeason();
+
+  // ── Record ────────────────────────────────────────────────────────────────
   const record = db.prepare(`
     SELECT
-      SUM(CASE WHEN (home_team_id = ? AND home_score > away_score) OR (away_team_id = ? AND away_score > home_score) THEN 1 ELSE 0 END) as wins,
-      SUM(CASE WHEN (home_team_id = ? AND home_score < away_score) OR (away_team_id = ? AND away_score < home_score) THEN 1 ELSE 0 END) as losses,
+      SUM(CASE WHEN (home_team_id = ? AND home_score > away_score)
+                 OR (away_team_id = ? AND away_score > home_score) THEN 1 ELSE 0 END) as wins,
+      SUM(CASE WHEN (home_team_id = ? AND home_score < away_score)
+                 OR (away_team_id = ? AND away_score < home_score) THEN 1 ELSE 0 END) as losses,
       COUNT(*) as games_played
-    FROM games WHERE (home_team_id = ? OR away_team_id = ?) AND season = ? AND is_simulated = 1 AND is_playoff = 0
+    FROM games
+    WHERE (home_team_id = ? OR away_team_id = ?)
+      AND season = ? AND is_simulated = 1 AND is_playoff = 0
   `).get(teamId, teamId, teamId, teamId, teamId, teamId, season) as any;
 
-  const ovrRow = db.prepare('SELECT AVG(overall_rating) as avg_ovr FROM players WHERE team_id = ?').get(teamId) as any;
-  const wins = record?.wins ?? 0;
-  const losses = record?.losses ?? 0;
+  const wins       = record?.wins        ?? 0;
+  const losses     = record?.losses      ?? 0;
   const gamesPlayed = record?.games_played ?? 0;
-  const winPct = gamesPlayed >= 4 ? wins / gamesPlayed : 0.5;
-  const avgOverall = Math.round(ovrRow?.avg_ovr ?? 75);
+  const winPct     = gamesPlayed >= 4 ? wins / gamesPlayed : 0.5;
 
-  let status: string, description: string, acceptanceThreshold: number;
-  if (winPct >= 0.65 && avgOverall >= 78) {
-    status = 'Contender'; description = 'Competing for a title — demands full value in any deal.'; acceptanceThreshold = -3;
-  } else if (winPct >= 0.50 && avgOverall >= 76) {
-    status = 'Buyer'; description = 'Looking to add a piece for a playoff push.'; acceptanceThreshold = -8;
-  } else if (winPct < 0.40 && avgOverall >= 77) {
-    status = 'Seller'; description = 'Moving veterans for future assets — open to dealing.'; acceptanceThreshold = -18;
-  } else if (winPct < 0.45 && avgOverall < 77) {
-    status = 'Rebuilding'; description = 'Tearing it down. Will move anyone for the right offer.'; acceptanceThreshold = -22;
-  } else {
-    status = 'Neutral'; description = 'No strong inclination to buy or sell right now.'; acceptanceThreshold = -8;
+  // ── Roster signals ────────────────────────────────────────────────────────
+  const roster = db.prepare(`
+    SELECT overall_rating, age, dev_trait, position
+    FROM players
+    WHERE team_id = ? AND roster_status = 'active'
+    ORDER BY overall_rating DESC
+  `).all(teamId) as any[];
+
+  const avgOverall = roster.length
+    ? Math.round(roster.reduce((s: number, p: any) => s + p.overall_rating, 0) / roster.length) : 75;
+  const avgAge = roster.length
+    ? roster.reduce((s: number, p: any) => s + p.age, 0) / roster.length : 26;
+  const eliteCount = roster.filter((p: any) => p.overall_rating >= 85).length;
+  const topQBAge   = roster.find((p: any) => p.position === 'QB')?.age ?? 26;
+  const hasXFactor = roster.some((p: any) =>
+    (p.dev_trait === 'X-Factor' || p.dev_trait === 'Superstar') && p.age >= 27);
+
+  // ── Auto-detect status ────────────────────────────────────────────────────
+  function autoDetect(): string {
+    const winning    = winPct >= 0.55;
+    const losing     = winPct < 0.40;
+    const talented   = avgOverall >= 78;
+    const old        = avgAge >= 27.5;
+    const young      = avgAge <= 25.5;
+    const winNow     = old || (hasXFactor && topQBAge >= 28);
+
+    if (winning && talented && (winNow || eliteCount >= 4)) return 'Contender';
+    if (winning || (talented && !young && winNow))           return 'Buyer';
+    if (losing  && talented && old)                          return 'Seller';
+    if (losing  || (young   && !talented))                   return 'Rebuilding';
+    return 'Neutral';
   }
-  return { status, description, acceptanceThreshold, wins, losses, avgOverall };
+
+  // ── Manual override takes priority ────────────────────────────────────────
+  const override = db.prepare(
+    'SELECT status FROM team_trade_overrides WHERE team_id = ?'
+  ).get(teamId) as any;
+
+  const resolvedStatus = override?.status ?? autoDetect();
+  const meta = STATUS_META_BACKEND[resolvedStatus] ?? STATUS_META_BACKEND['Neutral'];
+
+  return {
+    status:              resolvedStatus,
+    description:         meta.description,
+    acceptanceThreshold: meta.acceptanceThreshold,
+    wins,
+    losses,
+    avgOverall,
+    isOverridden:        !!override?.status,
+  };
 }
 
 // ─── Injury Helpers ───────────────────────────────────────────────────────────
@@ -1356,6 +1410,15 @@ ipcMain.handle('set-user-team', (_event: any, teamId: number) => {
 
 ipcMain.handle('get-team-status', (_event: any, teamId: number) => {
   return getTeamTradeProfile(teamId);
+});
+
+ipcMain.handle('set-team-trade-status', (_event, { teamId, status }: { teamId: number; status: string | null }) => {
+  if (!status || status === 'auto') {
+    db.prepare('DELETE FROM team_trade_overrides WHERE team_id = ?').run(teamId);
+  } else {
+    db.prepare('INSERT OR REPLACE INTO team_trade_overrides (team_id, status) VALUES (?, ?)').run(teamId, status);
+  }
+  return { success: true };
 });
 
 // ─── Trades ───────────────────────────────────────────────────────────────────
