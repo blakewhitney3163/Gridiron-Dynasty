@@ -170,8 +170,10 @@ export default function Franchise({ userTeam, currentSeason, playoffsComplete }:
   const [faSearch, setFaSearch] = useState('');
   const [cpuFaResult, setCpuFaResult] = useState<{ totalSigned: number; teamsActive: number } | null>(null);
   const [cpuFaDone, setCpuFaDone] = useState(false);
+  const [teamNeeds, setTeamNeeds] = useState<string[]>([]);
+  const [psSigningId, setPsSigningId] = useState<number | null>(null);
 
-  useEffect(() => { loadData(); }, [userTeam.id]);
+  useEffect(() => { loadData(); loadTeamNeeds(); }, [userTeam.id]);
 
   useEffect(() => {
     if (activeTab === 'fa') loadFreeAgents();
@@ -211,6 +213,25 @@ export default function Franchise({ userTeam, currentSeason, playoffsComplete }:
     const decisions: Record<number, Decision> = {};
     exp.forEach((p: Contract) => { decisions[p.id] = 'pending'; });
     setPlayerDecisions(decisions);
+  };
+
+  const loadTeamNeeds = async () => {
+    const needs = await window.api.getTeamNeeds(userTeam.id);
+    setTeamNeeds(Array.isArray(needs) ? needs : []);
+  };
+
+  const handleSignToPs = async (fa: FreeAgent) => {
+    setPsSigningId(fa.id);
+    const result = await window.api.signFreeAgentToPs(fa.id);
+    if (result.success) {
+      showToast(`${fa.first_name} ${fa.last_name} signed to practice squad.`, 'success');
+      await loadData();
+      await loadFreeAgents();
+      await loadTeamNeeds();
+    } else {
+      showToast(result.reason ?? 'Could not sign to PS.', 'error');
+    }
+    setPsSigningId(null);
   };
 
   const openExtend = (contract: Contract) => {
@@ -341,7 +362,7 @@ export default function Franchise({ userTeam, currentSeason, playoffsComplete }:
     });
 
   const filteredFa = freeAgents
-    .filter(f => faPos === 'ALL' || f.position === faPos)
+    .filter(f => faPos === 'ALL' ? true : faPos === 'NEEDS' ? teamNeeds.includes(f.position) : f.position === faPos)
     .filter(f => {
       if (!faSearch.trim()) return true;
       const q = faSearch.toLowerCase();
@@ -441,7 +462,7 @@ export default function Franchise({ userTeam, currentSeason, playoffsComplete }:
           { key: 'roster',    label: `ACTIVE ROSTER (${contracts.length})`,                          warn: false },
           { key: 'ps',        label: `PRACTICE SQUAD (${practiceSquad.length})`,                     warn: false },
           { key: 'fa',        label: 'FREE AGENTS',                                                   warn: false },
-          ...(playoffsComplete ? [{ key: 'offseason' as const, label: expiringCount > 0 ? `OFFSEASON ⚠ ${expiringCount}` : 'OFFSEASON', warn: expiringCount > 0 }] : []),
+          { key: 'offseason', label: expiringCount > 0 ? `OFFSEASON ⚠ ${expiringCount}` : 'OFFSEASON', warn: expiringCount > 0 },
         ] as const).map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
             padding: '5px 16px', fontSize: 11, letterSpacing: 1, cursor: 'pointer', borderRadius: 4,
@@ -661,14 +682,21 @@ export default function Franchise({ userTeam, currentSeason, playoffsComplete }:
         <div>
           <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              {POSITIONS.map(pos => (
-                <button key={pos} onClick={() => { setFaPos(pos); setSigningId(null); }} style={{
-                  padding: '3px 9px', background: faPos === pos ? '#4FC3F7' : '#141414',
-                  border: `1px solid ${faPos === pos ? '#4FC3F7' : '#222'}`, borderRadius: 3,
-                  color: faPos === pos ? '#000' : '#555', fontSize: 11, cursor: 'pointer',
-                  fontWeight: faPos === pos ? 'bold' : 'normal',
-                }}>{pos}</button>
-              ))}
+              {['NEEDS', ...POSITIONS].map(pos => {
+                const isNeeds = pos === 'NEEDS';
+                const isActive = faPos === pos;
+                return (
+                  <button key={pos} onClick={() => { setFaPos(pos); setSigningId(null); }} style={{
+                    padding: '3px 9px',
+                    background: isActive ? (isNeeds ? '#4a3020' : '#4FC3F7') : isNeeds ? '#1a0e00' : '#141414',
+                    border: `1px solid ${isActive ? (isNeeds ? '#FF8740' : '#4FC3F7') : isNeeds ? '#FF8740' : '#222'}`,
+                    borderRadius: 3,
+                    color: isActive ? (isNeeds ? '#FF8740' : '#000') : isNeeds ? '#FF8740' : '#555',
+                    fontSize: 11, cursor: 'pointer',
+                    fontWeight: isActive || isNeeds ? 'bold' : 'normal',
+                  }}>{isNeeds ? `NEEDS${teamNeeds.length > 0 ? ` (${teamNeeds.length})` : ''}` : pos}</button>
+                );
+              })}
             </div>
             <select onChange={e => setFaSortBy(e.target.value as any)} value={faSortBy} style={{
               marginLeft: 'auto', background: '#161616', border: '1px solid #2a2a2a',
@@ -690,12 +718,15 @@ export default function Franchise({ userTeam, currentSeason, playoffsComplete }:
           </div>
 
           {rosterSpots && cap && (
-            <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 12 }}>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 12, flexWrap: 'wrap' }}>
               <span style={{ color: rosterSpots.activeFree > 0 ? '#4caf50' : '#e57373' }}>
-                Active roster: {rosterSpots.active}/53 · {rosterSpots.activeFree > 0 ? `${rosterSpots.activeFree} open` : 'FULL'}
+                Active: {rosterSpots.active}/53 · {rosterSpots.activeFree > 0 ? `${rosterSpots.activeFree} open` : 'FULL'}
+              </span>
+              <span style={{ color: rosterSpots.psFree > 0 ? '#4FC3F7' : '#555' }}>
+                PS: {rosterSpots.ps}/16 · {rosterSpots.psFree > 0 ? `${rosterSpots.psFree} open` : 'FULL'}
               </span>
               <span style={{ color: cap.available_cap > 0 ? '#4caf50' : '#e57373' }}>
-                Cap space: {fmtSalary(cap.available_cap)} {cap.available_cap < 0 ? '(OVER)' : 'available'}
+                Cap: {fmtSalary(cap.available_cap)} {cap.available_cap < 0 ? '(OVER)' : 'available'}
               </span>
             </div>
           )}
@@ -728,17 +759,32 @@ export default function Franchise({ userTeam, currentSeason, playoffsComplete }:
                   </div>
                   <div style={{ width: 70, color: trait.color, fontSize: 11, textAlign: 'center', fontWeight: fa.dev_trait !== 'Normal' ? 700 : 'normal' }}>{fa.dev_trait === 'Normal' ? '—' : fa.dev_trait}</div>
                   <div style={{ width: 100, color: '#888', fontSize: 12 }}>{fmtSalary(mv)}/yr</div>
-                  <button
-                    onClick={() => isSigning ? setSigningId(null) : openSign(fa)}
-                    disabled={!!(rosterSpots && rosterSpots.activeFree <= 0)}
-                    style={{
-                      padding: '4px 12px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
-                      background: isSigning ? '#0a1a3a' : '#141414',
-                      border: `1px solid ${isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? '#1a1a1a' : '#2a2a2a'}`,
-                      color: isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? '#2a2a2a' : '#555',
-                    }}>
-                    {isSigning ? 'Cancel' : 'Sign'}
-                  </button>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button
+                      onClick={() => isSigning ? setSigningId(null) : openSign(fa)}
+                      disabled={!!(rosterSpots && rosterSpots.activeFree <= 0)}
+                      style={{
+                        padding: '4px 10px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
+                        background: isSigning ? '#0a1a3a' : '#141414',
+                        border: `1px solid ${isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? '#1a1a1a' : '#2a2a2a'}`,
+                        color: isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? '#2a2a2a' : '#555',
+                      }}>
+                      {isSigning ? 'Cancel' : 'Sign'}
+                    </button>
+                    <button
+                      onClick={() => handleSignToPs(fa)}
+                      disabled={!!(psSigningId === fa.id || (rosterSpots && rosterSpots.psFree <= 0))}
+                      title="Sign to Practice Squad (1yr, min salary)"
+                      style={{
+                        padding: '4px 8px', fontSize: 10, cursor: 'pointer', borderRadius: 4,
+                        background: '#141414',
+                        border: `1px solid ${rosterSpots && rosterSpots.psFree <= 0 ? '#1a1a1a' : '#1a2a3a'}`,
+                        color: psSigningId === fa.id ? '#888' : rosterSpots && rosterSpots.psFree <= 0 ? '#2a2a2a' : '#4FC3F7',
+                        fontWeight: 700, letterSpacing: 0.5,
+                      }}>
+                      {psSigningId === fa.id ? '...' : 'PS'}
+                    </button>
+                  </div>
                 </div>
 
                 {isSigning && signingPlayer && (
