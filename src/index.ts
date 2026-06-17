@@ -1419,6 +1419,28 @@ ipcMain.handle('get-week-matchups', (_event: any, week: number) => {
   `).all(season, week);
 });
 
+
+// ─── Difficulty ───────────────────────────────────────────────────────────────
+
+const DIFFICULTY_FACTORS: Record<string, number> = { easy: 8, normal: 0, hard: -8 };
+
+function getDifficulty(): string {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'difficulty'").get() as any;
+  return row?.value ?? 'normal';
+}
+
+function getDifficultyFactor(): number {
+  return DIFFICULTY_FACTORS[getDifficulty()] ?? 0;
+}
+
+ipcMain.handle('get-difficulty', () => getDifficulty());
+
+ipcMain.handle('set-difficulty', (_event: any, level: string) => {
+  if (!['easy', 'normal', 'hard'].includes(level)) return { success: false };
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('difficulty', ?)").run(level);
+  return { success: true };
+});
+
 ipcMain.handle('simulate-week', (_event: any, week: number) => {
   const season = getCurrentSeason();
   const games = db.prepare(`
@@ -1446,7 +1468,7 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
 
   const runWeek = db.transaction(() => {
     for (const game of games) {
-      const result = simulateGame(game.home_team_id, game.away_team_id, game.week ?? 1);
+      const result = simulateGame(game.home_team_id, game.away_team_id, game.week ?? 1, userTeamId, getDifficultyFactor());
             updateGame.run(result.homeScore, result.awayScore, result.homeQuarters[0], result.homeQuarters[1], result.homeQuarters[2], result.homeQuarters[3], result.awayQuarters[0], result.awayQuarters[1], result.awayQuarters[2], result.awayQuarters[3], result.weather ?? 'clear', game.id);
       for (const stat of [...result.homePlayerStats, ...result.awayPlayerStats]) {
         insertStat.run({ game_id: game.id, ...stat });
@@ -1486,7 +1508,7 @@ ipcMain.handle('simulate-game', (_event: any, gameId: number) => {
   const allStats: any[] = [];
 
   const runGame = db.transaction(() => {
-    gameResult = simulateGame(game.home_team_id, game.away_team_id, game.week ?? 1);
+    gameResult = simulateGame(game.home_team_id, game.away_team_id, game.week ?? 1, userTeamId, getDifficultyFactor());
     updateGame.run(
       gameResult.homeScore, gameResult.awayScore,
       gameResult.homeQuarters[0], gameResult.homeQuarters[1], gameResult.homeQuarters[2], gameResult.homeQuarters[3],

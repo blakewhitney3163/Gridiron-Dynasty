@@ -49,8 +49,10 @@ export default function App() {
   const [setupComplete, setSetupComplete] = useState(false);
 
   const [hasSave, setHasSave] = useState(false);
+  const [difficulty, setDifficultyState] = useState<'easy' | 'normal' | 'hard'>('normal');
 
 useEffect(() => {
+  window.api.getDifficulty().then((d: string) => setDifficultyState(d as any));
   Promise.all([
     window.api.getCurrentSeason(),
     window.api.getUserTeam(),
@@ -96,6 +98,11 @@ useEffect(() => {
 
     setSetupComplete(true);
     setTimeout(() => setScreen('game'), 1200);
+  };
+
+  const handleDifficultyChange = async (level: 'easy' | 'normal' | 'hard') => {
+    setDifficultyState(level);
+    await window.api.setDifficulty(level);
   };
 
   const handleTeamSelect = async (team: UserTeam) => {
@@ -261,9 +268,25 @@ useEffect(() => {
 >
   new dynasty
 </button>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: T.textDim }}>
-          {currentSeason} Season
-        </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 9, color: T.textDim, letterSpacing: 1 }}>DIFFICULTY</span>
+          {(['easy', 'normal', 'hard'] as const).map(d => (
+            <button
+              key={d}
+              onClick={() => handleDifficultyChange(d)}
+              style={{
+                padding: '3px 8px', fontSize: 9, fontFamily: 'monospace',
+                background: difficulty === d ? (d === 'easy' ? '#1a3a1a' : d === 'hard' ? '#3a1a1a' : '#1a1a2a') : 'none',
+                color: difficulty === d ? (d === 'easy' ? '#4caf50' : d === 'hard' ? '#e57373' : '#4FC3F7') : T.textDim,
+                border: `1px solid ${difficulty === d ? (d === 'easy' ? '#4caf50' : d === 'hard' ? '#e57373' : '#4FC3F7') : T.borderFaint}`,
+                borderRadius: 3, cursor: 'pointer', textTransform: 'uppercase',
+              }}
+            >
+              {d}
+            </button>
+          ))}
+          <span style={{ fontSize: 11, color: T.textDim, marginLeft: 8 }}>{currentSeason}</span>
+        </div>
       </div>
 
       <div style={{ display: 'flex', borderBottom: `1px solid ${T.borderMid}`, background: T.bgPage, overflowX: 'auto' }}>

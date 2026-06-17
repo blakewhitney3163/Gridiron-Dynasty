@@ -55,6 +55,8 @@ function attr(p, col, fallback = 70) {
   return p[col] ?? fallback;
 }
 
+// ─── Weather ──────────────────────────────────────────────────────────────────
+
 function getWeather(week) {
   const lateSeasonFactor = Math.max(0, (week - 8) / 9);
   const rand = Math.random();
@@ -73,6 +75,8 @@ function weatherMultipliers(weather) {
   }
 }
 
+// ─── Player Stats Generation ──────────────────────────────────────────────────
+
 function generatePlayerStats(teamId, score, offenseRating, wx, isHome) {
   const stats = [];
   const teamRatingFactor = offenseRating / 75;
@@ -84,6 +88,8 @@ function generatePlayerStats(teamId, score, offenseRating, wx, isHome) {
 
   const qb = qbs[0] ?? null;
 
+  // Estimate field goals so player TD totals aren't inflated.
+  // NFL average: ~1.5 FGs per team per game. Cap ensures at least 1 TD remains.
   const fgCount  = clamp(randomNormal(1.5, 0.9), 0, Math.max(0, Math.floor((score - 7) / 3)));
   const totalTDs = Math.max(0, Math.round((score - fgCount * 3) / 7));
   const passTDs  = clamp(Math.round(totalTDs * 0.72), 0, totalTDs);
@@ -95,15 +101,18 @@ function generatePlayerStats(teamId, score, offenseRating, wx, isHome) {
     def_interceptions: 0, pass_deflections: 0, def_tds: 0,
   };
 
+  // ── QB ──────────────────────────────────────────────────────────────────────
   let passYardsGenerated = 250 * teamRatingFactor;
   if (qb) {
     const qbRatingFactor  = qb.overall_rating / 75;
     const combinedFactor  = (teamRatingFactor + qbRatingFactor) / 2;
     const powerBonus      = (attr(qb, 'throw_power') - 75) * 0.8;
+    // Weather reduces pass yards
     passYardsGenerated    = clamp(randomNormal((220 + powerBonus) * combinedFactor, 50) * wx.passYards, 40, 420);
 
     const passAttempts    = clamp(randomNormal(34, 5), 20, 55);
     const throwAcc        = attr(qb, 'throw_accuracy');
+    // Away QBs get a crowd-noise accuracy penalty; home QBs get a small boost
     const homePenalty     = isHome ? 0.012 : -0.018;
     const compPct         = Math.min(0.78, Math.max(0.42,
       0.55 + (throwAcc - 70) * 0.004 + homePenalty + wx.compPct + randomNormal(0, 0.035)
@@ -111,7 +120,7 @@ function generatePlayerStats(teamId, score, offenseRating, wx, isHome) {
     const completions     = clamp(passAttempts * compPct, 8, passAttempts);
     const intMean         = Math.max(0.05,
       1.4 - (throwAcc / 100) * 0.6 - (attr(qb, 'awareness') / 100) * 0.35
-        + (isHome ? -0.05 : 0.1)
+        + (isHome ? -0.05 : 0.1)  // away QBs turn the ball over slightly more
     );
     const ints            = clamp(randomNormal(intMean, 0.6), 0, 4);
     const qbCarries       = Math.random() > 0.6 ? clamp(randomNormal(4, 2), 0, 8) : 0;
@@ -127,16 +136,20 @@ function generatePlayerStats(teamId, score, offenseRating, wx, isHome) {
     });
   }
 
+  // ── RBs ─────────────────────────────────────────────────────────────────────
+  // In bad weather, run game is featured more heavily
   const totalRushAttempts = clamp(randomNormal(26 * wx.rushAttempts, 5), 14, 45);
   const rbRatingWeights   = rbs.map(rb => rb.overall_rating / 75);
   const rbWeightTotal     = rbRatingWeights.reduce((a, b) => a + b, 0) || 1;
 
+  // Determine if RB1 is a true workhorse (much higher rating than RB2)
   const rb1Rating = rbs[0]?.overall_rating ?? 70;
   const rb2Rating = rbs[1]?.overall_rating ?? 60;
   const workhorseBonus = Math.max(0, (rb1Rating - rb2Rating) / 10) * 0.06;
 
   rbs.forEach((rb, i) => {
     const baseShare = rbRatingWeights[i] / rbWeightTotal;
+    // RB1 gets extra share if they're significantly better than backup
     const adjustedShare = i === 0 ? baseShare + workhorseBonus : baseShare - workhorseBonus / (rbs.length - 1 || 1);
     const share     = clamp(randomNormal(adjustedShare * 100, 8), i === 0 ? 25 : 0, 82) / 100;
     const carries   = clamp(totalRushAttempts * share, i === 0 ? 6 : 0, 35);
@@ -158,16 +171,23 @@ function generatePlayerStats(teamId, score, offenseRating, wx, isHome) {
     });
   });
 
+  // ── WRs + TEs ────────────────────────────────────────────────────────────────
   const receivers = [...wrs, ...tes];
   const actualCount = receivers.length;
 
+  // Build slot bias dynamically based on how many healthy receivers are available.
+  // When WR1 is out and WR2 steps into slot 0, they inherit the top target share.
+  // The bias curve steepens when fewer bodies are available (more concentrated targets).
   function buildSlotBias(count) {
     const biases = [];
     for (let i = 0; i < count; i++) {
+      // WRs first (indices 0..wrs.length-1), TEs after
       const isTe = i >= wrs.length;
       if (isTe) {
+        // TEs get a moderate fixed share
         biases.push(0.85 - (i - wrs.length) * 0.25);
       } else {
+        // WRs: top slot gets highest share, drops off. With fewer WRs the drop-off flattens.
         const base = 1.30 - i * (0.30 / Math.max(1, wrs.length - 1));
         biases.push(Math.max(0.30, base));
       }
@@ -188,8 +208,11 @@ function generatePlayerStats(teamId, score, offenseRating, wx, isHome) {
 
   receivers.forEach((rec, i) => {
     const powerShare = noisyWeights[i] / noisyTotal;
+    // Weather reduces passing yards distributed to receivers
     const recYards = clamp(Math.round(passYardsGenerated * powerShare), 0, 250);
     const ratingFactor = rec.overall_rating / 75;
+    // Slot 0 receiver (regardless of whether it's the original WR1 or a step-up WR2)
+    // gets the WR1 target volume
     const baseTargets = i === 0 ? 9 * ratingFactor : (8 * ratingFactor) - i * 0.8;
     const targets    = clamp(randomNormal(baseTargets, 2), i === 0 ? 2 : 0, 16);
     const catchingAttr = attr(rec, 'catching');
@@ -327,14 +350,27 @@ function generateDefensiveStats(teamId, opponentQBInts, defenseRating) {
   return stats;
 }
 
-function simulateGame(homeTeamId, awayTeamId, week = 9) {
+function simulateGame(homeTeamId, awayTeamId, week = 9, userTeamId = -1, difficultyFactor = 0) {
   const homeRatings = getTeamRatings(homeTeamId);
   const awayRatings = getTeamRatings(awayTeamId);
+
+  // Difficulty: shift effective ratings for the user's team
+  if (difficultyFactor !== 0) {
+    if (homeTeamId === userTeamId) {
+      homeRatings.offenseRating = Math.max(1, homeRatings.offenseRating + difficultyFactor);
+      homeRatings.defenseRating = Math.max(1, homeRatings.defenseRating + difficultyFactor);
+    }
+    if (awayTeamId === userTeamId) {
+      awayRatings.offenseRating = Math.max(1, awayRatings.offenseRating + difficultyFactor);
+      awayRatings.defenseRating = Math.max(1, awayRatings.defenseRating + difficultyFactor);
+    }
+  }
 
   const weather = getWeather(week);
   const wx      = weatherMultipliers(weather);
 
   const leagueAvg = 23;
+  // Home field advantage: ~3 pts boost to home mean score
   const homefieldAdvantage = 3.0;
 
   let homeScore = Math.round(randomNormal(
@@ -347,6 +383,7 @@ function simulateGame(homeTeamId, awayTeamId, week = 9) {
   awayScore = Math.max(0, awayScore);
   if (homeScore === awayScore) awayScore = Math.random() > 0.5 ? awayScore + 3 : Math.max(0, awayScore - 3);
 
+  // isHome flag drives QB accuracy bonus/penalty
   const homeOffStats = generatePlayerStats(homeTeamId, homeScore, homeRatings.offenseRating, wx, true);
   const awayOffStats = generatePlayerStats(awayTeamId, awayScore, awayRatings.offenseRating, wx, false);
 

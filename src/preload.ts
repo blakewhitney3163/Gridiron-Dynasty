@@ -89,6 +89,12 @@ acceptCpuTradeOffer: (payload: { myPlayerId: number; theirPlayerId: number; thei
   simulateOneGame: (gameId: number) =>
     ipcRenderer.invoke('simulate-game', gameId),
 
+  getDifficulty: () =>
+    ipcRenderer.invoke('get-difficulty'),
+
+  setDifficulty: (level: string) =>
+    ipcRenderer.invoke('set-difficulty', level),
+
   getGameBoxScore: (gameId: number) =>
     ipcRenderer.invoke('get-game-box-score', gameId),
 
