@@ -86,6 +86,9 @@ acceptCpuTradeOffer: (payload: { myPlayerId: number; theirPlayerId: number; thei
   simulateWeek: (week: number) =>
     ipcRenderer.invoke('simulate-week', week),
 
+  simulateOneGame: (gameId: number) =>
+    ipcRenderer.invoke('simulate-game', gameId),
+
   getGameBoxScore: (gameId: number) =>
     ipcRenderer.invoke('get-game-box-score', gameId),
 

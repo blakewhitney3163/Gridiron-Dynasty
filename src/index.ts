@@ -1464,6 +1464,72 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
   return { week, season, gamesSimulated: games.length, callups: rosterResult.callups, userPSOpenSpots: rosterResult.userPSOpenSpots };
 });
 
+
+ipcMain.handle('simulate-game', (_event: any, gameId: number) => {
+  const game = db.prepare(`SELECT * FROM games WHERE id = ?`).get(gameId) as any;
+  if (!game) return { success: false, reason: 'Game not found.' };
+  if (game.is_simulated) return { success: false, reason: 'Game already simulated.' };
+
+  const updateGame = db.prepare('UPDATE games SET home_score = ?, away_score = ?, home_q1 = ?, home_q2 = ?, home_q3 = ?, home_q4 = ?, away_q1 = ?, away_q2 = ?, away_q3 = ?, away_q4 = ?, weather = ?, is_simulated = 1 WHERE id = ?');
+  const insertStat = db.prepare(`
+    INSERT INTO stats (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
+      interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds,
+      tackles, assisted_tackles, sacks, tfl, forced_fumbles, fumble_recoveries,
+      def_interceptions, pass_deflections, def_tds)
+    VALUES (@game_id, @player_id, @team_id, @pass_attempts, @completions, @pass_yards, @pass_tds,
+      @interceptions, @rush_attempts, @rush_yards, @rush_tds, @targets, @receptions, @rec_yards, @rec_tds,
+      @tackles, @assisted_tackles, @sacks, @tfl, @forced_fumbles, @fumble_recoveries,
+      @def_interceptions, @pass_deflections, @def_tds)
+  `);
+
+  let gameResult: any;
+  const allStats: any[] = [];
+
+  const runGame = db.transaction(() => {
+    gameResult = simulateGame(game.home_team_id, game.away_team_id, game.week ?? 1);
+    updateGame.run(
+      gameResult.homeScore, gameResult.awayScore,
+      gameResult.homeQuarters[0], gameResult.homeQuarters[1], gameResult.homeQuarters[2], gameResult.homeQuarters[3],
+      gameResult.awayQuarters[0], gameResult.awayQuarters[1], gameResult.awayQuarters[2], gameResult.awayQuarters[3],
+      gameResult.weather ?? 'clear', game.id
+    );
+    for (const stat of [...gameResult.homePlayerStats, ...gameResult.awayPlayerStats]) {
+      insertStat.run({ game_id: game.id, ...stat });
+      allStats.push(stat);
+    }
+  });
+  runGame();
+
+  // Check if this was the last unplayed game of the week
+  const remaining = (db.prepare(
+    `SELECT COUNT(*) as cnt FROM games WHERE season = ? AND week = ? AND is_simulated = 0 AND is_playoff = 0`
+  ).get(game.season, game.week) as any).cnt;
+  const weekComplete = remaining === 0;
+
+  // Roll injuries for this game
+  const newlyInjured = rollInjuries(allStats);
+  const userTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
+  const userTeamId = userTeamRow ? parseInt(userTeamRow.value) : -1;
+  const rosterResult = processRosterAdjustments(newlyInjured, userTeamId);
+
+  // Only process waivers when the full week is done
+  if (weekComplete) {
+    db.prepare(`UPDATE players SET weeks_out = MAX(0, weeks_out - 1) WHERE weeks_out > 0`).run();
+    db.prepare(`UPDATE players SET injury_status = 'healthy', injury_type = NULL WHERE weeks_out = 0 AND injury_status != 'healthy'`).run();
+    processWaivers(userTeamId, game.week);
+  }
+
+  return {
+    success: true,
+    gameId,
+    weekComplete,
+    homeScore: gameResult.homeScore,
+    awayScore: gameResult.awayScore,
+    callups: rosterResult.callups,
+    userPSOpenSpots: rosterResult.userPSOpenSpots,
+  };
+});
+
 ipcMain.handle('get-injury-report', (_event: any, teamId: number) => {
   return db.prepare(`
     SELECT p.id, p.first_name, p.last_name, p.position, p.position_label,

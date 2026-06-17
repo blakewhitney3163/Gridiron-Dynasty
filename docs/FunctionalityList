@@ -198,6 +198,8 @@ Per-game outputs:
   - Weather condition for the game
   - Full player stat lines for both teams
 
+  Simulate game capability vs. simulate week
+
 Player stat generation covers:
   - QB: completions, attempts, passing yards, TDs, interceptions
   - RB: carries, rushing yards, rushing TDs

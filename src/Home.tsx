@@ -144,6 +144,7 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
   const [viewWeek,           setViewWeek]           = useState(1);
   const [matchups,           setMatchups]           = useState<Matchup[]>([]);
   const [simulating,         setSimulating]         = useState(false);
+  const [simulatingGameId,   setSimulatingGameId]   = useState<number | null>(null);
   const [generatingSchedule, setGeneratingSchedule] = useState(false);
   const [boxScore,           setBoxScore]           = useState<BoxScoreData | null>(null);
   const [boxScoreLoading,    setBoxScoreLoading]    = useState(false);
@@ -288,6 +289,46 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
   setSimulating(false);
 };
 
+  const handleSimulateGame = async (gameId: number) => {
+    setSimulatingGameId(gameId);
+    const result = await window.api.simulateOneGame(gameId);
+    if (!result?.success) { setSimulatingGameId(null); return; }
+
+    const [status, dashboard, standings, injuries] = await Promise.all([
+      window.api.getCurrentWeek(),
+      window.api.getDashboard(currentSeason),
+      window.api.getStandings(currentSeason),
+      window.api.getInjuryReport(userTeam.id),
+    ]);
+    setCurrentWeek(status.currentWeek);
+    setTopAFC(dashboard.topAFC);
+    setTopNFC(dashboard.topNFC);
+    setInjuryReport(injuries ?? []);
+    const mine = standings.find((t: any) => t.id === userTeam.id);
+    if (mine) setUserRecord({ wins: mine.wins, losses: mine.losses });
+
+    const data = await window.api.getWeekMatchups(viewWeek);
+    setMatchups(data);
+
+    if (result.userPSOpenSpots > 0) {
+      setPSAlert(`Practice squad has ${result.userPSOpenSpots} open spot${result.userPSOpenSpots !== 1 ? 's' : ''}. Sign free agents in Franchise → Practice Squad tab.`);
+    }
+
+    if (result.weekComplete) {
+      const updatedLeaders = await window.api.getStats(currentSeason);
+      setStatLeaders(updatedLeaders);
+      if (status.currentWeek === null && status.hasSchedule) {
+        const seeds = await window.api.getPlayoffSeeds();
+        setPlayoffSeeds(seeds);
+        const week18 = await window.api.getWeekMatchups(18);
+        setMatchups(week18);
+        setViewWeek(18);
+      }
+    }
+
+    setSimulatingGameId(null);
+  };
+
   const handleSimulatePlayoffs = async () => {
     setSimulatingPlayoffs(true);
     await window.api.simulatePlayoffs(currentSeason);
@@ -369,9 +410,21 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
             </button>
           )}
           {hasSchedule && currentWeek !== null && (
-            <button onClick={handleSimulateWeek} disabled={simulating} style={btn(T.bgGreen, '#4caf50', simulating)}>
-              {simulating ? `Simulating Week ${currentWeek}...` : `▶ Simulate Week ${currentWeek}`}
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  const nextGame = matchups.find(m => m.is_simulated === 0);
+                  if (nextGame) handleSimulateGame(nextGame.id);
+                }}
+                disabled={simulating || simulatingGameId !== null || matchups.every(m => m.is_simulated === 1)}
+                style={btn(T.bgGreen, '#4caf50', simulating || simulatingGameId !== null)}
+              >
+                {simulatingGameId !== null ? 'Simulating...' : '▶ Next Game'}
+              </button>
+              <button onClick={handleSimulateWeek} disabled={simulating || simulatingGameId !== null} style={btn('#1a2a1a', '#81C784', simulating || simulatingGameId !== null)}>
+                {simulating ? `Simulating Week ${currentWeek}...` : `▶ Sim Week ${currentWeek}`}
+              </button>
+            </>
           )}
           {allWeeksDone && !playoffsComplete && (
             <button onClick={handleSimulatePlayoffs} disabled={simulatingPlayoffs} style={btn('#1a2a2a', '#4FC3F7', simulatingPlayoffs)}>
@@ -549,9 +602,22 @@ export default function Home({ currentSeason, onSeasonAdvance, userTeam, onNavig
                         </div>
                         {played && <span style={{ fontSize: 15, fontWeight: 'bold', color: awayWon ? '#fff' : T.textMuted }}>{game.away_score}</span>}
                         {!played && (
-                          <span style={{ fontSize: 9, color: isUserGame ? '#4caf50' : T.borderStrong, letterSpacing: 1, gridColumn: '2 / 5' }}>
-                            {isUserGame ? '◆ YOUR GAME' : 'PREVIEW'}
-                          </span>
+                          <div style={{ gridColumn: '2 / 5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: 9, color: isUserGame ? '#4caf50' : T.borderStrong, letterSpacing: 1 }}>
+                              {isUserGame ? '◆ YOUR GAME' : 'PREVIEW'}
+                            </span>
+                            <button
+                              onClick={e => { e.stopPropagation(); handleSimulateGame(game.id); }}
+                              disabled={simulatingGameId !== null || simulating}
+                              style={{
+                                padding: '2px 8px', fontSize: 9, background: simulatingGameId === game.id ? '#1a2a1a' : T.bgGreen,
+                                color: simulatingGameId === game.id ? '#81C784' : '#4caf50',
+                                border: `1px solid ${T.borderFaint}`, borderRadius: 3, cursor: 'pointer', fontFamily: 'monospace',
+                              }}
+                            >
+                              {simulatingGameId === game.id ? '...' : '▶ Sim'}
+                            </button>
+                          </div>
                         )}
                       </div>
                       {played && (
