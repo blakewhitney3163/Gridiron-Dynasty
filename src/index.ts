@@ -1334,9 +1334,16 @@ ipcMain.handle('extend-player', (_event: any, { playerId, years, salary }: {
 });
 
 ipcMain.handle('release-player', (_event: any, playerId: number) => {
+  const season = getCurrentSeason();
+  const weekRow = db.prepare(
+    'SELECT MIN(week) as week FROM games WHERE season = ? AND is_simulated = 0 AND is_playoff = 0'
+  ).get(season) as any;
+  const isInSeason = weekRow && weekRow.week !== null;
+
   db.prepare('DELETE FROM contracts WHERE player_id = ?').run(playerId);
-  db.prepare("UPDATE players SET team_id = NULL, is_free_agent = 1, roster_status = 'free_agent' WHERE id = ?").run(playerId);
-  return { success: true };
+  db.prepare(`UPDATE players SET team_id = NULL, is_free_agent = 1, roster_status = ? WHERE id = ?`)
+    .run(isInSeason ? 'waivers' : 'free_agent', playerId);
+  return { success: true, onWaivers: !!isInSeason };
 });
 
 ipcMain.handle('get-team-stats', (_event: any, teamId: number, season?: number) => {
