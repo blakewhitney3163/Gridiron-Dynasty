@@ -1,13 +1,12 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 const { db, generateContracts } = require('./database');
 const { importFromMadden } = require('./importfromMadden');
-const { simulateGame } = require('./simulateGame');
 import { getCurrentSeason } from './helpers/getCurrentSeason';
 import { balanceRosters } from './helpers/balanceRosters';
-import { registerSettingsHandlers, getDifficultyFactor } from './handlers/settingsHandlers';
+import { registerSettingsHandlers } from './handlers/settingsHandlers';
 import { registerTradeHandlers } from './handlers/tradeHandlers';
 import { registerSimHandlers } from './handlers/simHandlers';
-import { registerContractHandlers, calcFairMarket } from './handlers/contractHandlers';
+import { registerContractHandlers } from './handlers/contractHandlers';
 import { registerDraftHandlers } from './handlers/draftHandlers';
 import { registerStatsHandlers } from './handlers/statsHandlers';
 import { registerSeasonHandlers } from './handlers/seasonHandlers';
