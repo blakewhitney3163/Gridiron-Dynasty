@@ -169,6 +169,8 @@ db.exec(`
 try { db.exec(`ALTER TABLE career_stats_history ADD COLUMN sacks REAL DEFAULT 0`); } catch (_) {}
 try { db.exec(`ALTER TABLE career_stats_history ADD COLUMN tfl REAL DEFAULT 0`); } catch (_) {}
 try { db.exec(`ALTER TABLE players ADD COLUMN waived_by_team_id INTEGER DEFAULT NULL`); } catch (_) {}
+try { db.exec(`ALTER TABLE players ADD COLUMN waived_by_team_id INTEGER DEFAULT NULL`); } catch (_) {}
+try { db.exec(`ALTER TABLE players ADD COLUMN waiver_placed_week INTEGER DEFAULT NULL`); } catch (_) {}
 
 // Auto-balance rosters on startup if FA pool is empty
 {
@@ -185,6 +187,11 @@ const POSITION_TO_GROUP: Record<string, string> = {
   MLB: 'LB', OLB: 'LB', LOLB: 'LB', ROLB: 'LB', WILL: 'LB', MIKE: 'LB', LB: 'LB',
   CB: 'CB', FS: 'S', SS: 'S', S: 'S', K: 'K',
 };
+
+const WAIVER_POS_MAX: Record<string, number> = {
+  QB: 3, RB: 4, WR: 6, TE: 3, OL: 9, DL: 6, LB: 5, CB: 5, S: 4, K: 2,
+};
+const SOFT_CAP_M = 275; // $275M soft cap for waiver claims
 
 function initDepthChart(teamId: number) {
   const existing = (db.prepare('SELECT COUNT(*) as count FROM depth_chart WHERE team_id = ?').get(teamId) as any).count;
@@ -397,14 +404,20 @@ function getPosGroup(pos: string): string[] {
   return [pos];
 }
 
-function processWaivers(userTeamId: number): void {
+function processWaivers(userTeamId: number, week: number): void {
   const season = getCurrentSeason();
-  const waiverPlayers = db.prepare(
-    "SELECT id, waived_by_team_id FROM players WHERE roster_status = 'waivers' ORDER BY overall_rating DESC"
-  ).all() as any[];
+  // Only process players placed on waivers before this week (clears next week)
+  const waiverPlayers = db.prepare(`
+    SELECT p.id, p.waived_by_team_id, p.position,
+           COALESCE(c.annual_salary, 1.0) as annual_salary
+    FROM players p
+    LEFT JOIN contracts c ON c.player_id = p.id
+    WHERE p.roster_status = 'waivers' AND p.waiver_placed_week < ?
+    ORDER BY p.overall_rating DESC
+  `).all(week) as any[];
   if (waiverPlayers.length === 0) return;
 
-  // CPU teams by waiver priority (worst record first), excluding the user
+  // CPU teams by waiver priority (worst record first), excluding user
   const cpuTeams = db.prepare(`
     SELECT t.id,
       COUNT(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score)
@@ -417,34 +430,61 @@ function processWaivers(userTeamId: number): void {
   `).all(season, userTeamId) as any[];
 
   const remaining = [...waiverPlayers];
+
   for (const team of cpuTeams) {
     if (remaining.length === 0) break;
+
     const active = (db.prepare(
       "SELECT COUNT(*) as count FROM players WHERE team_id = ? AND roster_status = 'active'"
     ).get(team.id) as any).count;
     if (active >= 53) continue;
 
-    // Find first player this team is eligible to claim (not waived by them)
-    const idx = remaining.findIndex(p => p.waived_by_team_id !== team.id);
-    if (idx === -1) continue;
-    const claimed = remaining.splice(idx, 1)[0];
+    // Team's current total salary
+    const teamSalary = (db.prepare(`
+      SELECT COALESCE(SUM(c.annual_salary), 0) as total
+      FROM contracts c
+      JOIN players p ON c.player_id = p.id
+      WHERE p.team_id = ?
+    `).get(team.id) as any).total;
 
-    db.prepare("UPDATE players SET team_id = ?, roster_status = 'active', is_free_agent = 0, waived_by_team_id = NULL WHERE id = ?")
+    // Find first eligible player: not waived by this team, fits cap, fills a positional need
+    let claimedIdx = -1;
+    for (let i = 0; i < remaining.length; i++) {
+      const p = remaining[i];
+      if (p.waived_by_team_id === team.id) continue;
+      if (teamSalary + p.annual_salary > SOFT_CAP_M) continue;
+
+      const posGroup = POSITION_TO_GROUP[p.position] ?? p.position;
+      const maxAtPos = WAIVER_POS_MAX[posGroup] ?? 5;
+      const groupPositions = getPosGroup(p.position);
+      const placeholders = groupPositions.map(() => '?').join(',');
+      const groupCount = (db.prepare(
+        `SELECT COUNT(*) as count FROM players WHERE team_id = ? AND roster_status = 'active' AND position IN (${placeholders})`
+      ).get(team.id, ...groupPositions) as any).count;
+
+      if (groupCount >= maxAtPos) continue;
+      claimedIdx = i;
+      break;
+    }
+    if (claimedIdx === -1) continue;
+
+    const claimed = remaining.splice(claimedIdx, 1)[0];
+    db.prepare("UPDATE players SET team_id = ?, roster_status = 'active', is_free_agent = 0, waived_by_team_id = NULL, waiver_placed_week = NULL WHERE id = ?")
       .run(team.id, claimed.id);
     // Preserve existing salary — just reassign contract to claiming team
     const existing = db.prepare('SELECT id FROM contracts WHERE player_id = ?').get(claimed.id);
     if (existing) {
       db.prepare('UPDATE contracts SET team_id = ? WHERE player_id = ?').run(team.id, claimed.id);
     } else {
-      db.prepare('INSERT INTO contracts (player_id, team_id, years_total, years_remaining, annual_salary, guaranteed_amount, guaranteed_pct) VALUES (?, ?, 1, 1, 1.0, 0, 0)')
-        .run(claimed.id, team.id);
+      db.prepare('INSERT INTO contracts (player_id, team_id, years_total, years_remaining, annual_salary, guaranteed_amount, guaranteed_pct) VALUES (?, ?, 1, 1, ?, 0, 0)')
+        .run(claimed.id, team.id, claimed.annual_salary);
     }
   }
 
-  // Unclaimed → free agency; contract is now void, eligible for new deal
+  // Unclaimed → free agency; contract voided, eligible for new deal
   for (const p of remaining) {
     db.prepare('DELETE FROM contracts WHERE player_id = ?').run(p.id);
-    db.prepare("UPDATE players SET roster_status = 'free_agent', waived_by_team_id = NULL WHERE id = ?").run(p.id);
+    db.prepare("UPDATE players SET roster_status = 'free_agent', waived_by_team_id = NULL, waiver_placed_week = NULL WHERE id = ?").run(p.id);
   }
 }
 }
@@ -1178,7 +1218,7 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
   const userTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
   const userTeamId = userTeamRow ? parseInt(userTeamRow.value) : -1;
   const rosterResult = processRosterAdjustments(newlyInjured, userTeamId);
-  processWaivers(userTeamId);
+  processWaivers(userTeamId, week);
   return { week, season, gamesSimulated: games.length, callups: rosterResult.callups, userPSOpenSpots: rosterResult.userPSOpenSpots };
 });
 
@@ -1448,8 +1488,9 @@ ipcMain.handle('release-player', (_event: any, playerId: number) => {
   if (isInSeason) {
     // Preserve contract so salary travels with the player through waivers
     db.prepare('UPDATE contracts SET team_id = NULL WHERE player_id = ?').run(playerId);
-    db.prepare(`UPDATE players SET team_id = NULL, is_free_agent = 1, roster_status = 'waivers', waived_by_team_id = ? WHERE id = ?`)
-      .run(releasingTeamId, playerId);
+    const currentWeek = weekRow.week;
+db.prepare(`UPDATE players SET team_id = NULL, is_free_agent = 1, roster_status = 'waivers', waived_by_team_id = ?, waiver_placed_week = ? WHERE id = ?`)
+  .run(releasingTeamId, currentWeek, playerId);
   } else {
     // Off-season: contract is void, player enters FA eligible for new deal
     db.prepare('DELETE FROM contracts WHERE player_id = ?').run(playerId);
