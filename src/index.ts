@@ -718,8 +718,10 @@ ipcMain.handle('advance-season', () => {
   db.prepare("UPDATE players SET age = age + 1 WHERE roster_status != 'retired'").run();
 
   const players = db.prepare(
-    "SELECT id, age, overall_rating, speed, strength, awareness, dev_trait, position FROM players WHERE roster_status != 'retired'"
-  ).all() as any[];
+  `SELECT id, age, overall_rating, speed, strength, awareness, dev_trait, position,
+   throw_accuracy, throw_power, catching, route_running, tackle_rating, coverage, pass_rush
+   FROM players WHERE roster_status != 'retired'`
+).all() as any[];
 
   const progressionTable: Record<string, Record<string, [number, number]>> = {
     young:   { Normal: [0, 1], Star: [1, 2], Superstar: [2, 3], 'X-Factor': [3, 4] },
@@ -730,33 +732,117 @@ ipcMain.handle('advance-season', () => {
     veteran: { Normal: [-4,-3], Star: [-3,-2], Superstar: [-3,-2], 'X-Factor': [-2,-1] },
   };
 
-  const updatePlayer = db.prepare('UPDATE players SET overall_rating = ?, speed = ?, awareness = ? WHERE id = ?');
+  const updatePlayer = db.prepare(`
+  UPDATE players SET overall_rating = ?, speed = ?, strength = ?, awareness = ?,
+  throw_accuracy = ?, throw_power = ?, catching = ?, route_running = ?,
+  tackle_rating = ?, coverage = ?, pass_rush = ?
+  WHERE id = ?
+`);
+const attr = (cur: number, growP: number, decP: number, amt = 1): number => {
+  const r = Math.random();
+  if (r < growP) return Math.min(99, cur + amt);
+  if (r < growP + decP) return Math.max(40, cur - amt);
+  return cur;
+};
+const progressPlayers = db.transaction(() => {
+  for (const p of players) {
+    const trait = p.dev_trait ?? 'Normal';
+    const bracket =
+      p.age <= 23 ? 'young' : p.age <= 26 ? 'rising' : p.age <= 29 ? 'prime' :
+      p.age <= 32 ? 'decline' : p.age <= 35 ? 'old' : 'veteran';
+    const [min, max] = progressionTable[bracket][trait] ?? [0, 0];
+    const ovrChange = Math.floor(Math.random() * (max - min + 1)) + min;
+    const newOvr = Math.max(40, Math.min(99, p.overall_rating + ovrChange));
+    const isYoung = p.age <= 26;
+    const isOld = p.age >= 32;
+    // Speed — peaks early, declines late
+    const newSpeed = attr(p.speed ?? 70,
+      isYoung ? 0.20 : 0.03,
+      p.age >= 34 ? 0.70 : p.age >= 31 ? 0.40 : p.age >= 29 ? 0.15 : 0.03);
+    // Strength — peaks mid-20s, slow decline
+    const newStrength = attr(p.strength ?? 70,
+      p.age <= 25 ? 0.35 : 0.05,
+      isOld ? 0.30 : 0.05);
+    // Awareness — grows with experience
+    const newAwareness = attr(p.awareness ?? 70,
+      isYoung ? 0.35 : p.age <= 31 ? 0.15 : 0.05,
+      p.age >= 35 ? 0.30 : 0.05);
+    const pos = p.position;
+    // Passing
+    const newThrowAcc = attr(p.throw_accuracy ?? 70,
+      isYoung && pos === 'QB' ? 0.40 : 0.03,
+      isOld ? 0.25 : 0.04);
+    const newThrowPwr = attr(p.throw_power ?? 70,
+      isYoung && pos === 'QB' ? 0.25 : 0.02,
+      isOld ? 0.30 : 0.05);
+    // Receiving
+    const isRecvr = ['WR', 'TE', 'RB', 'HB', 'FB'].includes(pos);
+    const newCatching = attr(p.catching ?? 70,
+      isYoung && isRecvr ? 0.35 : 0.04,
+      isOld ? 0.25 : 0.04);
+    const newRouteRunning = attr(p.route_running ?? 70,
+      isYoung && ['WR', 'TE'].includes(pos) ? 0.35 : 0.03,
+      isOld ? 0.20 : 0.04);
+    // Defense
+    const isDef = ['DL', 'DE', 'DT', 'LE', 'RE', 'IDL', 'LB', 'MLB', 'OLB', 'CB', 'S', 'FS', 'SS'].includes(pos);
+    const newTackle = attr(p.tackle_rating ?? 70,
+      isYoung && isDef ? 0.30 : 0.04,
+      isOld ? 0.25 : 0.05);
+    const newCoverage = attr(p.coverage ?? 70,
+      isYoung && ['CB', 'S', 'FS', 'SS', 'LB', 'MLB', 'OLB'].includes(pos) ? 0.30 : 0.04,
+      isOld ? 0.25 : 0.05);
+    const newPassRush = attr(p.pass_rush ?? 70,
+      isYoung && ['DL', 'DE', 'DT', 'LE', 'RE', 'IDL', 'LB', 'OLB'].includes(pos) ? 0.30 : 0.04,
+      isOld ? 0.25 : 0.05);
+    updatePlayer.run(
+      newOvr, newSpeed, newStrength, newAwareness,
+      newThrowAcc, newThrowPwr, newCatching, newRouteRunning,
+      newTackle, newCoverage, newPassRush,
+      p.id
+    );
+  }
+});
+progressPlayers();
 
-  const progressPlayers = db.transaction(() => {
-    for (const p of players) {
-      const trait = p.dev_trait ?? 'Normal';
-      const bracket =
-        p.age <= 23 ? 'young' : p.age <= 26 ? 'rising' : p.age <= 29 ? 'prime' :
-        p.age <= 32 ? 'decline' : p.age <= 35 ? 'old' : 'veteran';
-      const [min, max] = progressionTable[bracket][trait] ?? [0, 0];
-      const ovrChange = Math.floor(Math.random() * (max - min + 1)) + min;
-      const newOvr = Math.max(40, Math.min(99, p.overall_rating + ovrChange));
+  // Breakout bonus — exceptional season performances earn young players an extra OVR bump
+const breakoutIds = new Set<number>();
+const bSeason = current;
+const breakoutStats = db.prepare(`
+  SELECT s.player_id, p.age, p.position,
+    SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
+    SUM(s.rush_yards) as rush_yards,
+    SUM(s.rec_yards) as rec_yards,
+    SUM(s.sacks) as sacks, SUM(s.def_interceptions) as def_int,
+    SUM(s.tackles) + SUM(s.assisted_tackles) as total_tkl
+  FROM stats s
+  JOIN games g ON s.game_id = g.id
+  JOIN players p ON s.player_id = p.id
+  WHERE g.season = ? AND g.is_simulated = 1
+  GROUP BY s.player_id
+`).all(bSeason) as any[];
 
-      let speedChange = 0;
-      if (p.age >= 34) speedChange = -(Math.floor(Math.random() * 2) + 1);
-      else if (p.age >= 31 && Math.random() < 0.6) speedChange = -1;
-      else if (p.age >= 29 && Math.random() < 0.2) speedChange = -1;
-      const newSpeed = Math.max(40, Math.min(99, (p.speed ?? 70) + speedChange));
+for (const row of breakoutStats) {
+  const isBreakout =
+    (row.position === 'QB' && (row.pass_yards > 4000 || row.pass_tds > 30)) ||
+    (['RB','HB','FB'].includes(row.position) && row.rush_yards > 1300) ||
+    (['WR','TE'].includes(row.position) && row.rec_yards > 1100) ||
+    (row.sacks > 10) ||
+    (row.def_int > 5) ||
+    (row.total_tkl > 130);
 
-      let awarenessChange = 0;
-      if (p.age <= 26 && Math.random() < 0.4) awarenessChange = 1;
-      else if (p.age >= 35 && Math.random() < 0.3) awarenessChange = -1;
-      const newAwareness = Math.max(40, Math.min(99, (p.awareness ?? 70) + awarenessChange));
+  if (isBreakout && row.age <= 28) breakoutIds.add(row.player_id);
+}
 
-      updatePlayer.run(newOvr, newSpeed, newAwareness, p.id);
+if (breakoutIds.size > 0) {
+  const applyBreakout = db.transaction(() => {
+    for (const pid of breakoutIds) {
+      const pp = db.prepare('SELECT age FROM players WHERE id = ?').get(pid) as any;
+      const bonus = pp && pp.age <= 24 ? 2 : 1;
+      db.prepare('UPDATE players SET overall_rating = MIN(99, overall_rating + ?) WHERE id = ?').run(bonus, pid);
     }
   });
-  progressPlayers();
+  applyBreakout();
+}
 
   // Dev trait regression AND breakout upgrades
   const setTrait = db.prepare('UPDATE players SET dev_trait = ? WHERE id = ?');
@@ -894,7 +980,7 @@ ipcMain.handle('advance-season', () => {
 
   db.prepare("UPDATE settings SET value = ? WHERE key = 'current_season'").run(String(next));
 
-  return { nextSeason: next, retired, cpuResigns };
+  return { nextSeason: next, retired, cpuResigns, breakouts: breakoutIds.size };
 });
 
 // ─── Week-by-Week Simulation ──────────────────────────────────────────────────
