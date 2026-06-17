@@ -56,6 +56,7 @@ interface WaiverPlayer {
   speed: number;
   strength: number;
   awareness: number;
+  canClaim: boolean;
 }
 
 interface CapSummary {
@@ -732,26 +733,32 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
                 <span style={{ color: ratingColor(p.overall_rating), fontWeight: 700, fontSize: 14 }}>{p.overall_rating}</span>
                 <span style={{ color: T.textSecondary, fontSize: 12 }}>{p.age} {traj.label}</span>
                 <span style={{ color: T.textSecondary, fontSize: 11 }}>{p.position_label || p.position}</span>
-                <button
-                  onClick={async () => {
-                    const result = await window.api.claimWaiver(p.id);
-                    if (result.success) {
-                      showToast(`${result.name} claimed off waivers.`, 'success');
-                      loadData();
-                    } else {
-                      showToast(result.reason ?? 'Could not claim.', 'error');
-                    }
-                  }}
-                  disabled={!!(rosterSpots && rosterSpots.activeFree <= 0)}
-                  style={{
-                    padding: '4px 14px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
-                    background: T.bgPanel,
-                    border: `1px solid ${rosterSpots && rosterSpots.activeFree <= 0 ? T.bgCard : '#4FC3F7'}`,
-                    color: rosterSpots && rosterSpots.activeFree <= 0 ? T.borderMid : '#4FC3F7',
-                    opacity: rosterSpots && rosterSpots.activeFree <= 0 ? 0.4 : 1,
-                  }}>
-                  Claim
-                </button>
+                {p.canClaim ? (
+  <button
+    onClick={async () => {
+      const result = await window.api.claimWaiver(p.id);
+      if (result.success) {
+        showToast(`${result.name} claimed off waivers.`, 'success');
+        loadData();
+      } else {
+        showToast(result.reason ?? 'Could not claim.', 'error');
+      }
+    }}
+    disabled={!!(rosterSpots && rosterSpots.activeFree <= 0)}
+    style={{
+      padding: '4px 14px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
+      background: T.bgPanel,
+      border: `1px solid ${rosterSpots && rosterSpots.activeFree <= 0 ? T.bgCard : '#4FC3F7'}`,
+      color: rosterSpots && rosterSpots.activeFree <= 0 ? T.borderMid : '#4FC3F7',
+      opacity: rosterSpots && rosterSpots.activeFree <= 0 ? 0.4 : 1,
+    }}>
+    Claim
+  </button>
+) : (
+  <span style={{ fontSize: 10, color: T.borderMid, fontStyle: 'italic' }}>
+    Released by you
+  </span>
+)}
               </div>
             );
           })}
