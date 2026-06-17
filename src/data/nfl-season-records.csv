@@ -69,3 +69,13 @@ defInts,7,Antonio Cromartie,San Diego Chargers,CB,2007,16,0,0,0,0,0,0,0,0,0,0,0,
 defInts,8,Deion Sanders,Dallas Cowboys,CB,1998,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,12,0
 defInts,9,Rod Woodson,Pittsburgh Steelers,CB,1993,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,8,12,0
 defInts,10,Darren Sharper,Green Bay Packers,S,1997,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,9,9,0
+passTds,1,Peyton Manning,Denver Broncos,QB,2013,16,5477,55,10,450,659,0,2,0,0,0,0,0,0,0,0,0,0
+passTds,2,Tom Brady,New England Patriots,QB,2007,16,4806,50,8,398,578,0,0,0,0,0,0,0,0,0,0,0,0
+passTds,3,Patrick Mahomes,Kansas City Chiefs,QB,2018,16,5097,50,12,383,580,0,2,0,0,0,0,0,0,0,0,0,0
+passTds,4,Drew Brees,New Orleans Saints,QB,2011,16,5476,46,14,468,657,0,0,0,0,0,0,0,0,0,0,0,0
+passTds,5,Aaron Rodgers,Green Bay Packers,QB,2011,15,4643,45,6,343,502,0,4,0,0,0,0,0,0,0,0,0,0
+passTds,6,Tom Brady,New England Patriots,QB,2021,17,5316,43,12,485,719,0,0,0,0,0,0,0,0,0,0,0,0
+passTds,7,Drew Brees,New Orleans Saints,QB,2012,16,5177,43,19,422,670,0,0,0,0,0,0,0,0,0,0,0,0
+passTds,8,Matthew Stafford,Detroit Lions,QB,2011,16,5038,41,16,421,663,0,0,0,0,0,0,0,0,0,0,0,0
+passTds,9,Matthew Stafford,Los Angeles Rams,QB,2021,17,4886,41,17,404,601,0,0,0,0,0,0,0,0,0,0,0,0
+passTds,10,Tom Brady,New England Patriots,QB,2011,16,5235,39,12,401,611,0,0,0,0,0,0,0,0,0,0,0,0
