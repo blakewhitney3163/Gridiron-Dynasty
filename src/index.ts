@@ -1439,154 +1439,6 @@ ipcMain.handle('propose-trade', (_event: any, { myPlayerIds, theirPlayerIds, the
   return { accepted: false, reason };
 });
 
-ipcMain.handle('get-tradeable-picks', (_event: any, teamId: number) => {
-  const season = getCurrentSeason();
-  return db.prepare(`
-    SELECT pa.id, pa.owner_team_id, pa.original_team_id, pa.season, pa.round,
-           t.city AS original_team_city
-    FROM pick_assets pa
-    JOIN teams t ON t.id = pa.original_team_id
-    WHERE pa.owner_team_id = ? AND pa.is_used = 0 AND pa.season >= ?
-    ORDER BY pa.season, pa.round
-  `).all(teamId, season);
-});
-
-ipcMain.handle('get-cpu-trade-offer', () => {
-  const userTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
-  if (!userTeamRow) return null;
-  const userTeamId = parseInt(userTeamRow.value);
-
-  const season = getCurrentSeason();
-  const weekRow = db.prepare('SELECT MIN(week) as week FROM games WHERE season = ? AND is_simulated = 0 AND is_playoff = 0').get(season) as any;
-  const currentWeek = weekRow?.week;
-  if (!currentWeek || currentWeek > 8) return null;
-
-  const cpuTeams = db.prepare(
-    `SELECT id, city, name FROM teams WHERE id != ? ORDER BY RANDOM()`
-  ).all(userTeamId) as any[];
-
-  for (const cpuTeam of cpuTeams.slice(0, 15)) {
-    const profile = getTeamTradeProfile(cpuTeam.id);
-    const { status } = profile;
-
-    if (status === 'Buyer' || status === 'Contender') {
-      const cpuNeeds = getTeamNeedsInternal(cpuTeam.id);
-      if (cpuNeeds.length === 0) continue;
-
-      const userPlayers = db.prepare(`
-        SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
-        FROM players WHERE team_id = ? AND roster_status = 'active'
-        ORDER BY overall_rating DESC
-      `).all(userTeamId) as any[];
-
-      const wanted = userPlayers.find((p: any) =>
-        cpuNeeds.includes(p.position) && p.overall_rating >= 75 && p.dev_trait !== 'X-Factor'
-      );
-      if (!wanted) continue;
-
-      const requestedValue = calcPlayerTradeValue(wanted.overall_rating, wanted.age, wanted.position, wanted.dev_trait);
-
-      const cpuPlayers = db.prepare(`
-        SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
-        FROM players WHERE team_id = ? AND roster_status = 'active' ORDER BY RANDOM()
-      `).all(cpuTeam.id) as any[];
-
-      const offerPlayer = cpuPlayers.find((p: any) => {
-        const v = calcPlayerTradeValue(p.overall_rating, p.age, p.position, p.dev_trait);
-        return v >= requestedValue * 0.65 && v <= requestedValue * 1.05;
-      });
-      if (!offerPlayer) continue;
-
-      const offerValue = calcPlayerTradeValue(offerPlayer.overall_rating, offerPlayer.age, offerPlayer.position, offerPlayer.dev_trait);
-      const gap = requestedValue - offerValue;
-      let offeredPick: any = null;
-      if (gap > 10) {
-        const picks = db.prepare(`
-          SELECT id, round, season FROM pick_assets
-          WHERE owner_team_id = ? AND is_used = 0 AND season >= ?
-          ORDER BY season, round
-        `).all(cpuTeam.id, season) as any[];
-        offeredPick = picks.find((pk: any) => {
-          const pv = calcPickTradeValue(pk.round, pk.season);
-          return pv >= gap * 0.6 && pv <= gap * 1.6;
-        }) ?? null;
-      }
-
-      return {
-        fromTeamId: cpuTeam.id, fromTeamName: `${cpuTeam.city} ${cpuTeam.name}`,
-        requestedPlayer: wanted, requestedValue,
-        offeredPlayer: offerPlayer, offeredPick,
-        offerValue: offerValue + (offeredPick ? calcPickTradeValue(offeredPick.round, offeredPick.season) : 0),
-      };
-    }
-
-    if (status === 'Seller' || status === 'Rebuilding') {
-      const veterans = db.prepare(`
-        SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
-        FROM players WHERE team_id = ? AND roster_status = 'active'
-          AND overall_rating >= 76
-          AND dev_trait != 'X-Factor'
-          AND (age >= 28 OR dev_trait IN ('Star','Superstar'))
-        ORDER BY overall_rating DESC
-      `).all(cpuTeam.id) as any[];
-      if (veterans.length === 0) continue;
-
-      const offering = veterans[Math.floor(Math.random() * Math.min(4, veterans.length))];
-      const offerValue = calcPlayerTradeValue(offering.overall_rating, offering.age, offering.position, offering.dev_trait);
-
-      const userPlayers = db.prepare(`
-        SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
-        FROM players WHERE team_id = ? AND roster_status = 'active'
-          AND age <= 26 AND overall_rating >= 68
-        ORDER BY
-          CASE dev_trait WHEN 'X-Factor' THEN 4 WHEN 'Superstar' THEN 3 WHEN 'Star' THEN 2 ELSE 1 END DESC,
-          overall_rating DESC
-      `).all(userTeamId) as any[];
-
-      const target = userPlayers.find((p: any) => {
-        const v = calcPlayerTradeValue(p.overall_rating, p.age, p.position, p.dev_trait);
-        return v >= offerValue * 0.5 && v <= offerValue * 0.85;
-      });
-      if (!target) continue;
-
-      const requestedValue = calcPlayerTradeValue(target.overall_rating, target.age, target.position, target.dev_trait);
-
-      const picks = db.prepare(`
-        SELECT id, round, season FROM pick_assets
-        WHERE owner_team_id = ? AND is_used = 0 AND season >= ?
-        ORDER BY season, round
-      `).all(cpuTeam.id, season) as any[];
-      const bonusPick = picks.find((pk: any) => pk.round <= 4) ?? null;
-
-      return {
-        fromTeamId: cpuTeam.id, fromTeamName: `${cpuTeam.city} ${cpuTeam.name}`,
-        requestedPlayer: target, requestedValue,
-        offeredPlayer: offering, offeredPick: bonusPick,
-        offerValue: offerValue + (bonusPick ? calcPickTradeValue(bonusPick.round, bonusPick.season) : 0),
-      };
-    }
-  }
-  return null;
-});
-
-ipcMain.handle('accept-cpu-trade-offer', (_event: any, { myPlayerId, theirPlayerId, theirTeamId, theirPickId }: {
-  myPlayerId: number; theirPlayerId: number; theirTeamId: number; theirPickId: number | null;
-}) => {
-  const userTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
-  if (!userTeamRow) return { success: false };
-  const myTeamId = parseInt(userTeamRow.value);
-
-  const execute = db.transaction(() => {
-    db.prepare('UPDATE players SET team_id = ? WHERE id = ?').run(theirTeamId, myPlayerId);
-    db.prepare('UPDATE contracts SET team_id = ? WHERE player_id = ?').run(theirTeamId, myPlayerId);
-    db.prepare('UPDATE players SET team_id = ? WHERE id = ?').run(myTeamId, theirPlayerId);
-    db.prepare('UPDATE contracts SET team_id = ? WHERE player_id = ?').run(myTeamId, theirPlayerId);
-    if (theirPickId) db.prepare('UPDATE pick_assets SET owner_team_id = ? WHERE id = ?').run(myTeamId, theirPickId);
-  });
-  execute();
-  return { success: true };
-});
-
 // ─── Contracts ────────────────────────────────────────────────────────────────
 
 ipcMain.handle('get-team-contracts', (_event: any, teamId: number) => {
@@ -2550,45 +2402,6 @@ ipcMain.handle('get-season-awards', (_event: any, season: number) => {
   };
 });
 
-ipcMain.handle('get-team-needs', (_: any, teamId: number) => {
-  const TARGETS: Record<string, { min: number; ideal: number; topN: number; minOvr: number }> = {
-    QB: { min: 2, ideal: 3, topN: 1, minOvr: 72 },
-    RB: { min: 3, ideal: 4, topN: 2, minOvr: 70 },
-    WR: { min: 4, ideal: 5, topN: 3, minOvr: 70 },
-    TE: { min: 2, ideal: 3, topN: 1, minOvr: 68 },
-    OL: { min: 6, ideal: 8, topN: 5, minOvr: 68 },
-    DL: { min: 4, ideal: 6, topN: 4, minOvr: 68 },
-    LB: { min: 3, ideal: 5, topN: 3, minOvr: 68 },
-    CB: { min: 3, ideal: 5, topN: 2, minOvr: 68 },
-    S:  { min: 2, ideal: 3, topN: 2, minOvr: 68 },
-    K:  { min: 1, ideal: 1, topN: 1, minOvr: 60 },
-  };
-
-  const roster = db.prepare(`
-    SELECT position, overall_rating FROM players
-    WHERE team_id = ? AND is_free_agent = 0 AND roster_status = 'active'
-    ORDER BY overall_rating DESC
-  `).all(teamId) as { position: string; overall_rating: number }[];
-
-  const needs: { position: string; severity: 'critical' | 'depth' }[] = [];
-
-  for (const [pos, targets] of Object.entries(TARGETS)) {
-    const posPlayers = roster.filter((p: any) => p.position === pos);
-    const count = posPlayers.length;
-    if (count < targets.min) {
-      needs.push({ position: pos, severity: 'critical' });
-      continue;
-    }
-    const topPlayers = posPlayers.slice(0, targets.topN);
-    const topAvg = topPlayers.reduce((s: number, p: any) => s + p.overall_rating, 0) / topPlayers.length;
-    if (count < targets.ideal || topAvg < targets.minOvr) {
-      needs.push({ position: pos, severity: 'depth' });
-    }
-  }
-
-  return needs;
-});
-
 // ─── NFLverse Stats Import ────────────────────────────────────────────────────
 ipcMain.handle('import-nflverse-stats', () => {
   const pathModule = require('path');
@@ -2715,6 +2528,7 @@ ipcMain.handle('import-nflverse-stats', () => {
 // ─── App Lifecycle ────────────────────────────────────────────────────────────
 
 registerSettingsHandlers();
+registerTradeHandlers();
 
 app.on('ready', createWindow);
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
