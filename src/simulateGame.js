@@ -148,9 +148,13 @@ function generatePlayerStats(teamId, score, offenseRating) {
   const recPowerTotal = recPowerWeights.reduce((a, b) => a + b, 0) || 1;
   let remainingRecTDs = passTDs;
 
+  // Add noise to each weight so distribution varies game to game, then normalize
+  const noisyWeights = recPowerWeights.map(w => Math.max(0.01, w + randomNormal(0, w * 0.3)));
+  const noisyTotal = noisyWeights.reduce((a, b) => a + b, 0) || 1;
+
   receivers.forEach((rec, i) => {
-    const powerShare = recPowerWeights[i] / recPowerTotal;
-    const recYards   = clamp(randomNormal(passYardsGenerated * powerShare, 35), 0, 250);
+    const powerShare = noisyWeights[i] / noisyTotal;
+    const recYards = clamp(Math.round(passYardsGenerated * powerShare), 0, 250);
     const ratingFactor = rec.overall_rating / 75;
     const targets    = clamp(randomNormal((9 * ratingFactor) - i * 0.8, 2), 1, 14);
     // catching attribute drives catch rate
