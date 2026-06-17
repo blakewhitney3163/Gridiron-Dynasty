@@ -23,6 +23,12 @@ contextBridge.exposeInMainWorld('api', {
   getRoster: (teamId: number) =>
     ipcRenderer.invoke('get-roster', teamId),
 
+    getWaiverWire: () =>
+    ipcRenderer.invoke('get-waiver-wire'),
+
+  claimWaiver: (playerId: number) =>
+    ipcRenderer.invoke('claim-waiver', playerId),
+
   getSchedule: (season: number) =>
     ipcRenderer.invoke('get-schedule', season),
 
