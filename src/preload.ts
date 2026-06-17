@@ -35,6 +35,15 @@ contextBridge.exposeInMainWorld('api', {
   getDashboard: (season: number) =>
     ipcRenderer.invoke('get-dashboard', season),
 
+  getTradeablePicks: (teamId: number) =>
+  ipcRenderer.invoke('get-tradeable-picks', teamId),
+
+getCpuTradeOffer: () =>
+  ipcRenderer.invoke('get-cpu-trade-offer'),
+
+acceptCpuTradeOffer: (payload: { myPlayerId: number; theirPlayerId: number; theirTeamId: number; theirPickId: number | null }) =>
+  ipcRenderer.invoke('accept-cpu-trade-offer', payload),
+
   getStats: (season: number) =>
     ipcRenderer.invoke('get-stats', season),
 
