@@ -189,6 +189,21 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS team_trade_overrides (
 )`); } catch (_) {}
 `);
 
+try { db.exec(`CREATE TABLE IF NOT EXISTS hall_of_fame (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  player_id INTEGER NOT NULL UNIQUE,
+  name TEXT NOT NULL, position TEXT NOT NULL,
+  inducted_season INTEGER NOT NULL,
+  dev_trait TEXT DEFAULT 'Normal', peak_ovr INTEGER DEFAULT 70,
+  career_games INTEGER DEFAULT 0,
+  career_pass_yards INTEGER DEFAULT 0, career_pass_tds INTEGER DEFAULT 0,
+  career_rush_yards INTEGER DEFAULT 0, career_rush_tds INTEGER DEFAULT 0,
+  career_rec_yards INTEGER DEFAULT 0,  career_rec_tds INTEGER DEFAULT 0,
+  career_receptions INTEGER DEFAULT 0,
+  career_tackles INTEGER DEFAULT 0,   career_sacks REAL DEFAULT 0,
+  career_def_ints INTEGER DEFAULT 0,  career_pass_deflections INTEGER DEFAULT 0
+)`); } catch (_) {}
+
 // Auto-balance rosters on startup if FA pool is empty
 {
   const faCount = (db.prepare('SELECT COUNT(*) as count FROM players WHERE is_free_agent = 1').get() as any).count;
@@ -372,6 +387,31 @@ function getTeamNeedsInternal(teamId: number): string[] {
     if (posPlayers.length < t.ideal || topAvg < t.minOvr) needs.push(pos);
   }
   return needs;
+}
+
+function isHOFEligible(position: string, career: any): boolean {
+  const games   = career.games ?? 0;
+  const passYds = career.pass_yards ?? 0; const passTds = career.pass_tds ?? 0;
+  const rushYds = career.rush_yards ?? 0; const rushTds = career.rush_tds ?? 0;
+  const recYds  = career.rec_yards ?? 0;  const recTds  = career.rec_tds ?? 0;
+  const recs    = career.receptions ?? 0;
+  const tackles = career.tackles ?? 0;
+  const sacks   = parseFloat(String(career.sacks ?? 0));
+  const defInts = career.def_interceptions ?? 0;
+  const pds     = career.pass_deflections ?? 0;
+  switch (position) {
+    case 'QB':  return passYds >= 40000 || passTds >= 300;
+    case 'RB':  return rushYds >= 10000 || rushTds >= 100;
+    case 'WR':  return recYds  >= 10000 || recTds  >= 75  || recs >= 750;
+    case 'TE':  return recYds  >=  8000 || recTds  >= 60  || recs >= 600;
+    case 'OL':  return games   >= 160;
+    case 'DL':  return sacks   >= 100   || tackles >= 600;
+    case 'LB':  return tackles >= 1000  || sacks   >= 80;
+    case 'CB':  return defInts >= 30    || pds     >= 100;
+    case 'S':   return defInts >= 25    || pds     >= 80  || tackles >= 800;
+    case 'K':   return games   >= 200;
+    default:    return false;
+  }
 }
 
 function getPlayerAvailabilityPremium(player: { age: number; position: string; dev_trait: string }): number {
@@ -896,6 +936,52 @@ ipcMain.handle('get-stats', (_event: any, season?: number) => {
   return { passing, rushing, receiving, tackles, sacks, defInterceptions };
 });
 
+ipcMain.handle('get-hall-of-fame', () => {
+  return db.prepare('SELECT * FROM hall_of_fame ORDER BY inducted_season DESC, name ASC').all();
+});
+
+ipcMain.handle('get-team-season-stats', (_event: any, season?: number) => {
+  const s = season ?? getCurrentSeason();
+  const pointRows = db.prepare(`
+    SELECT t.id, t.city, t.name,
+      COUNT(g.id) as games,
+      SUM(CASE WHEN g.home_team_id = t.id THEN g.home_score ELSE g.away_score END) as points_for,
+      SUM(CASE WHEN g.home_team_id = t.id THEN g.away_score ELSE g.home_score END) as points_against,
+      SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score) OR (g.away_team_id = t.id AND g.away_score > g.home_score) THEN 1 ELSE 0 END) as wins,
+      SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score < g.away_score) OR (g.away_team_id = t.id AND g.away_score < g.home_score) THEN 1 ELSE 0 END) as losses
+    FROM teams t
+    JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id)
+    WHERE g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
+    GROUP BY t.id
+  `).all(s) as any[];
+
+  const statRows = db.prepare(`
+    SELECT s.team_id,
+      SUM(s.pass_yards + s.rush_yards) as off_yards,
+      SUM(s.interceptions) as turnovers_given,
+      SUM(s.def_interceptions + COALESCE(s.fumble_recoveries, 0)) as turnovers_taken
+    FROM stats s JOIN games g ON s.game_id = g.id
+    WHERE g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
+    GROUP BY s.team_id
+  `).all(s) as any[];
+
+  return pointRows.map((t: any) => {
+    const st  = statRows.find((r: any) => r.team_id === t.id) ?? {};
+    const g   = Math.max(t.games, 1);
+    const toGiven  = st.turnovers_given  ?? 0;
+    const toTaken  = st.turnovers_taken  ?? 0;
+    return {
+      ...t,
+      ppg:     Math.round((t.points_for    / g) * 10) / 10,
+      papg:    Math.round((t.points_against / g) * 10) / 10,
+      ypg:     Math.round((st.off_yards    ?? 0) / g),
+      to_diff: toTaken - toGiven,
+      to_given:  toGiven,
+      to_taken:  toTaken,
+    };
+  }).sort((a: any, b: any) => b.ppg - a.ppg);
+});
+
 ipcMain.handle('simulate-playoffs', (_event: any, season?: number) => {
   const s = season ?? getCurrentSeason();
   db.prepare(`DELETE FROM stats WHERE game_id IN (SELECT id FROM games WHERE season = ? AND is_playoff = 1)`).run(s);
@@ -1118,7 +1204,7 @@ if (breakoutIds.size > 0) {
     "SELECT id, first_name, last_name, position, age, overall_rating FROM players WHERE age >= 33 AND roster_status != 'retired'"
   ).all() as any[];
 
-  const retired: { name: string; position: string; age: number; ovr: number }[] = [];
+  const retired: { id: number; name: string; position: string; age: number; ovr: number }[] = [];
   const retirePlayers = db.transaction(() => {
     for (const p of retireCandidates) {
       let chance =
@@ -1130,7 +1216,7 @@ if (breakoutIds.size > 0) {
       if (Math.random() < chance) {
         db.prepare("UPDATE players SET roster_status = 'retired', team_id = NULL, is_free_agent = 0 WHERE id = ?").run(p.id);
         db.prepare('DELETE FROM contracts WHERE player_id = ?').run(p.id);
-        retired.push({ name: `${p.first_name} ${p.last_name}`, position: p.position, age: p.age, ovr: p.overall_rating });
+        retired.push({ id: p.id, name: `${p.first_name} ${p.last_name}`, position: p.position, age: p.age, ovr: p.overall_rating });
       }
     }
   });
@@ -1227,9 +1313,47 @@ if (breakoutIds.size > 0) {
       pass_deflections = excluded.pass_deflections, def_tds = excluded.def_tds
   `).run(current);
 
+// ─── Hall of Fame inductions ──────────────────────────────────────────────────
+const hofInductees: { name: string; position: string }[] = [];
+const runHof = db.transaction(() => {
+  for (const r of retired) {
+    if (db.prepare('SELECT id FROM hall_of_fame WHERE player_id = ?').get(r.id)) continue;
+    const detail = db.prepare('SELECT dev_trait FROM players WHERE id = ?').get(r.id) as any;
+    const career = db.prepare(`
+      SELECT SUM(games) as games,
+             SUM(pass_yards) as pass_yards, SUM(pass_tds) as pass_tds,
+             SUM(rush_yards) as rush_yards, SUM(rush_tds) as rush_tds,
+             SUM(rec_yards) as rec_yards,   SUM(rec_tds) as rec_tds,
+             SUM(receptions) as receptions,
+             SUM(tackles) as tackles, SUM(CAST(sacks AS REAL)) as sacks,
+             SUM(def_interceptions) as def_interceptions,
+             SUM(pass_deflections) as pass_deflections
+      FROM career_stats_history WHERE player_id = ?
+    `).get(r.id) as any;
+    if (!career?.games || !isHOFEligible(r.position, career)) continue;
+    db.prepare(`INSERT OR IGNORE INTO hall_of_fame (
+      player_id, name, position, inducted_season, dev_trait, peak_ovr,
+      career_games, career_pass_yards, career_pass_tds,
+      career_rush_yards, career_rush_tds,
+      career_rec_yards, career_rec_tds, career_receptions,
+      career_tackles, career_sacks, career_def_ints, career_pass_deflections
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(r.id, r.name, r.position, next,
+      detail?.dev_trait ?? 'Normal', r.ovr,
+      career.games ?? 0,
+      career.pass_yards ?? 0, career.pass_tds ?? 0,
+      career.rush_yards ?? 0, career.rush_tds ?? 0,
+      career.rec_yards ?? 0, career.rec_tds ?? 0, career.receptions ?? 0,
+      career.tackles ?? 0, career.sacks ?? 0,
+      career.def_interceptions ?? 0, career.pass_deflections ?? 0);
+    hofInductees.push({ name: r.name, position: r.position });
+  }
+});
+runHof();
+  
   db.prepare("UPDATE settings SET value = ? WHERE key = 'current_season'").run(String(next));
 
-  return { nextSeason: next, retired, cpuResigns, breakouts: breakoutIds.size };
+  return { nextSeason: next, retired, cpuResigns, breakouts: breakoutIds.size, hofInductees };
 });
 
 // ─── Week-by-Week Simulation ──────────────────────────────────────────────────
