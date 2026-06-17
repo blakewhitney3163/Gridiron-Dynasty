@@ -204,6 +204,15 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS hall_of_fame (
   career_def_ints INTEGER DEFAULT 0,  career_pass_deflections INTEGER DEFAULT 0
 )`); } catch (_) {}
 
+try { db.exec(`ALTER TABLE games ADD COLUMN home_q1 INTEGER DEFAULT 0`); } catch (_) {}
+try { db.exec(`ALTER TABLE games ADD COLUMN home_q2 INTEGER DEFAULT 0`); } catch (_) {}
+try { db.exec(`ALTER TABLE games ADD COLUMN home_q3 INTEGER DEFAULT 0`); } catch (_) {}
+try { db.exec(`ALTER TABLE games ADD COLUMN home_q4 INTEGER DEFAULT 0`); } catch (_) {}
+try { db.exec(`ALTER TABLE games ADD COLUMN away_q1 INTEGER DEFAULT 0`); } catch (_) {}
+try { db.exec(`ALTER TABLE games ADD COLUMN away_q2 INTEGER DEFAULT 0`); } catch (_) {}
+try { db.exec(`ALTER TABLE games ADD COLUMN away_q3 INTEGER DEFAULT 0`); } catch (_) {}
+try { db.exec(`ALTER TABLE games ADD COLUMN away_q4 INTEGER DEFAULT 0`); } catch (_) {}
+
 // Auto-balance rosters on startup if FA pool is empty
 {
   const faCount = (db.prepare('SELECT COUNT(*) as count FROM players WHERE is_free_agent = 1').get() as any).count;
@@ -997,11 +1006,11 @@ ipcMain.handle('simulate-playoffs', (_event: any, season?: number) => {
 
   const afcTeams = seedTeams('AFC');
   const nfcTeams = seedTeams('NFC');
-  const insertGame = db.prepare(`INSERT INTO games (season, week, home_team_id, away_team_id, home_score, away_score, is_playoff, is_simulated) VALUES (?, ?, ?, ?, ?, ?, 1, 1)`);
+    const insertGame = db.prepare(`INSERT INTO games (season, week, home_team_id, away_team_id, home_score, away_score, home_q1, home_q2, home_q3, home_q4, away_q1, away_q2, away_q3, away_q4, is_playoff, is_simulated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)`);
 
   const simGame = (homeTeam: any, awayTeam: any, week: number) => {
-    const result = simulateGame(homeTeam.id, awayTeam.id);
-    insertGame.run(s, week, homeTeam.id, awayTeam.id, result.homeScore, result.awayScore);
+    cons
+        insertGame.run(s, week, homeTeam.id, awayTeam.id, result.homeScore, result.awayScore, result.homeQuarters[0], result.homeQuarters[1], result.homeQuarters[2], result.homeQuarters[3], result.awayQuarters[0], result.awayQuarters[1], result.awayQuarters[2], result.awayQuarters[3]);
     return { home: homeTeam, away: awayTeam, homeScore: result.homeScore, awayScore: result.awayScore, winner: result.homeScore > result.awayScore ? homeTeam : awayTeam };
   };
 
@@ -1420,7 +1429,7 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
   db.prepare(`UPDATE players SET weeks_out = MAX(0, weeks_out - 1) WHERE weeks_out > 0`).run();
   db.prepare(`UPDATE players SET injury_status = 'healthy', injury_type = NULL WHERE weeks_out = 0 AND injury_status != 'healthy'`).run();
 
-  const updateGame = db.prepare('UPDATE games SET home_score = ?, away_score = ?, is_simulated = 1 WHERE id = ?');
+    const updateGame = db.prepare('UPDATE games SET home_score = ?, away_score = ?, home_q1 = ?, home_q2 = ?, home_q3 = ?, home_q4 = ?, away_q1 = ?, away_q2 = ?, away_q3 = ?, away_q4 = ?, is_simulated = 1 WHERE id = ?');
   const insertStat = db.prepare(`
     INSERT INTO stats (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
       interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds,
@@ -1437,7 +1446,7 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
   const runWeek = db.transaction(() => {
     for (const game of games) {
       const result = simulateGame(game.home_team_id, game.away_team_id);
-      updateGame.run(result.homeScore, result.awayScore, game.id);
+            updateGame.run(result.homeScore, result.awayScore, result.homeQuarters[0], result.homeQuarters[1], result.homeQuarters[2], result.homeQuarters[3], result.awayQuarters[0], result.awayQuarters[1], result.awayQuarters[2], result.awayQuarters[3], game.id);
       for (const stat of [...result.homePlayerStats, ...result.awayPlayerStats]) {
         insertStat.run({ game_id: game.id, ...stat });
         allStats.push(stat);
@@ -1466,8 +1475,10 @@ ipcMain.handle('get-injury-report', (_event: any, teamId: number) => {
 });
 
 ipcMain.handle('get-game-box-score', (_event: any, gameId: number) => {
-  const game = db.prepare(`
+    const game = db.prepare(`
     SELECT g.id, g.week, g.home_score, g.away_score,
+           g.home_q1, g.home_q2, g.home_q3, g.home_q4,
+           g.away_q1, g.away_q2, g.away_q3, g.away_q4,
            ht.id as home_team_id, ht.city || ' ' || ht.name AS home_team,
            at.id as away_team_id, at.city || ' ' || at.name AS away_team
     FROM games g JOIN teams ht ON g.home_team_id = ht.id JOIN teams at ON g.away_team_id = at.id WHERE g.id = ?
@@ -1476,9 +1487,10 @@ ipcMain.handle('get-game-box-score', (_event: any, gameId: number) => {
   const players = db.prepare(`
     SELECT p.first_name || ' ' || p.last_name as player_name, p.position, s.team_id,
            s.pass_attempts, s.completions, s.pass_yards, s.pass_tds, s.interceptions,
-           s.rush_attempts, s.rush_yards, s.rush_tds, s.targets, s.receptions, s.rec_yards, s.rec_tds
+           s.rush_attempts, s.rush_yards, s.rush_tds, s.targets, s.receptions, s.rec_yards, s.rec_tds,
+           s.tackles, s.assisted_tackles, s.sacks, s.tfl, s.def_interceptions, s.pass_deflections
     FROM stats s JOIN players p ON s.player_id = p.id
-    WHERE s.game_id = ? AND (s.pass_yards > 0 OR s.rush_yards > 0 OR s.rec_yards > 0)
+    WHERE s.game_id = ? AND (s.pass_yards > 0 OR s.rush_yards > 0 OR s.rec_yards > 0 OR s.tackles > 2 OR s.sacks > 0)
     ORDER BY s.team_id, s.pass_yards DESC, s.rush_yards DESC, s.rec_yards DESC
   `).all(gameId);
   return { game, players };
