@@ -19,9 +19,17 @@ interface Player {
   position_label: string;
   overall_rating: number;
   age: number;
+  dev_trait: string;
   speed: number;
   strength: number;
   awareness: number;
+  throw_accuracy: number;
+  throw_power: number;
+  catching: number;
+  route_running: number;
+  tackle_rating: number;
+  coverage: number;
+  pass_rush: number;
 }
 
 interface PlayerStats {
@@ -50,11 +58,38 @@ const POSITION_ORDER = [
 const OFF_POSITIONS = ['QB', 'RB', 'HB', 'FB', 'WR', 'TE'];
 const DEF_POSITIONS = ['DE', 'DT', 'DL', 'LE', 'RE', 'IDL', 'MLB', 'OLB', 'ILB', 'LOLB', 'ROLB', 'LB', 'WILL', 'MIKE', 'CB', 'FS', 'SS', 'S'];
 
+type RatingCol = { label: string; key: keyof Player };
+
+function getRatingCols(pos: string): RatingCol[] {
+  if (pos === 'QB')
+    return [{ label: 'SPD', key: 'speed' }, { label: 'ACC', key: 'throw_accuracy' }, { label: 'PWR', key: 'throw_power' }, { label: 'AWR', key: 'awareness' }];
+  if (['RB', 'HB', 'FB'].includes(pos))
+    return [{ label: 'SPD', key: 'speed' }, { label: 'STR', key: 'strength' }, { label: 'CAT', key: 'catching' }, { label: 'AWR', key: 'awareness' }];
+  if (['WR', 'TE'].includes(pos))
+    return [{ label: 'SPD', key: 'speed' }, { label: 'CAT', key: 'catching' }, { label: 'RTE', key: 'route_running' }, { label: 'AWR', key: 'awareness' }];
+  if (['LT', 'LG', 'C', 'RG', 'RT'].includes(pos))
+    return [{ label: 'SPD', key: 'speed' }, { label: 'STR', key: 'strength' }, { label: 'AWR', key: 'awareness' }];
+  if (['LE', 'RE', 'DT', 'IDL', 'DE'].includes(pos))
+    return [{ label: 'SPD', key: 'speed' }, { label: 'STR', key: 'strength' }, { label: 'PRSH', key: 'pass_rush' }, { label: 'AWR', key: 'awareness' }];
+  if (['MLB', 'OLB', 'LB', 'LOLB', 'ROLB', 'WILL', 'MIKE', 'ILB'].includes(pos))
+    return [{ label: 'SPD', key: 'speed' }, { label: 'TKL', key: 'tackle_rating' }, { label: 'COV', key: 'coverage' }, { label: 'AWR', key: 'awareness' }];
+  if (['CB', 'FS', 'SS', 'S'].includes(pos))
+    return [{ label: 'SPD', key: 'speed' }, { label: 'COV', key: 'coverage' }, { label: 'TKL', key: 'tackle_rating' }, { label: 'AWR', key: 'awareness' }];
+  return [{ label: 'SPD', key: 'speed' }, { label: 'STR', key: 'strength' }, { label: 'AWR', key: 'awareness' }];
+}
+
 function getOvrColor(ovr: number): string {
   if (ovr >= 90) return '#FFD700';
   if (ovr >= 80) return '#4FC3F7';
   if (ovr >= 70) return '#81C784';
   return T.textSecondary;
+}
+
+function attrColor(v: number): string {
+  if (v >= 90) return '#FFD700';
+  if (v >= 80) return '#4FC3F7';
+  if (v >= 70) return '#81C784';
+  return T.textMuted;
 }
 
 function StatBox({ label, value }: { label: string; value: any }) {
@@ -133,7 +168,23 @@ export default function Teams() {
   const [statsView, setStatsView] = useState<'season' | 'career'>('season');
 
   useEffect(() => {
-    window.api.getTeams().then((data: Team[]) => setTeams(data));
+    Promise.all([
+      window.api.getTeams(),
+      window.api.getUserTeam(),
+    ]).then(([data, userTeam]: [Team[], any]) => {
+      setTeams(data);
+      if (userTeam) {
+        const match = data.find((t: Team) => t.id === userTeam.id);
+        if (match) {
+          setSelectedTeam(match);
+          window.api.getRoster(match.id).then((rosterData: Player[]) => {
+            setRoster(rosterData);
+            const positions = getAvailablePositions(rosterData);
+            if (positions.length > 0) setSelectedPosition(positions[0]);
+          });
+        }
+      }
+    });
   }, []);
 
   const handleSelectTeam = (team: Team) => {
@@ -166,6 +217,7 @@ export default function Teams() {
     .filter(p => (p.position_label || p.position) === selectedPosition)
     .sort((a, b) => b.overall_rating - a.overall_rating);
 
+  const ratingCols = getRatingCols(selectedPosition);
   const conferences = ['AFC', 'NFC'];
 
   const careerHeaders: Record<string, string[]> = {
@@ -182,6 +234,8 @@ export default function Teams() {
   };
 
   const showStats = (pos: string) => OFF_POSITIONS.includes(pos) || DEF_POSITIONS.includes(pos);
+
+  const gridCols = `20px 1fr 28px 38px ${ratingCols.map(() => '38px').join(' ')}`;
 
   return (
     <div style={{ display: 'flex', height: '100%', fontFamily: 'monospace' }}>
@@ -248,25 +302,46 @@ export default function Teams() {
           <div style={{ display: 'flex', gap: 20 }}>
 
             {/* Player list */}
-            <div style={{ flex: '0 0 260px', borderRight: `1px solid ${T.borderFaint}` }}>
+            <div style={{ flex: '0 0 auto', minWidth: 320 }}>
+
+              {/* Column headers */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: gridCols,
+                gap: 6, padding: '4px 12px',
+                fontSize: 9, color: T.textDim, letterSpacing: 1,
+                borderBottom: `1px solid ${T.borderFaint}`, marginBottom: 2,
+              }}>
+                <div>#</div>
+                <div>NAME</div>
+                <div>AGE</div>
+                <div>OVR</div>
+                {ratingCols.map(c => <div key={c.key}>{c.label}</div>)}
+              </div>
+
               {filteredPlayers.map((player, i) => (
                 <div
                   key={player.id}
                   onClick={() => handleSelectPlayer(player)}
                   style={{
-                    display: 'flex', alignItems: 'center', padding: '11px 20px',
+                    display: 'grid', gridTemplateColumns: gridCols,
+                    gap: 6, alignItems: 'center', padding: '8px 12px',
                     borderBottom: `1px solid ${T.borderFaint}`, cursor: 'pointer',
                     background: selectedPlayer?.id === player.id ? T.bgBlue : 'transparent',
                   }}
                 >
-                  <span style={{ color: T.textDim, fontSize: 11, width: 20 }}>{i + 1}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ color: T.textPrimary, fontSize: 13 }}>{player.first_name} {player.last_name}</div>
-                    <div style={{ color: T.textDim, fontSize: 10 }}>Age {player.age}</div>
+                  <span style={{ color: T.textDim, fontSize: 11 }}>{i + 1}</span>
+                  <div>
+                    <div style={{ color: T.textPrimary, fontSize: 12, fontWeight: 600 }}>{player.first_name} {player.last_name}</div>
                   </div>
-                  <span style={{ color: getOvrColor(player.overall_rating), fontWeight: 700, fontSize: 14 }}>
+                  <span style={{ color: T.textDim, fontSize: 11 }}>{player.age}</span>
+                  <span style={{ color: getOvrColor(player.overall_rating), fontWeight: 700, fontSize: 13 }}>
                     {player.overall_rating}
                   </span>
+                  {ratingCols.map(c => (
+                    <span key={c.key} style={{ color: attrColor(player[c.key] as number ?? 0), fontSize: 12 }}>
+                      {(player[c.key] as number) ?? '—'}
+                    </span>
+                  ))}
                 </div>
               ))}
             </div>
@@ -300,15 +375,13 @@ export default function Teams() {
                 {/* Attributes */}
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ color: T.textDim, fontSize: 10, letterSpacing: 1, marginBottom: 8 }}>ATTRIBUTES</div>
-                  <div style={{ display: 'flex', gap: 16 }}>
-                    {[
-                      { label: 'Speed', value: selectedPlayer.speed },
-                      { label: 'Strength', value: selectedPlayer.strength },
-                      { label: 'Awareness', value: selectedPlayer.awareness },
-                    ].map(attr => (
-                      <div key={attr.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 56 }}>
-                        <span style={{ color: '#4FC3F7', fontWeight: 700, fontSize: 18 }}>{attr.value}</span>
-                        <span style={{ color: T.textDim, fontSize: 9, letterSpacing: 0.5, marginTop: 2 }}>{attr.label}</span>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {getRatingCols(selectedPlayer.position_label || selectedPlayer.position).map(col => (
+                      <div key={col.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 48 }}>
+                        <span style={{ color: attrColor(selectedPlayer[col.key] as number ?? 0), fontWeight: 700, fontSize: 18 }}>
+                          {(selectedPlayer[col.key] as number) ?? '—'}
+                        </span>
+                        <span style={{ color: T.textDim, fontSize: 9, letterSpacing: 0.5, marginTop: 2 }}>{col.label}</span>
                       </div>
                     ))}
                   </div>
