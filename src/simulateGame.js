@@ -322,11 +322,30 @@ if (homeScore === awayScore) awayScore = Math.random() > 0.5 ? awayScore + 3 : M
   const homeDefStats = generateDefensiveStats(homeTeamId, awayQBInts, homeRatings.defenseRating);
   const awayDefStats = generateDefensiveStats(awayTeamId, homeQBInts, awayRatings.defenseRating);
 
+    const homeQuarters = distributeToQuarters(homeScore);
+  const awayQuarters = distributeToQuarters(awayScore);
+
   return {
     homeScore, awayScore,
+    homeQuarters, awayQuarters,
     homePlayerStats: [...homeOffStats, ...homeDefStats],
     awayPlayerStats: [...awayOffStats, ...awayDefStats],
   };
+}
+
+function distributeToQuarters(total) {
+  const quarters = [0, 0, 0, 0];
+  let remaining = total;
+  while (remaining >= 2) {
+    let pts;
+    if (remaining >= 7 && Math.random() < 0.55) pts = 7;
+    else if (remaining >= 3 && Math.random() < 0.85) pts = 3;
+    else pts = 2;
+    quarters[Math.floor(Math.random() * 4)] += pts;
+    remaining -= pts;
+  }
+  if (remaining > 0) quarters[Math.floor(Math.random() * 4)] += remaining;
+  return quarters;
 }
 
 module.exports = { simulateGame };
