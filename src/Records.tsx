@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 
 declare const window: any;
 
-type RecordMode = 'alltime' | 'season' | 'awards';
+type RecordMode = 'alltime' | 'season' | 'awards' | 'hof';
 type StatCategory = 'passing' | 'rushing' | 'receiving' | 'tds' | 'passTds' | 'tackles' | 'sacks' | 'defInts';
 
 interface RecordRow {
@@ -45,6 +45,17 @@ interface SeasonAwards {
   mvp: AwardWinner | null; opoy: AwardWinner | null; dpoy: AwardWinner | null;
   oroty: AwardWinner | null; droty: AwardWinner | null;
   coy: { city: string; name: string; wins: number } | null;
+}
+
+interface HofEntry {
+  id: number; player_id: number; name: string; position: string;
+  inducted_season: number; dev_trait: string; peak_ovr: number;
+  career_games: number;
+  career_pass_yards: number; career_pass_tds: number;
+  career_rush_yards: number; career_rush_tds: number;
+  career_rec_yards: number;  career_rec_tds: number; career_receptions: number;
+  career_tackles: number;    career_sacks: number;
+  career_def_ints: number;   career_pass_deflections: number;
 }
 
 const TRAIT_META: Record<string, { color: string; short: string }> = {
@@ -110,6 +121,20 @@ function getValue(row: RecordRow, key: string): number {
   if (key === '_total_tkl') return ((row as any).tackles || 0) + ((row as any).assisted_tackles || 0);
   if (key === '_def_tds')   return 0;
   return (row as any)[key] ?? 0;
+}
+
+function hofKeyStat(e: HofEntry): string {
+  switch (e.position) {
+    case 'QB':  return e.career_pass_yards >= 40000 ? `${e.career_pass_yards.toLocaleString()} pass yds` : `${e.career_pass_tds} pass TDs`;
+    case 'RB':  return e.career_rush_yards >= 10000 ? `${e.career_rush_yards.toLocaleString()} rush yds` : `${e.career_rush_tds} rush TDs`;
+    case 'WR':
+    case 'TE':  return e.career_rec_yards >= 8000 ? `${e.career_rec_yards.toLocaleString()} rec yds` : e.career_receptions >= 600 ? `${e.career_receptions} rec` : `${e.career_rec_tds} rec TDs`;
+    case 'DL':
+    case 'LB':  return e.career_sacks >= 80 ? `${e.career_sacks.toFixed(1)} sacks` : `${e.career_tackles} tackles`;
+    case 'CB':
+    case 'S':   return e.career_def_ints >= 25 ? `${e.career_def_ints} INTs` : `${e.career_pass_deflections} PDs`;
+    default:    return `${e.career_games} games`;
+  }
 }
 
 function gridTemplate(cols: ColDef[], mode: RecordMode): string {
@@ -231,12 +256,14 @@ export default function Records() {
   const [currentSeason, setCurrentSeason] = useState(2025);
   const [sortKey, setSortKey]     = useState<string | null>(null);
   const [sortDir, setSortDir]     = useState<'asc' | 'desc'>('desc');
+  const [hofData, setHofData] = useState<HofEntry[]>([]);
 
   useEffect(() => {
     Promise.all([
       window.api.getAlltimeLeaders(),
       window.api.getSeasonRecords(),
       window.api.getCurrentSeason(),
+      window.api.getHallOfFame().then((hof: HofEntry[]) => setHofData(hof));
     ]).then(([at, sr, s]: [RecordsData, RecordsData, number]) => {
       setAlltime(at);
       setSeason(sr);
@@ -281,8 +308,53 @@ export default function Records() {
         <ModeBtn active={mode === 'alltime'} onClick={() => setMode('alltime')}>ALL-TIME LEADERS</ModeBtn>
         <ModeBtn active={mode === 'season'}  onClick={() => setMode('season')}>SEASON RECORDS</ModeBtn>
         <ModeBtn active={mode === 'awards'}  onClick={() => setMode('awards')}>SEASON AWARDS</ModeBtn>
+        <ModeBtn active={mode === 'hof'} onClick={() => setMode('hof')}>HALL OF FAME</ModeBtn>
       </div>
 
+{mode === 'hof' && (
+  <div style={{ marginTop: 8 }}>
+    <div style={{ color: '#FFD700', fontSize: 13, fontWeight: 700, letterSpacing: 1, marginBottom: 4 }}>
+      🏛 HALL OF FAME
+    </div>
+    <div style={{ fontSize: 11, color: '#555', marginBottom: 20 }}>
+      Players who reached career milestones before retiring — inducted on the season they retired.
+    </div>
+    {hofData.length === 0 ? (
+      <div style={{ color: '#444', padding: '40px 12px', fontSize: 13 }}>
+        No inductees yet — keep simulating seasons.
+      </div>
+    ) : (
+      <>
+        {/* Group by inducted season */}
+        {Array.from(new Set(hofData.map(e => e.inducted_season))).sort((a,b) => b-a).map(season => (
+          <div key={season} style={{ marginBottom: 28 }}>
+            <div style={{ fontSize: 11, color: '#666', letterSpacing: 1, marginBottom: 10, borderBottom: '1px solid #1a1a00', paddingBottom: 4 }}>
+              {season} INDUCTEES
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              {hofData.filter(e => e.inducted_season === season).map(entry => {
+                const trait = TRAIT_META[entry.dev_trait] ?? TRAIT_META['Normal'];
+                return (
+                  <div key={entry.id} style={{ background: '#0d0c00', border: '1px solid #e8b80033', borderRadius: 8, padding: '14px 18px', minWidth: 200, flex: '1 1 200px', maxWidth: 260 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#e8b800' }}>{entry.name}</span>
+                      {trait.short && (
+                        <span style={{ fontSize: 8, padding: '1px 4px', background: trait.color + '33', color: trait.color, borderRadius: 3, fontWeight: 700 }}>{trait.short}</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#665500', marginBottom: 8 }}>{entry.position} · Peak {entry.peak_ovr} OVR · {entry.career_games} career games</div>
+                    <div style={{ fontSize: 13, color: '#fff', fontWeight: 700 }}>{hofKeyStat(entry)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </>
+    )}
+  </div>
+)}
+      
       {mode !== 'awards' && (
         <div style={{ display: 'flex', gap: 4, marginBottom: 20, flexWrap: 'wrap' }}>
           {CATEGORIES.map(c => (
