@@ -49,10 +49,10 @@ interface TeamEntry { id: number; city: string; name: string; }
 interface Props { currentSeason: number; }
 
 const TRAIT_META: Record<string, { color: string; label: string }> = {
-  'Normal': { color: T.textDim, label: '' },
-  'Star': { color: '#4FC3F7', label: 'Star' },
-  'Superstar': { color: '#FF8740', label: 'Superstar' },
-  'X-Factor': { color: '#FFD700', label: 'X-Factor' },
+  'Normal':    { color: T.textDim,   label: ''          },
+  'Star':      { color: '#4FC3F7',   label: 'Star'      },
+  'Superstar': { color: '#FF8740',   label: 'Superstar' },
+  'X-Factor':  { color: '#FFD700',   label: 'X-Factor'  },
 };
 
 function ovrColor(r: number): string {
@@ -62,8 +62,8 @@ function ovrColor(r: number): string {
   return T.textSecondary;
 }
 
-function isQB(pos: string) { return pos === 'QB'; }
-function isRB(pos: string) { return ['RB', 'HB', 'FB'].includes(pos); }
+function isQB(pos: string)   { return pos === 'QB'; }
+function isRB(pos: string)   { return ['RB', 'HB', 'FB'].includes(pos); }
 function isWRTE(pos: string) { return ['WR', 'TE'].includes(pos); }
 
 function StatGroup({ label, children }: { label: string; children: React.ReactNode }) {
@@ -101,12 +101,12 @@ function PlayerCard({ player, currentSeason, onClose }: { player: SelectedPlayer
     }).catch(() => { setSeasonStats(null); setCareerStats([]); setLoading(false); });
   }, [player.player_id]);
 
-  const trait = TRAIT_META[player.dev_trait] ?? TRAIT_META['Normal'];
-  const pos = player.position;
-  const showPassing = isQB(pos);
-  const showRushing = isQB(pos) || isRB(pos);
-  const showReceiving = isRB(pos) || isWRTE(pos);
-  const showDefense = ['DL', 'LB', 'CB', 'S', 'DE', 'DT', 'MLB', 'OLB', 'ILB', 'FS', 'SS'].includes(pos);
+  const trait      = TRAIT_META[player.dev_trait] ?? TRAIT_META['Normal'];
+  const pos        = player.position;
+  const showPassing    = isQB(pos);
+  const showRushing    = isQB(pos) || isRB(pos);
+  const showReceiving  = isRB(pos) || isWRTE(pos);
+  const showDefense    = ['DL', 'LB', 'CB', 'S', 'DE', 'DT', 'MLB', 'OLB', 'ILB', 'FS', 'SS'].includes(pos);
 
   return (
     <div style={{
@@ -148,36 +148,36 @@ function PlayerCard({ player, currentSeason, onClose }: { player: SelectedPlayer
               <div style={{ background: T.bgCard, borderRadius: 6, padding: '10px 14px', marginBottom: 16 }}>
                 {showPassing && (seasonStats.pass_attempts ?? 0) > 0 && (
                   <StatGroup label="PASSING">
-                    <StatLine label="Yards" value={seasonStats.pass_yards ?? 0} color="#4FC3F7" />
-                    <StatLine label="TDs" value={seasonStats.pass_tds ?? 0} color="#81C784" />
-                    <StatLine label="INTs" value={seasonStats.interceptions ?? 0} color="#e57373" />
+                    <StatLine label="Yards"  value={seasonStats.pass_yards ?? 0}   color="#4FC3F7" />
+                    <StatLine label="TDs"    value={seasonStats.pass_tds ?? 0}     color="#81C784" />
+                    <StatLine label="INTs"   value={seasonStats.interceptions ?? 0} color="#e57373" />
                     <StatLine label="Comp %" value={(seasonStats.pass_attempts ?? 0) > 0 ? ((seasonStats.completions / seasonStats.pass_attempts) * 100).toFixed(1) + '%' : '-'} />
                   </StatGroup>
                 )}
                 {showRushing && (seasonStats.rush_attempts ?? 0) > 0 && (
                   <StatGroup label="RUSHING">
-                    <StatLine label="Yards" value={seasonStats.rush_yards ?? 0} color="#4FC3F7" />
-                    <StatLine label="TDs" value={seasonStats.rush_tds ?? 0} color="#81C784" />
-                    <StatLine label="YPC" value={(seasonStats.rush_attempts ?? 0) > 0 ? ((seasonStats.rush_yards ?? 0) / seasonStats.rush_attempts).toFixed(1) : '-'} />
+                    <StatLine label="Yards" value={seasonStats.rush_yards ?? 0}    color="#4FC3F7" />
+                    <StatLine label="TDs"   value={seasonStats.rush_tds ?? 0}      color="#81C784" />
+                    <StatLine label="YPC"   value={(seasonStats.rush_attempts ?? 0) > 0 ? ((seasonStats.rush_yards ?? 0) / seasonStats.rush_attempts).toFixed(1) : '-'} />
                   </StatGroup>
                 )}
                 {showReceiving && (seasonStats.targets ?? 0) > 0 && (
                   <StatGroup label="RECEIVING">
-                    <StatLine label="Yards" value={seasonStats.rec_yards ?? 0} color="#4FC3F7" />
-                    <StatLine label="TDs" value={seasonStats.rec_tds ?? 0} color="#81C784" />
+                    <StatLine label="Yards"      value={seasonStats.rec_yards ?? 0}   color="#4FC3F7" />
+                    <StatLine label="TDs"        value={seasonStats.rec_tds ?? 0}     color="#81C784" />
                     <StatLine label="Receptions" value={seasonStats.receptions ?? 0} />
-                    <StatLine label="YPR" value={(seasonStats.receptions ?? 0) > 0 ? ((seasonStats.rec_yards ?? 0) / seasonStats.receptions).toFixed(1) : '-'} />
+                    <StatLine label="YPR"        value={(seasonStats.receptions ?? 0) > 0 ? ((seasonStats.rec_yards ?? 0) / seasonStats.receptions).toFixed(1) : '-'} />
                   </StatGroup>
                 )}
                 {showDefense && ((seasonStats.tackles ?? 0) + (seasonStats.assisted_tackles ?? 0) > 0 || (seasonStats.sacks ?? 0) > 0) && (
                   <StatGroup label="DEFENSE">
-                    <StatLine label="Tackles" value={(seasonStats.tackles ?? 0) + (seasonStats.assisted_tackles ?? 0)} color="#4FC3F7" />
-                    <StatLine label="Solo" value={seasonStats.tackles ?? 0} />
+                    <StatLine label="Tackles"  value={(seasonStats.tackles ?? 0) + (seasonStats.assisted_tackles ?? 0)} color="#4FC3F7" />
+                    <StatLine label="Solo"     value={seasonStats.tackles ?? 0} />
                     <StatLine label="Assisted" value={seasonStats.assisted_tackles ?? 0} />
-                    <StatLine label="Sacks" value={Number(seasonStats.sacks ?? 0).toFixed(1)} color="#FF8740" />
-                    <StatLine label="TFL" value={seasonStats.tfl ?? 0} />
-                    <StatLine label="INTs" value={seasonStats.def_interceptions ?? 0} color="#81C784" />
-                    <StatLine label="PDs" value={seasonStats.pass_deflections ?? 0} />
+                    <StatLine label="Sacks"    value={Number(seasonStats.sacks ?? 0).toFixed(1)} color="#FF8740" />
+                    <StatLine label="TFL"      value={seasonStats.tfl ?? 0} />
+                    <StatLine label="INTs"     value={seasonStats.def_interceptions ?? 0}  color="#81C784" />
+                    <StatLine label="PDs"      value={seasonStats.pass_deflections ?? 0} />
                   </StatGroup>
                 )}
                 {(seasonStats.pass_attempts ?? 0) === 0 && (seasonStats.rush_attempts ?? 0) === 0 && (seasonStats.targets ?? 0) === 0 && !showDefense && (
@@ -196,10 +196,10 @@ function PlayerCard({ player, currentSeason, onClose }: { player: SelectedPlayer
                       <tr style={{ color: T.textDim, fontSize: 10 }}>
                         <th style={{ padding: '4px 6px', textAlign: 'left' }}>YR</th>
                         <th style={{ padding: '4px 6px', textAlign: 'right' }}>G</th>
-                        {showPassing && <><th style={{ padding: '4px 6px', textAlign: 'right' }}>PYDS</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>PTD</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>INT</th></>}
-                        {showRushing && <><th style={{ padding: '4px 6px', textAlign: 'right' }}>RYDS</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>RTD</th></>}
-                        {showReceiving && <><th style={{ padding: '4px 6px', textAlign: 'right' }}>RECYDS</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>RECTD</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>REC</th></>}
-                        {showDefense && <><th style={{ padding: '4px 6px', textAlign: 'right' }}>TOT</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>SACKS</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>TFL</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>INT</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>PD</th></>}
+                        {showPassing    && <><th style={{ padding: '4px 6px', textAlign: 'right' }}>PYDS</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>PTD</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>INT</th></>}
+                        {showRushing    && <><th style={{ padding: '4px 6px', textAlign: 'right' }}>RYDS</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>RTD</th></>}
+                        {showReceiving  && <><th style={{ padding: '4px 6px', textAlign: 'right' }}>RECYDS</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>RECTD</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>REC</th></>}
+                        {showDefense    && <><th style={{ padding: '4px 6px', textAlign: 'right' }}>TOT</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>SACKS</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>TFL</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>INT</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>PD</th></>}
                       </tr>
                     </thead>
                     <tbody>
@@ -207,10 +207,10 @@ function PlayerCard({ player, currentSeason, onClose }: { player: SelectedPlayer
                         <tr key={i} style={{ borderTop: `1px solid ${T.borderFaint}`, color: T.textPrimary }}>
                           <td style={{ padding: '4px 6px' }}>{s.season}</td>
                           <td style={{ padding: '4px 6px', textAlign: 'right' }}>{s.games ?? 0}</td>
-                          {showPassing && <><td style={{ padding: '4px 6px', textAlign: 'right', color: '#4FC3F7' }}>{s.pass_yards ?? 0}</td><td style={{ padding: '4px 6px', textAlign: 'right' }}>{s.pass_tds ?? 0}</td><td style={{ padding: '4px 6px', textAlign: 'right', color: '#e57373' }}>{s.interceptions ?? 0}</td></>}
-                          {showRushing && <><td style={{ padding: '4px 6px', textAlign: 'right', color: '#4FC3F7' }}>{s.rush_yards ?? 0}</td><td style={{ padding: '4px 6px', textAlign: 'right' }}>{s.rush_tds ?? 0}</td></>}
+                          {showPassing   && <><td style={{ padding: '4px 6px', textAlign: 'right', color: '#4FC3F7' }}>{s.pass_yards ?? 0}</td><td style={{ padding: '4px 6px', textAlign: 'right' }}>{s.pass_tds ?? 0}</td><td style={{ padding: '4px 6px', textAlign: 'right', color: '#e57373' }}>{s.interceptions ?? 0}</td></>}
+                          {showRushing   && <><td style={{ padding: '4px 6px', textAlign: 'right', color: '#4FC3F7' }}>{s.rush_yards ?? 0}</td><td style={{ padding: '4px 6px', textAlign: 'right' }}>{s.rush_tds ?? 0}</td></>}
                           {showReceiving && <><td style={{ padding: '4px 6px', textAlign: 'right', color: '#4FC3F7' }}>{s.rec_yards ?? 0}</td><td style={{ padding: '4px 6px', textAlign: 'right' }}>{s.rec_tds ?? 0}</td><td style={{ padding: '4px 6px', textAlign: 'right' }}>{s.receptions ?? 0}</td></>}
-                          {showDefense && <><td style={{ padding: '4px 6px', textAlign: 'right', color: '#4FC3F7' }}>{(s.tackles ?? 0) + (s.assisted_tackles ?? 0)}</td><td style={{ padding: '4px 6px', textAlign: 'right', color: '#FF8740' }}>{Number(s.sacks ?? 0).toFixed(1)}</td><td style={{ padding: '4px 6px', textAlign: 'right' }}>{s.tfl ?? 0}</td><td style={{ padding: '4px 6px', textAlign: 'right', color: '#81C784' }}>{s.def_interceptions ?? 0}</td><td style={{ padding: '4px 6px', textAlign: 'right' }}>{s.pass_deflections ?? 0}</td></>}
+                          {showDefense   && <><td style={{ padding: '4px 6px', textAlign: 'right', color: '#4FC3F7' }}>{(s.tackles ?? 0) + (s.assisted_tackles ?? 0)}</td><td style={{ padding: '4px 6px', textAlign: 'right', color: '#FF8740' }}>{Number(s.sacks ?? 0).toFixed(1)}</td><td style={{ padding: '4px 6px', textAlign: 'right' }}>{s.tfl ?? 0}</td><td style={{ padding: '4px 6px', textAlign: 'right', color: '#81C784' }}>{s.def_interceptions ?? 0}</td><td style={{ padding: '4px 6px', textAlign: 'right' }}>{s.pass_deflections ?? 0}</td></>}
                         </tr>
                       ))}
                     </tbody>
@@ -300,21 +300,22 @@ function TeamStatsTable({ rows, sortKey, sortDir, onSort, thStyle, tdBase }: {
 // ─── Main Stats Page ──────────────────────────────────────────────────────────
 
 export default function Stats({ currentSeason }: Props) {
-  const [stats, setStats] = useState<StatsData | null>(null);
-  const [category, setCategory] = useState<StatCategory>('passing');
-  const [defSubCat, setDefSubCat] = useState<DefSubCat>('tackles');
-  const [viewSeason, setViewSeason] = useState<number>(currentSeason);
+  const [stats, setStats]                   = useState<StatsData | null>(null);
+  const [category, setCategory]             = useState<StatCategory>('passing');
+  const [defSubCat, setDefSubCat]           = useState<DefSubCat>('tackles');
+  const [viewSeason, setViewSeason]         = useState<number>(currentSeason);
   const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<SelectedPlayer | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ matched: number; skipped: number } | null>(null);
-  const [teams, setTeams] = useState<TeamEntry[]>([]);
-  const [selectedTeam, setSelectedTeam] = useState<TeamEntry | null>(null);
-  const [teamStats, setTeamStats] = useState<any[] | null>(null);
-  const [viewMode, setViewMode] = useState<'players' | 'teams'>('players');
+  const [importing, setImporting]           = useState(false);
+  const [importResult, setImportResult]     = useState<{ matched: number; skipped: number } | null>(null);
+  const [teams, setTeams]                   = useState<TeamEntry[]>([]);
+  const [selectedTeam, setSelectedTeam]     = useState<TeamEntry | null>(null);
+  const [teamStats, setTeamStats]           = useState<any[] | null>(null);
+  const [viewMode, setViewMode]             = useState<'players' | 'teams'>('players');
   const [teamSeasonStats, setTeamSeasonStats] = useState<any[] | null>(null);
-  const [teamSortKey, setTeamSortKey] = useState<string>('ppg');
-  const [teamSortDir, setTeamSortDir] = useState<'asc' | 'desc'>('desc');
+  const [teamSortKey, setTeamSortKey]       = useState<string>('ppg');
+  const [teamSortDir, setTeamSortDir]       = useState<'asc' | 'desc'>('desc');
+  const [searchQuery, setSearchQuery]       = useState('');
 
   useEffect(() => {
     window.api.getSeasons().then((seasons: number[]) => setAvailableSeasons(seasons));
@@ -358,12 +359,15 @@ export default function Stats({ currentSeason }: Props) {
   const teamSacks        = teamStats ? [...teamStats].filter(p => (p.sacks ?? 0) > 0).sort((a, b) => (b.sacks ?? 0) - (a.sacks ?? 0)) : null;
   const teamDefInts      = teamStats ? [...teamStats].filter(p => (p.def_interceptions ?? 0) > 0 || (p.pass_deflections ?? 0) > 0).sort((a, b) => (b.def_interceptions ?? 0) - (a.def_interceptions ?? 0)) : null;
 
-  const passing          = teamPassing  ?? stats.passing;
-  const rushing          = teamRushing  ?? stats.rushing;
-  const receiving        = teamReceiving ?? stats.receiving;
-  const tackles          = teamTackles  ?? (stats.tackles ?? []);
-  const sacks            = teamSacks    ?? (stats.sacks ?? []);
-  const defInterceptions = teamDefInts  ?? (stats.defInterceptions ?? []);
+  const filterSearch = (rows: any[]) =>
+    searchQuery ? rows.filter(p => p.player_name?.toLowerCase().includes(searchQuery.toLowerCase())) : rows;
+
+  const passing          = filterSearch(teamPassing  ?? stats.passing);
+  const rushing          = filterSearch(teamRushing  ?? stats.rushing);
+  const receiving        = filterSearch(teamReceiving ?? stats.receiving);
+  const tackles          = filterSearch(teamTackles  ?? (stats.tackles ?? []));
+  const sacks            = filterSearch(teamSacks    ?? (stats.sacks ?? []));
+  const defInterceptions = filterSearch(teamDefInts  ?? (stats.defInterceptions ?? []));
 
   const categories: { id: StatCategory; label: string }[] = [
     { id: 'passing',   label: 'Passing'   },
@@ -442,19 +446,34 @@ export default function Stats({ currentSeason }: Props) {
         </div>
       </div>
 
-      {/* Category Tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {categories.map(cat => (
-          <button key={cat.id} onClick={() => setCategory(cat.id)} style={{
-            padding: '7px 18px',
-            background: category === cat.id ? T.bgGreen : T.bgPage,
-            color: category === cat.id ? '#4caf50' : T.textMuted,
-            border: `1px solid ${category === cat.id ? '#2a4a2a' : T.bgCard}`,
-            borderRadius: 4, cursor: 'pointer',
-            fontWeight: category === cat.id ? 'bold' : 'normal',
-            fontSize: 12, fontFamily: 'monospace',
-          }}>{cat.label}</button>
-        ))}
+      {/* Category Tabs + Search */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {categories.map(cat => (
+            <button key={cat.id} onClick={() => setCategory(cat.id)} style={{
+              padding: '7px 18px',
+              background: category === cat.id ? T.bgGreen : T.bgPage,
+              color: category === cat.id ? '#4caf50' : T.textMuted,
+              border: `1px solid ${category === cat.id ? '#2a4a2a' : T.bgCard}`,
+              borderRadius: 4, cursor: 'pointer',
+              fontWeight: category === cat.id ? 'bold' : 'normal',
+              fontSize: 12, fontFamily: 'monospace',
+            }}>{cat.label}</button>
+          ))}
+        </div>
+        {viewMode === 'players' && (
+          <input
+            type="text"
+            placeholder="Search player..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{
+              background: T.bgPage, border: `1px solid ${T.borderFaint}`, borderRadius: 4,
+              color: T.textPrimary, padding: '6px 12px', fontSize: 12, fontFamily: 'monospace',
+              outline: 'none', width: 180,
+            }}
+          />
+        )}
       </div>
 
       {/* Teams View */}
@@ -498,7 +517,7 @@ export default function Stats({ currentSeason }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {passing.length === 0 && <tr><td colSpan={10} style={{ ...tdBase, color: T.textDim, textAlign: 'center' }}>No passing stats yet</td></tr>}
+                  {passing.length === 0 && <tr><td colSpan={10} style={{ ...tdBase, color: T.textDim, textAlign: 'center' }}>{searchQuery ? 'No players match your search' : 'No passing stats yet'}</td></tr>}
                   {passing.map((p, i) => (
                     <tr key={p.player_id} style={rowStyle(i, p)} onClick={() => setSelectedPlayer(p)}>
                       <td style={{ ...tdBase, textAlign: 'center', color: T.textDim }}>{i + 1}</td>
@@ -535,7 +554,7 @@ export default function Stats({ currentSeason }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {rushing.length === 0 && <tr><td colSpan={8} style={{ ...tdBase, color: T.textDim, textAlign: 'center' }}>No rushing stats yet</td></tr>}
+                  {rushing.length === 0 && <tr><td colSpan={8} style={{ ...tdBase, color: T.textDim, textAlign: 'center' }}>{searchQuery ? 'No players match your search' : 'No rushing stats yet'}</td></tr>}
                   {rushing.map((p, i) => (
                     <tr key={p.player_id} style={rowStyle(i, p)} onClick={() => setSelectedPlayer(p)}>
                       <td style={{ ...tdBase, textAlign: 'center', color: T.textDim }}>{i + 1}</td>
@@ -571,7 +590,7 @@ export default function Stats({ currentSeason }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {receiving.length === 0 && <tr><td colSpan={9} style={{ ...tdBase, color: T.textDim, textAlign: 'center' }}>No receiving stats yet</td></tr>}
+                  {receiving.length === 0 && <tr><td colSpan={9} style={{ ...tdBase, color: T.textDim, textAlign: 'center' }}>{searchQuery ? 'No players match your search' : 'No receiving stats yet'}</td></tr>}
                   {receiving.map((p, i) => (
                     <tr key={p.player_id} style={rowStyle(i, p)} onClick={() => setSelectedPlayer(p)}>
                       <td style={{ ...tdBase, textAlign: 'center', color: T.textDim }}>{i + 1}</td>
@@ -627,7 +646,7 @@ export default function Stats({ currentSeason }: Props) {
                       </tr>
                     </thead>
                     <tbody>
-                      {tackles.length === 0 && <tr><td colSpan={10} style={{ ...tdBase, color: T.textDim, textAlign: 'center' }}>No defensive stats yet — simulate some games first</td></tr>}
+                      {tackles.length === 0 && <tr><td colSpan={10} style={{ ...tdBase, color: T.textDim, textAlign: 'center' }}>{searchQuery ? 'No players match your search' : 'No defensive stats yet — simulate some games first'}</td></tr>}
                       {tackles.map((p, i) => (
                         <tr key={p.player_id} style={rowStyle(i, p)} onClick={() => setSelectedPlayer(p)}>
                           <td style={{ ...tdBase, textAlign: 'center', color: T.textDim }}>{i + 1}</td>
@@ -663,7 +682,7 @@ export default function Stats({ currentSeason }: Props) {
                       </tr>
                     </thead>
                     <tbody>
-                      {sacks.length === 0 && <tr><td colSpan={8} style={{ ...tdBase, color: T.textDim, textAlign: 'center' }}>No sack data yet</td></tr>}
+                      {sacks.length === 0 && <tr><td colSpan={8} style={{ ...tdBase, color: T.textDim, textAlign: 'center' }}>{searchQuery ? 'No players match your search' : 'No sack data yet'}</td></tr>}
                       {sacks.map((p, i) => (
                         <tr key={p.player_id} style={rowStyle(i, p)} onClick={() => setSelectedPlayer(p)}>
                           <td style={{ ...tdBase, textAlign: 'center', color: T.textDim }}>{i + 1}</td>
@@ -697,7 +716,7 @@ export default function Stats({ currentSeason }: Props) {
                       </tr>
                     </thead>
                     <tbody>
-                      {defInterceptions.length === 0 && <tr><td colSpan={8} style={{ ...tdBase, color: T.textDim, textAlign: 'center' }}>No INT/PD data yet</td></tr>}
+                      {defInterceptions.length === 0 && <tr><td colSpan={8} style={{ ...tdBase, color: T.textDim, textAlign: 'center' }}>{searchQuery ? 'No players match your search' : 'No INT/PD data yet'}</td></tr>}
                       {defInterceptions.map((p, i) => (
                         <tr key={p.player_id} style={rowStyle(i, p)} onClick={() => setSelectedPlayer(p)}>
                           <td style={{ ...tdBase, textAlign: 'center', color: T.textDim }}>{i + 1}</td>
