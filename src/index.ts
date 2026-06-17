@@ -212,6 +212,7 @@ try { db.exec(`ALTER TABLE games ADD COLUMN away_q1 INTEGER DEFAULT 0`); } catch
 try { db.exec(`ALTER TABLE games ADD COLUMN away_q2 INTEGER DEFAULT 0`); } catch (_) {}
 try { db.exec(`ALTER TABLE games ADD COLUMN away_q3 INTEGER DEFAULT 0`); } catch (_) {}
 try { db.exec(`ALTER TABLE games ADD COLUMN away_q4 INTEGER DEFAULT 0`); } catch (_) {}
+try { db.exec(`ALTER TABLE games ADD COLUMN weather TEXT DEFAULT 'clear'`); } catch (_) {}
 
 // Auto-balance rosters on startup if FA pool is empty
 {
@@ -1006,11 +1007,11 @@ ipcMain.handle('simulate-playoffs', (_event: any, season?: number) => {
 
   const afcTeams = seedTeams('AFC');
   const nfcTeams = seedTeams('NFC');
-    const insertGame = db.prepare(`INSERT INTO games (season, week, home_team_id, away_team_id, home_score, away_score, home_q1, home_q2, home_q3, home_q4, away_q1, away_q2, away_q3, away_q4, is_playoff, is_simulated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)`);
+    const insertGame = db.prepare(`INSERT INTO games (season, week, home_team_id, away_team_id, home_score, away_score, home_q1, home_q2, home_q3, home_q4, away_q1, away_q2, away_q3, away_q4, weather, is_playoff, is_simulated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)`);
 
     const simGame = (homeTeam: any, awayTeam: any, week: number) => {
     const result = simulateGame(homeTeam.id, awayTeam.id);
-            insertGame.run(s, week, homeTeam.id, awayTeam.id, result.homeScore, result.awayScore, result.homeQuarters[0], result.homeQuarters[1], result.homeQuarters[2], result.homeQuarters[3], result.awayQuarters[0], result.awayQuarters[1], result.awayQuarters[2], result.awayQuarters[3]);
+            insertGame.run(s, week, homeTeam.id, awayTeam.id, result.homeScore, result.awayScore, result.homeQuarters[0], result.homeQuarters[1], result.homeQuarters[2], result.homeQuarters[3], result.awayQuarters[0], result.awayQuarters[1], result.awayQuarters[2], result.awayQuarters[3], result.weather ?? 'clear');
         return { home: homeTeam, away: awayTeam, homeScore: result.homeScore, awayScore: result.awayScore, winner: result.homeScore > result.awayScore ? homeTeam : awayTeam };
   };
 
@@ -1429,7 +1430,7 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
   db.prepare(`UPDATE players SET weeks_out = MAX(0, weeks_out - 1) WHERE weeks_out > 0`).run();
   db.prepare(`UPDATE players SET injury_status = 'healthy', injury_type = NULL WHERE weeks_out = 0 AND injury_status != 'healthy'`).run();
 
-    const updateGame = db.prepare('UPDATE games SET home_score = ?, away_score = ?, home_q1 = ?, home_q2 = ?, home_q3 = ?, home_q4 = ?, away_q1 = ?, away_q2 = ?, away_q3 = ?, away_q4 = ?, is_simulated = 1 WHERE id = ?');
+    const updateGame = db.prepare('UPDATE games SET home_score = ?, away_score = ?, home_q1 = ?, home_q2 = ?, home_q3 = ?, home_q4 = ?, away_q1 = ?, away_q2 = ?, away_q3 = ?, away_q4 = ?, weather = ?, is_simulated = 1 WHERE id = ?');
   const insertStat = db.prepare(`
     INSERT INTO stats (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
       interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds,
@@ -1445,8 +1446,8 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
 
   const runWeek = db.transaction(() => {
     for (const game of games) {
-      const result = simulateGame(game.home_team_id, game.away_team_id);
-            updateGame.run(result.homeScore, result.awayScore, result.homeQuarters[0], result.homeQuarters[1], result.homeQuarters[2], result.homeQuarters[3], result.awayQuarters[0], result.awayQuarters[1], result.awayQuarters[2], result.awayQuarters[3], game.id);
+      const result = simulateGame(game.home_team_id, game.away_team_id, game.week ?? 1);
+            updateGame.run(result.homeScore, result.awayScore, result.homeQuarters[0], result.homeQuarters[1], result.homeQuarters[2], result.homeQuarters[3], result.awayQuarters[0], result.awayQuarters[1], result.awayQuarters[2], result.awayQuarters[3], result.weather ?? 'clear', game.id);
       for (const stat of [...result.homePlayerStats, ...result.awayPlayerStats]) {
         insertStat.run({ game_id: game.id, ...stat });
         allStats.push(stat);
