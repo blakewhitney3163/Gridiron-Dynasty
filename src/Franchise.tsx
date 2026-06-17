@@ -755,16 +755,25 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
                   <div style={{ width: 70, color: T.textMuted, fontSize: 11, textAlign: 'center' }}>{fa.dev_trait === 'Normal' ? '—' : fa.dev_trait}</div>
                   <div style={{ width: 100, color: T.textMuted, fontSize: 12 }}>{fmtSalary(mv)}/yr</div>
                   <button
-                    onClick={() => isSigning ? setSigningId(null) : openSign(fa)}
-                    disabled={!!(rosterSpots && rosterSpots.activeFree <= 0)}
-                    style={{
-                      padding: '4px 12px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
-                      background: isSigning ? T.bgBlue : T.bgPanel,
-                      border: `1px solid ${isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? T.bgCard : T.borderMid}`,
-                      color: isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? T.borderMid : T.textMuted,
-                    }}>
-                    {isSigning ? 'Cancel' : 'Sign'}
-                  </button>
+  onClick={async () => {
+    const result = await window.api.signFreeAgentToPs(fa.id);
+    if (result.success) {
+      showToast(`${result.name} signed to practice squad.`, 'success');
+      loadData();
+    } else {
+      showToast(result.reason ?? 'Could not sign to PS.', 'error');
+    }
+  }}
+  disabled={!!(rosterSpots && rosterSpots.psFree <= 0)}
+  title="Sign to practice squad ($0.87M / 1 yr)"
+  style={{
+    padding: '4px 8px', fontSize: 10, cursor: 'pointer', borderRadius: 4,
+    background: T.bgPanel, border: `1px solid ${rosterSpots && rosterSpots.psFree <= 0 ? T.bgCard : T.borderMid}`,
+    color: rosterSpots && rosterSpots.psFree <= 0 ? T.borderMid : T.textDim,
+    opacity: rosterSpots && rosterSpots.psFree <= 0 ? 0.4 : 1,
+  }}>
+  PS
+</button>
                 </div>
 
                 {isSigning && signingPlayer && (
