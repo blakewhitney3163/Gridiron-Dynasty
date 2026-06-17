@@ -1597,11 +1597,13 @@ ipcMain.handle('get-cpu-trade-offer', () => {
     // ── SELLER / REBUILDING: CPU wants to dump a veteran for youth/picks ──
     if (status === 'Seller' || status === 'Rebuilding') {
       const veterans = db.prepare(`
-        SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
-        FROM players WHERE team_id = ? AND roster_status = 'active'
-        AND overall_rating >= 76 AND (age >= 28 OR dev_trait IN ('Star','Superstar'))
-        ORDER BY overall_rating DESC
-      `).all(cpuTeam.id) as any[];
+  SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
+  FROM players WHERE team_id = ? AND roster_status = 'active'
+  AND overall_rating >= 76
+  AND dev_trait != 'X-Factor'
+  AND (age >= 28 OR dev_trait IN ('Star','Superstar'))
+  ORDER BY overall_rating DESC
+`).all(cpuTeam.id) as any[];
       if (veterans.length === 0) continue;
 
       const offering = veterans[Math.floor(Math.random() * Math.min(4, veterans.length))];
@@ -1609,11 +1611,13 @@ ipcMain.handle('get-cpu-trade-offer', () => {
 
       // Target: a young user player they can develop
       const userPlayers = db.prepare(`
-        SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
-        FROM players WHERE team_id = ? AND roster_status = 'active'
-        AND age <= 26 AND overall_rating >= 68
-        ORDER BY overall_rating DESC
-      `).all(userTeamId) as any[];
+  SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
+  FROM players WHERE team_id = ? AND roster_status = 'active'
+  AND age <= 26 AND overall_rating >= 68
+  ORDER BY
+    CASE dev_trait WHEN 'X-Factor' THEN 4 WHEN 'Superstar' THEN 3 WHEN 'Star' THEN 2 ELSE 1 END DESC,
+    overall_rating DESC
+`).all(userTeamId) as any[];
 
       const target = userPlayers.find((p: any) => {
         const v = calcPlayerTradeValue(p.overall_rating, p.age, p.position, p.dev_trait);
