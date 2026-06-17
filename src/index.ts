@@ -1933,77 +1933,126 @@ ipcMain.handle('get-team-needs', (_: any, teamId: number) => {
 // ─── NFLverse Stats Import ────────────────────────────────────────────────────
 ipcMain.handle('import-nflverse-stats', () => {
   const pathModule = require('path');
-  const fsModule  = require('fs');
-  const csvPath   = pathModule.join(process.cwd(), 'src', 'data', 'player-career-stats.csv');
+  const fsModule = require('fs');
 
+  // ── Offense ──────────────────────────────────────────────────────────────
+  const csvPath = pathModule.join(process.cwd(), 'src', 'data', 'player-career-stats.csv');
   if (!fsModule.existsSync(csvPath)) {
     return { success: false, matched: 0, error: 'player-career-stats.csv not found — run scripts/fetch-career-stats.js first' };
   }
 
-  // Parse CSV
-  const lines   = fsModule.readFileSync(csvPath, 'utf8').split('\n').filter((l: string) => l.trim());
-  const headers = lines[0].split(',').map((h: string) => h.trim());
-  const rows    = lines.slice(1).map((line: string) => {
-    const vals: string[] = [];
-    let cur = '', inQ = false;
-    for (const ch of line) {
-      if (ch === '"') { inQ = !inQ; }
-      else if (ch === ',' && !inQ) { vals.push(cur); cur = ''; }
-      else { cur += ch; }
-    }
-    vals.push(cur);
-    const r: any = {};
-    headers.forEach((h: string, i: number) => { r[h] = (vals[i] ?? '').trim(); });
-    return r;
-  });
-
-  // Build name → player lookup (normalized: lowercase, no apostrophes/periods)
   const norm = (s: string) => s.toLowerCase().replace(/['\u2019.]/g, '').replace(/\s+/g, ' ').trim();
   const players = db.prepare('SELECT id, first_name, last_name FROM players').all() as any[];
   const byName: Record<string, any> = {};
   for (const p of players) byName[norm(`${p.first_name} ${p.last_name}`)] = p;
 
-  const upsert = db.prepare(`
+  const parseCSV = (filePath: string) => {
+    const lines = fsModule.readFileSync(filePath, 'utf8').split('\n').filter((l: string) => l.trim());
+    const headers = lines[0].split(',').map((h: string) => h.trim());
+    return lines.slice(1).map((line: string) => {
+      const vals: string[] = [];
+      let cur = '', inQ = false;
+      for (const ch of line) {
+        if (ch === '"') { inQ = !inQ; }
+        else if (ch === ',' && !inQ) { vals.push(cur); cur = ''; }
+        else { cur += ch; }
+      }
+      vals.push(cur);
+      const r: any = {};
+      headers.forEach((h: string, i: number) => { r[h] = (vals[i] ?? '').trim(); });
+      return r;
+    });
+  };
+
+  const offRows = parseCSV(csvPath);
+
+  const upsertOff = db.prepare(`
     INSERT OR IGNORE INTO career_stats_history
-      (player_id, season, games,
-       completions, pass_attempts, pass_yards, pass_tds, interceptions,
-       rush_attempts, rush_yards, rush_tds,
-       targets, receptions, rec_yards, rec_tds)
+    (player_id, season, games,
+     completions, pass_attempts, pass_yards, pass_tds, interceptions,
+     rush_attempts, rush_yards, rush_tds,
+     targets, receptions, rec_yards, rec_tds)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `);
 
   let matched = 0, skipped = 0;
-
-  const run = db.transaction(() => {
-    for (const r of rows) {
+  const runOff = db.transaction(() => {
+    for (const r of offRows) {
       const player = byName[norm(r.player_display_name ?? '')];
       if (!player) { skipped++; continue; }
       const season = parseInt(r.season);
       if (!season) { skipped++; continue; }
-
-      upsert.run(
+      upsertOff.run(
         player.id, season,
-        parseInt(r.games)          || 0,
-        parseInt(r.completions)    || 0,
-        parseInt(r.attempts)       || 0,
-        parseInt(r.passing_yards)  || 0,
-        parseInt(r.passing_tds)    || 0,
-        parseInt(r.interceptions)  || 0,
-        parseInt(r.carries)        || 0,
-        parseInt(r.rushing_yards)  || 0,
-        parseInt(r.rushing_tds)    || 0,
-        parseInt(r.targets)        || 0,
-        parseInt(r.receptions)     || 0,
-        parseInt(r.receiving_yards)|| 0,
-        parseInt(r.receiving_tds)  || 0,
+        parseInt(r.games) || 0,
+        parseInt(r.completions) || 0,
+        parseInt(r.attempts) || 0,
+        parseInt(r.passing_yards) || 0,
+        parseInt(r.passing_tds) || 0,
+        parseInt(r.interceptions) || 0,
+        parseInt(r.carries) || 0,
+        parseInt(r.rushing_yards) || 0,
+        parseInt(r.rushing_tds) || 0,
+        parseInt(r.targets) || 0,
+        parseInt(r.receptions) || 0,
+        parseInt(r.receiving_yards) || 0,
+        parseInt(r.receiving_tds) || 0,
       );
       matched++;
     }
   });
+  runOff();
 
-  run();
-  console.log(`Career stats: ${matched} matched, ${skipped} skipped`);
-  return { success: true, matched, skipped };
+  // ── Defense ───────────────────────────────────────────────────────────────
+  const defCsvPath = pathModule.join(process.cwd(), 'src', 'data', 'player-career-stats-def.csv');
+  let defMatched = 0;
+
+  if (fsModule.existsSync(defCsvPath)) {
+    const defRows = parseCSV(defCsvPath);
+
+    const upsertDef = db.prepare(`
+      INSERT INTO career_stats_history
+        (player_id, season, games, tackles, assisted_tackles, sacks, tfl,
+         forced_fumbles, def_interceptions, pass_deflections, def_tds)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(player_id, season) DO UPDATE SET
+        tackles           = excluded.tackles,
+        assisted_tackles  = excluded.assisted_tackles,
+        sacks             = excluded.sacks,
+        tfl               = excluded.tfl,
+        forced_fumbles    = excluded.forced_fumbles,
+        def_interceptions = excluded.def_interceptions,
+        pass_deflections  = excluded.pass_deflections,
+        def_tds           = excluded.def_tds,
+        games             = MAX(career_stats_history.games, excluded.games)
+    `);
+
+    const runDef = db.transaction(() => {
+      for (const r of defRows) {
+        const player = byName[norm(r.player_display_name ?? '')];
+        if (!player) continue;
+        const season = parseInt(r.season);
+        if (!season) continue;
+        upsertDef.run(
+          player.id, season,
+          parseInt(r.games) || 0,
+          parseFloat(r.tackles) || 0,
+          parseFloat(r.assisted_tackles) || 0,
+          parseFloat(r.sacks) || 0,
+          parseFloat(r.tfl) || 0,
+          parseFloat(r.forced_fumbles) || 0,
+          parseFloat(r.def_interceptions) || 0,
+          parseFloat(r.pass_deflections) || 0,
+          parseFloat(r.def_tds) || 0,
+        );
+        defMatched++;
+      }
+    });
+    runDef();
+  }
+
+  console.log(`Career stats: ${matched} offense matched, ${skipped} skipped, ${defMatched} defense matched`);
+  return { success: true, matched: matched + defMatched, skipped };
 });
 
 ipcMain.handle('check-setup-done', () => {
