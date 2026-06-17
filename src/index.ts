@@ -1155,7 +1155,7 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
       @def_interceptions, @pass_deflections, @def_tds)
   `);
 
-  const allStats: any[] = [];
+    const allStats: any[] = [];
 
   const runWeek = db.transaction(() => {
     for (const game of games) {
@@ -1167,14 +1167,14 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
       }
     }
   });
-const newlyInjured = rollInjuries(allStats);
+  runWeek();
+
+  const newlyInjured = rollInjuries(allStats);
   const userTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
   const userTeamId = userTeamRow ? parseInt(userTeamRow.value) : -1;
   const rosterResult = processRosterAdjustments(newlyInjured, userTeamId);
-  const rosterResult = processWaivers(userTeamId)
+  processWaivers(userTeamId);
   return { week, season, gamesSimulated: games.length, callups: rosterResult.callups, userPSOpenSpots: rosterResult.userPSOpenSpots };
-
-  return { week, season, gamesSimulated: games.length };
 });
 
 ipcMain.handle('get-injury-report', (_event: any, teamId: number) => {
