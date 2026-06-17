@@ -88,6 +88,7 @@ function PlayerCard({ player, currentSeason, onClose }: { player: SelectedPlayer
   const [seasonStats, setSeasonStats] = useState<SeasonStats | null>(null);
   const [careerStats, setCareerStats] = useState<CareerSeasonStats[]>([]);
   const [loading, setLoading] = useState(true);
+  
 
   useEffect(() => {
     setLoading(true);
@@ -239,6 +240,10 @@ export default function Stats({ currentSeason }: Props) {
   const [teams, setTeams] = useState<TeamEntry[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamEntry | null>(null);
   const [teamStats, setTeamStats] = useState<any[] | null>(null);
+  const [viewMode, setViewMode] = useState<'players' | 'teams'>('players');
+const [teamSeasonStats, setTeamSeasonStats] = useState<any[] | null>(null);
+const [teamSortKey, setTeamSortKey] = useState<string>('ppg');
+const [teamSortDir, setTeamSortDir] = useState<'asc'|'desc'>('desc');
 
   useEffect(() => {
     window.api.getSeasons().then((seasons: number[]) => setAvailableSeasons(seasons));
@@ -251,6 +256,12 @@ export default function Stats({ currentSeason }: Props) {
     window.api.getStats(viewSeason).then((data: StatsData) => setStats(data));
   }, [viewSeason]);
 
+useEffect(() => {
+  if (viewMode === 'teams') {
+    window.api.getTeamSeasonStats(viewSeason).then((rows: any[]) => setTeamSeasonStats(rows));
+  }
+}, [viewMode, viewSeason]);
+  
   useEffect(() => {
     if (selectedTeam) {
       window.api.getTeamStats(selectedTeam.id, viewSeason).then((rows: any[]) => setTeamStats(rows));
@@ -310,9 +321,15 @@ export default function Stats({ currentSeason }: Props) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 'bold', color: T.textPrimary }}>
-            {selectedTeam ? `${selectedTeam.city} ${selectedTeam.name} — ` : ''}{viewSeason} Season {selectedTeam ? 'Stats' : 'Leaders'}
-          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+  <div style={{ fontSize: 22, fontWeight: 'bold', color: T.textPrimary }}>
+    {viewMode === 'teams' ? `${viewSeason} Team Stats` : (selectedTeam ? `${selectedTeam.city} ${selectedTeam.name} — ` : '') + `${viewSeason} Season Leaders`}
+  </div>
+  <div style={{ display: 'flex', gap: 4 }}>
+    <button onClick={() => setViewMode('players')} style={{ padding: '4px 10px', fontSize: 10, background: viewMode==='players'?'#FF8740':T.bgCard, color: viewMode==='players'?'#000':T.textDim, border: `1px solid ${viewMode==='players'?'#FF8740':T.borderFaint}`, borderRadius: 3, cursor: 'pointer', fontWeight: viewMode==='players'?700:400 }}>PLAYERS</button>
+    <button onClick={() => setViewMode('teams')} style={{ padding: '4px 10px', fontSize: 10, background: viewMode==='teams'?'#FF8740':T.bgCard, color: viewMode==='teams'?'#000':T.textDim, border: `1px solid ${viewMode==='teams'?'#FF8740':T.borderFaint}`, borderRadius: 3, cursor: 'pointer', fontWeight: viewMode==='teams'?700:400 }}>TEAMS</button>
+  </div>
+</div>
           <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>Click any player to view their full stats</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -362,6 +379,62 @@ export default function Stats({ currentSeason }: Props) {
         ))}
       </div>
 
+{viewMode === 'teams' && (() => {
+  const rows = teamSeasonStats ?? [];
+  const sortedTeams = [...rows].sort((a, b) => {
+    const av = a[teamSortKey] ?? 0, bv = b[teamSortKey] ?? 0;
+    return teamSortDir === 'desc' ? bv - av : av - bv;
+  });
+  const SortHdr = ({ k, label }: { k: string; label: string }) => (
+    <th onClick={() => { teamSortKey === k ? setTeamSortDir(d => d==='desc'?'asc':'desc') : (setTeamSortKey(k), setTeamSortDir('desc')); }}
+      style={{ ...thStyle, textAlign:'right', cursor:'pointer', color: teamSortKey===k?'#FF8740':T.textDim, userSelect:'none' }}>
+      {label}{teamSortKey===k?(teamSortDir==='desc'?' ▼':' ▲'):''}
+    </th>
+  );
+  return (
+    <div style={{ background: T.bgPanel, borderRadius: 6, overflow: 'hidden', border: `1px solid ${T.borderFaint}` }}>
+      {rows.length === 0 && <div style={{ padding: 24, color: T.textDim, fontSize: 13 }}>No team stats yet — simulate some games first.</div>}
+      {rows.length > 0 && (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: T.bgCard }}>
+              <th style={{ ...thStyle, width: 32, textAlign: 'center' }}>#</th>
+              <th style={{ ...thStyle, textAlign: 'left' }}>TEAM</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>W-L</th>
+              <SortHdr k="ppg"     label="PPG" />
+              <SortHdr k="papg"    label="PAPG" />
+              <SortHdr k="ypg"     label="YPG" />
+              <SortHdr k="to_diff" label="TO±" />
+              <SortHdr k="to_given"  label="TO GIVEN" />
+              <SortHdr k="to_taken"  label="TO TAKEN" />
+            </tr>
+          </thead>
+          <tbody>
+            {sortedTeams.map((t, i) => {
+              const toDiffColor = t.to_diff > 0 ? '#4caf50' : t.to_diff < 0 ? '#e57373' : T.textMuted;
+              return (
+                <tr key={t.id} style={{ borderBottom: `1px solid ${T.borderFaint}`, background: i%2===0?T.bgCard:'transparent' }}>
+                  <td style={{ ...tdBase, textAlign: 'center', color: T.textDim }}>{i+1}</td>
+                  <td style={{ ...tdBase, color: T.textPrimary, fontWeight: 'bold' }}>{t.city} {t.name}</td>
+                  <td style={{ ...tdBase, textAlign: 'right', color: T.textMuted }}>{t.wins}–{t.losses}</td>
+                  <td style={{ ...tdBase, textAlign: 'right', color: '#4FC3F7', fontWeight: 'bold' }}>{t.ppg}</td>
+                  <td style={{ ...tdBase, textAlign: 'right', color: '#e57373' }}>{t.papg}</td>
+                  <td style={{ ...tdBase, textAlign: 'right' }}>{t.ypg.toLocaleString()}</td>
+                  <td style={{ ...tdBase, textAlign: 'right', fontWeight: 700, color: toDiffColor }}>{t.to_diff > 0 ? '+' : ''}{t.to_diff}</td>
+                  <td style={{ ...tdBase, textAlign: 'right', color: T.textDim }}>{t.to_given}</td>
+                  <td style={{ ...tdBase, textAlign: 'right', color: T.textDim }}>{t.to_taken}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+})()}
+
+{viewMode === 'players' && (
+      
       {/* Passing */}
       {category === 'passing' && (
         <div style={{ background: T.bgPanel, borderRadius: 6, overflow: 'hidden', border: `1px solid ${T.borderFaint}` }}>
