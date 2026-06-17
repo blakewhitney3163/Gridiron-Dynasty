@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { T } from './theme';
 
 declare const window: any;
 
@@ -44,21 +43,6 @@ interface FreeAgent {
   dev_trait: string;
 }
 
-interface WaiverPlayer {
-  id: number;
-  first_name: string;
-  last_name: string;
-  position: string;
-  position_label: string;
-  overall_rating: number;
-  age: number;
-  dev_trait: string;
-  speed: number;
-  strength: number;
-  awareness: number;
-  canClaim: boolean;
-}
-
 interface CapSummary {
   total_cap: number;
   used_cap: number;
@@ -74,33 +58,32 @@ interface RosterSpots {
   psFree: number;
 }
 
-interface TeamNeed { position: string; severity: 'critical' | 'depth'; }
-
 interface Props {
   userTeam: { id: number; city: string; name: string };
   currentSeason: number;
+  playoffsComplete: boolean;
 }
 
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K'];
 
 const TRAIT_META: Record<string, { color: string; short: string }> = {
-  'Normal': { color: T.textDim, short: '' },
-  'Star': { color: '#4FC3F7', short: 'S' },
+  'Normal':    { color: '#444',    short: '' },
+  'Star':      { color: '#4FC3F7', short: 'S' },
   'Superstar': { color: '#FF8740', short: 'SS' },
-  'X-Factor': { color: '#FFD700', short: 'XF' },
+  'X-Factor':  { color: '#FFD700', short: 'XF' },
 };
 
 function ratingColor(r: number): string {
   if (r >= 90) return '#FFD700';
   if (r >= 80) return '#4caf50';
   if (r >= 70) return '#FF8740';
-  return T.textMuted;
+  return '#888';
 }
 
 function trajectory(age: number): { label: string; color: string } {
   if (age <= 26) return { label: '↑', color: '#4caf50' };
   if (age <= 30) return { label: '→', color: '#FF8740' };
-  return { label: '↓', color: T.textMuted };
+  return { label: '↓', color: '#777' };
 }
 
 function fmtSalary(m: number): string {
@@ -158,25 +141,10 @@ function contractGrade(salary: number, pos: string, ovr: number, devTrait: strin
 
 type Decision = 'pending' | 'resigned' | 'walking';
 
-function TeamNeedsBar({ needs }: { needs: TeamNeed[] }) {
-  if (needs.length === 0) return null;
-  return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-      <span style={{ fontSize: 10, color: T.textMuted, letterSpacing: 1 }}>TEAM NEEDS</span>
-      {needs.map(n => (
-        <span key={n.position} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, background: n.severity === 'critical' ? '#3a1a1a' : '#2a2a1a', color: n.severity === 'critical' ? '#e57373' : '#e8b800', fontWeight: 700 }}>
-          {n.position}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-export default function Franchise({ userTeam, currentSeason }: Props) {
+export default function Franchise({ userTeam, currentSeason, playoffsComplete }: Props) {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [practiceSquad, setPracticeSquad] = useState<PracticePlayer[]>([]);
   const [freeAgents, setFreeAgents] = useState<FreeAgent[]>([]);
-  const [waiverPlayers, setWaiverPlayers] = useState<WaiverPlayer[]>([]);
   const [expiringPlayers, setExpiringPlayers] = useState<Contract[]>([]);
   const [cap, setCap] = useState<CapSummary | null>(null);
   const [rosterSpots, setRosterSpots] = useState<RosterSpots | null>(null);
@@ -184,12 +152,10 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
   const [faPos, setFaPos] = useState('ALL');
   const [faSortBy, setFaSortBy] = useState<'ovr' | 'age' | 'value'>('ovr');
   const [sortBy, setSortBy] = useState<'salary' | 'years' | 'ovr' | 'age'>('salary');
-  const [activeTab, setActiveTab] = useState<'roster' | 'ps' | 'waivers' | 'fa' | 'offseason'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'ps' | 'fa' | 'offseason'>('roster');
   const [extendingId, setExtendingId] = useState<number | null>(null);
   const [extendYears, setExtendYears] = useState(3);
   const [extendSalary, setExtendSalary] = useState('');
-  const [restructuringId, setRestructuringId] = useState<number | null>(null);
-  const [restructurePct, setRestructurePct] = useState(0.3);
   const [releasingId, setReleasingId] = useState<number | null>(null);
   const [signingId, setSigningId] = useState<number | null>(null);
   const [signYears, setSignYears] = useState(2);
@@ -204,15 +170,17 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
   const [faSearch, setFaSearch] = useState('');
   const [cpuFaResult, setCpuFaResult] = useState<{ totalSigned: number; teamsActive: number } | null>(null);
   const [cpuFaDone, setCpuFaDone] = useState(false);
-  const [needs, setNeeds] = useState<TeamNeed[]>([]);
 
   useEffect(() => { loadData(); }, [userTeam.id]);
 
   useEffect(() => {
     if (activeTab === 'fa') loadFreeAgents();
     if (activeTab === 'offseason') loadExpiringContracts();
-    if (activeTab === 'waivers') loadWaivers();
   }, [activeTab, faPos]);
+
+  useEffect(() => {
+    if (!playoffsComplete && activeTab === 'offseason') setActiveTab('roster');
+  }, [playoffsComplete]);
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
@@ -220,30 +188,21 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
   };
 
   const loadData = async () => {
-    const [c, s, ps, spots, n, waivers] = await Promise.all([
+    const [c, s, ps, spots] = await Promise.all([
       window.api.getTeamContracts(userTeam.id),
       window.api.getCapSummary(userTeam.id),
       window.api.getPracticeSquad(userTeam.id),
       window.api.getRosterSpots(userTeam.id),
-      window.api.getTeamNeeds(userTeam.id),
-      window.api.getWaiverWire(),
     ]);
     setContracts(c);
     setCap(s);
     setPracticeSquad(ps);
     setRosterSpots(spots);
-    setNeeds(n);
-    setWaiverPlayers(waivers);
   };
 
   const loadFreeAgents = async () => {
     const fa = await window.api.getFreeAgents(faPos === 'ALL' ? undefined : faPos);
     setFreeAgents(fa);
-  };
-
-  const loadWaivers = async () => {
-    const waivers = await window.api.getWaiverWire();
-    setWaiverPlayers(waivers);
   };
 
   const loadExpiringContracts = async () => {
@@ -257,7 +216,6 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
   const openExtend = (contract: Contract) => {
     setExtendingId(contract.id);
     setReleasingId(null);
-    setRestructuringId(null);
     setExtendYears(Math.min(contract.years_remaining + 2, 5));
     setExtendSalary(contract.annual_salary.toFixed(1));
   };
@@ -294,31 +252,13 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
     setWorking(false);
   };
 
-  const handleRestructure = async () => {
-    if (!restructuringId || working) return;
-    setWorking(true);
-    const result = await window.api.restructurePlayer({ playerId: restructuringId, pct: restructurePct });
-    if (!result.success) {
-      showToast(result.reason ?? 'Could not restructure.', 'error');
-    } else {
-      showToast(`Restructured — saved $${result.savings.toFixed(1)}M this year.`, 'success');
-      setRestructuringId(null);
-    }
-    await loadData();
-    setWorking(false);
-  };
-
   const handleRelease = async () => {
     if (!releasingId || working) return;
     const player = contracts.find(c => c.id === releasingId);
     setWorking(true);
-    const result = await window.api.releasePlayer(releasingId);
+    await window.api.releasePlayer(releasingId);
     setReleasingId(null);
-    if (result?.onWaivers) {
-      showToast(`${player?.first_name} ${player?.last_name} placed on waivers.`, 'error');
-    } else {
-      showToast(`${player?.first_name} ${player?.last_name} released to free agency.`, 'error');
-    }
+    showToast(`${player?.first_name} ${player?.last_name} released.`, 'error');
     await loadData();
     if (activeTab === 'fa') loadFreeAgents();
     setWorking(false);
@@ -428,51 +368,46 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
   const resignCapLeft = cap ? cap.available_cap - resignSalaryNum : 0;
   const pendingCount = Object.values(playerDecisions).filter(d => d === 'pending').length;
 
-  const currentRestructure = restructuringId ? contracts.find(c => c.id === restructuringId) : null;
-  const restructureSavings = currentRestructure
-    ? Math.round(currentRestructure.annual_salary * restructurePct * (1 - 1 / Math.max(currentRestructure.years_remaining, 2)) * 10) / 10
-    : 0;
-  const restructureNewSalary = currentRestructure
-    ? Math.round((currentRestructure.annual_salary - restructureSavings) * 10) / 10
-    : 0;
-  const restructureNewGtd = currentRestructure
-    ? Math.round(((currentRestructure.guaranteed_amount ?? 0) + currentRestructure.annual_salary * restructurePct) * 10) / 10
-    : 0;
-
   return (
     <div style={{ padding: '20px 24px', maxWidth: 900, margin: '0 auto' }}>
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 9999, background: toast.type === 'error' ? '#3a1a1a' : '#1a3a1a', border: `1px solid ${toast.type === 'error' ? '#e57373' : '#4caf50'}`, borderRadius: 6, padding: '10px 16px', color: toast.type === 'error' ? '#e57373' : '#4caf50', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, maxWidth: 360 }}>
-          <span>{toast.type === 'error' ? '✗' : '✓'}</span>
+        <div style={{
+          position: 'fixed', top: 20, right: 24, zIndex: 1000,
+          background: toast.type === 'error' ? '#2a0a0a' : '#0a2a0a',
+          border: `1px solid ${toast.type === 'error' ? '#e57373' : '#4caf50'}`,
+          borderRadius: 6, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10,
+          color: toast.type === 'error' ? '#e57373' : '#4caf50', fontSize: 13, maxWidth: 380,
+        }}>
+          <span style={{ fontWeight: 'bold' }}>{toast.type === 'error' ? '✗' : '✓'}</span>
           <span>{toast.message}</span>
           <button onClick={() => setToast(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, opacity: 0.6 }}>×</button>
         </div>
       )}
 
       {/* Header */}
-      <div style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 20, color: T.textPrimary }}>Franchise Management</h2>
-        <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{userTeam.city} {userTeam.name} · {currentSeason} Season</div>
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ color: '#fff', fontSize: 20, fontWeight: 700, margin: 0 }}>Franchise Management</h1>
+        <p style={{ color: '#444', fontSize: 12, margin: '2px 0 0' }}>{userTeam.city} {userTeam.name} · {currentSeason} Season</p>
       </div>
 
       {/* Cap Bar */}
       {cap && (
-        <div style={{ background: T.bgPanel, border: `1px solid ${T.borderFaint}`, borderRadius: 8, padding: '12px 16px', marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-            <span style={{ fontSize: 10, letterSpacing: 1, color: T.textMuted }}>SALARY CAP</span>
-            <span style={{ fontSize: 13, color: T.textPrimary, fontWeight: 600 }}>{fmtSalary(cap.used_cap)} used</span>
-            <span style={{ color: T.textDim }}>/</span>
-            <span style={{ fontSize: 13, color: T.textMuted }}>{fmtSalary(cap.total_cap)} cap</span>
-            <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: capColor }}>
+        <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+            <span style={{ color: '#444', fontSize: 10, letterSpacing: 1, fontWeight: 700 }}>SALARY CAP</span>
+            <span style={{ color: capColor, fontSize: 14, fontWeight: 700 }}>{fmtSalary(cap.used_cap)} used</span>
+            <span style={{ color: '#333', fontSize: 12 }}>/</span>
+            <span style={{ color: '#555', fontSize: 12 }}>{fmtSalary(cap.total_cap)} cap</span>
+            <span style={{ marginLeft: 'auto', color: cap.available_cap < 0 ? '#e57373' : '#4caf50', fontWeight: 700, fontSize: 13 }}>
               {cap.available_cap < 0 ? '⚠ OVER CAP ' : ''}{fmtSalary(cap.available_cap)}{cap.available_cap >= 0 ? ' available' : ''}
             </span>
           </div>
-          <div style={{ height: 6, background: T.bgCard, borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${Math.min(capPct, 100)}%`, background: capColor, borderRadius: 3, transition: 'width 0.3s' }} />
+          <div style={{ background: '#1a1a1a', borderRadius: 4, height: 6, overflow: 'hidden' }}>
+            <div style={{ background: capColor, height: '100%', width: `${Math.min(capPct, 100)}%`, transition: 'width 0.3s' }} />
           </div>
-          <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 11, color: T.textMuted }}>
+          <div style={{ display: 'flex', gap: 16, marginTop: 6, fontSize: 11, color: '#444' }}>
             <span>Guaranteed on books: {fmtSalary(totalGuaranteed)}</span>
             {expiringCount > 0 && <span style={{ color: '#FF8740' }}>⚠ {expiringCount} expiring this offseason</span>}
             {rosterSpots && <span>{rosterSpots.active}/53 active · {rosterSpots.ps}/16 PS</span>}
@@ -481,34 +416,38 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
       )}
 
       {/* OTC Import */}
-      <div style={{ marginBottom: 10, textAlign: 'right' }}>
-        <button onClick={async () => {
-          const result = await window.api.importOtcContracts();
-          if (result.success) {
-            showToast(`OTC: ${result.matched}/${result.total} contracts updated`, 'success');
-            loadData();
-          } else {
-            showToast(result.reason ?? 'OTC import failed', 'error');
-          }
-        }}
-          style={{ fontSize: 10, color: T.textMuted, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
-        >↻ sync OTC contracts</button>
+      <div style={{ marginBottom: 16 }}>
+        <button
+          onClick={async () => {
+            const result = await window.api.importOtcContracts();
+            if (result.success) {
+              showToast(`OTC: ${result.matched}/${result.total} contracts updated`, 'success');
+              loadData();
+            } else {
+              showToast(result.reason ?? 'OTC import failed', 'error');
+            }
+          }}
+          style={{
+            padding: '5px 14px', fontSize: 11, letterSpacing: 1, cursor: 'pointer', borderRadius: 4,
+            background: '#0a1a0a', border: '1px solid #4caf50', color: '#4caf50', fontWeight: 'bold',
+          }}
+        >IMPORT OTC CONTRACTS</button>
+        <span style={{ color: '#333', fontSize: 10, marginLeft: 10 }}>otc-contracts.htm detected in repo root</span>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
         {([
-          { key: 'roster', label: `ACTIVE ROSTER (${contracts.length})`, warn: false },
-          { key: 'ps', label: `PRACTICE SQUAD (${practiceSquad.length})`, warn: false },
-          { key: 'waivers', label: waiverPlayers.length > 0 ? `WAIVERS (${waiverPlayers.length})` : 'WAIVERS', warn: waiverPlayers.length > 0 },
-          { key: 'fa', label: 'FREE AGENTS', warn: false },
-          { key: 'offseason', label: expiringCount > 0 ? `OFFSEASON ⚠ ${expiringCount}` : 'OFFSEASON', warn: expiringCount > 0 },
+          { key: 'roster',    label: `ACTIVE ROSTER (${contracts.length})`,                          warn: false },
+          { key: 'ps',        label: `PRACTICE SQUAD (${practiceSquad.length})`,                     warn: false },
+          { key: 'fa',        label: 'FREE AGENTS',                                                   warn: false },
+          ...(playoffsComplete ? [{ key: 'offseason' as const, label: expiringCount > 0 ? `OFFSEASON ⚠ ${expiringCount}` : 'OFFSEASON', warn: expiringCount > 0 }] : []),
         ] as const).map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
             padding: '5px 16px', fontSize: 11, letterSpacing: 1, cursor: 'pointer', borderRadius: 4,
-            background: activeTab === tab.key ? '#FF8740' : (tab.warn ? T.bgOrange : T.bgPage),
-            border: `1px solid ${activeTab === tab.key ? '#FF8740' : tab.warn ? '#FF8740' : T.borderFaint}`,
-            color: activeTab === tab.key ? '#000' : tab.warn ? '#FF8740' : T.textMuted,
+            background: activeTab === tab.key ? '#FF8740' : (tab.warn ? '#1a1000' : '#111'),
+            border: `1px solid ${activeTab === tab.key ? '#FF8740' : tab.warn ? '#FF8740' : '#222'}`,
+            color: activeTab === tab.key ? '#000' : tab.warn ? '#FF8740' : '#555',
             fontWeight: activeTab === tab.key || tab.warn ? 'bold' : 'normal',
           }}>{tab.label}</button>
         ))}
@@ -517,173 +456,141 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
       {/* ── Active Roster ── */}
       {activeTab === 'roster' && (
         <>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            {POSITIONS.map(pos => (
-              <button key={pos} onClick={() => setPosFilter(pos)} style={{
-                padding: '3px 9px', background: posFilter === pos ? '#FF8740' : T.bgPanel,
-                border: `1px solid ${posFilter === pos ? '#FF8740' : T.borderFaint}`, borderRadius: 3,
-                color: posFilter === pos ? '#000' : T.textMuted, fontSize: 11, cursor: 'pointer',
-                fontWeight: posFilter === pos ? 'bold' : 'normal',
-              }}>{pos}</button>
-            ))}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {POSITIONS.map(pos => (
+                <button key={pos} onClick={() => setPosFilter(pos)} style={{
+                  padding: '3px 9px', background: posFilter === pos ? '#FF8740' : '#141414',
+                  border: `1px solid ${posFilter === pos ? '#FF8740' : '#222'}`, borderRadius: 3,
+                  color: posFilter === pos ? '#000' : '#555', fontSize: 11, cursor: 'pointer',
+                  fontWeight: posFilter === pos ? 'bold' : 'normal',
+                }}>{pos}</button>
+              ))}
+            </div>
             <select onChange={e => setSortBy(e.target.value as any)} value={sortBy} style={{
-              background: T.bgInput, border: `1px solid ${T.borderMid}`, borderRadius: 5,
-              color: T.textPrimary, padding: '4px 10px', fontSize: 12, marginLeft: 'auto',
+              background: '#161616', border: '1px solid #2a2a2a', borderRadius: 5,
+              color: '#ccc', padding: '4px 10px', fontSize: 12, marginLeft: 'auto',
             }}>
               <option value="salary">Sort: Salary</option>
               <option value="years">Sort: Expiring First</option>
               <option value="ovr">Sort: OVR</option>
               <option value="age">Sort: Age</option>
             </select>
-            <input placeholder="Search player..." value={rosterSearch} onChange={e => setRosterSearch(e.target.value)}
+            <input
+              placeholder="Search player..."
+              value={rosterSearch}
+              onChange={e => setRosterSearch(e.target.value)}
               style={{
-                background: T.bgInput, border: `1px solid ${T.borderMid}`, borderRadius: 5,
-                color: T.textPrimary, padding: '4px 10px', fontSize: 12, width: 160,
+                background: '#161616', border: '1px solid #2a2a2a', borderRadius: 5,
+                color: '#ccc', padding: '4px 10px', fontSize: 12, width: 160,
               }}
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '4px 8px', padding: '4px 8px', fontSize: 10, color: T.textDim, letterSpacing: 1, borderBottom: `1px solid ${T.borderFaint}`, marginBottom: 4 }}>
-            <span>PLAYER</span><span>AGE / OVR</span><span>DEV</span><span>SALARY / GTD</span><span>YEARS</span>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 80px auto', gap: 8, padding: '6px 12px', fontSize: 10, color: '#333', letterSpacing: 1, borderBottom: '1px solid #1a1a1a', marginBottom: 4 }}>
+            <span>PLAYER</span><span>AGE / OVR</span><span>DEV</span><span>SALARY / GTD</span><span style={{ gridColumn: '5' }}>YEARS</span>
           </div>
 
           {filtered.length === 0 ? (
-            <div style={{ color: T.textDim, fontSize: 13, padding: 16 }}>No contracts found</div>
+            <div style={{ color: '#333', padding: '20px 12px', fontSize: 13 }}>No contracts found</div>
           ) : filtered.map(contract => {
             const isExpiring = contract.years_remaining === 1;
             const trait = TRAIT_META[contract.dev_trait] ?? TRAIT_META['Normal'];
             const traj = trajectory(contract.age);
             const isExtending = extendingId === contract.id;
-            const isRestructuring = restructuringId === contract.id;
             const isReleasing = releasingId === contract.id;
             const grade = contractGrade(contract.annual_salary, contract.position, contract.overall_rating, contract.dev_trait);
             const gtdPct = contract.guaranteed_pct ?? 0;
 
             return (
-              <div key={contract.id} style={{ borderBottom: `1px solid ${T.borderFaint}`, paddingBottom: 4, marginBottom: 4 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '4px 8px', padding: '6px 8px', alignItems: 'center', background: isExpiring ? '#1a1500' : 'transparent', borderRadius: 4 }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <span style={{ fontSize: 13, color: T.textPrimary, fontWeight: 500 }}>{contract.first_name} {contract.last_name}</span>
-                      {trait.short && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: trait.color + '22', color: trait.color, fontWeight: 700 }}>{trait.short}</span>}
-                      {grade && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: grade.color + '22', color: grade.color, fontWeight: 700 }}>{grade.label}</span>}
+              <div key={contract.id} style={{ borderBottom: '1px solid #0d0d0d', background: isExpiring ? '#120900' : 'transparent' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: '#ddd', fontWeight: 600, fontSize: 13 }}>{contract.first_name} {contract.last_name}</span>
+                      {trait.short && <span style={{ background: trait.color, color: '#000', fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3 }}>{trait.short}</span>}
+                      {grade && <span style={{ color: grade.color, fontSize: 9, fontWeight: 700 }}>{grade.label}</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: T.textDim, marginTop: 1 }}>{contract.position_label || contract.position}</div>
+                    <span style={{ color: '#444', fontSize: 11 }}>{contract.position_label || contract.position}</span>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 12, color: T.textMuted }}>{contract.age} <span style={{ color: traj.color }}>{traj.label}</span></div>
-                    <div style={{ fontSize: 13, color: ratingColor(contract.overall_rating), fontWeight: 700 }}>{contract.overall_rating}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 60 }}>
+                    <span style={{ color: traj.color, fontSize: 12 }}>{contract.age} {traj.label}</span>
+                    <span style={{ color: ratingColor(contract.overall_rating), fontWeight: 700, fontSize: 14 }}>{contract.overall_rating}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: trait.color }}>
+                  <div style={{ width: 70, color: '#555', fontSize: 11, textAlign: 'center' }}>
                     {contract.dev_trait === 'Normal' ? '—' : contract.dev_trait}
                   </div>
-                  <div>
-                    <div style={{ fontSize: 13, color: T.textPrimary, fontWeight: 600 }}>{fmtSalary(contract.annual_salary)}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', width: 110 }}>
+                    <span style={{ color: '#ddd', fontWeight: 600, fontSize: 13 }}>{fmtSalary(contract.annual_salary)}</span>
                     {gtdPct > 0 && (
-                      <div style={{ color: gtdPct >= 60 ? '#4caf50' : gtdPct >= 35 ? '#FF8740' : T.textMuted, fontSize: 10, marginTop: 1 }}>
+                      <span style={{ color: gtdPct >= 60 ? '#4caf50' : gtdPct >= 35 ? '#FF8740' : '#555', fontSize: 10, marginTop: 1 }}>
                         {fmtSalary(contract.guaranteed_amount ?? 0)} GTD · {gtdPct.toFixed(0)}%
-                      </div>
+                      </span>
                     )}
                   </div>
-                  <div>
-                    <div style={{ display: 'flex', gap: 2, marginBottom: 2 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', width: 90 }}>
+                    <div style={{ display: 'flex', gap: 2 }}>
                       {Array.from({ length: contract.years_total }).map((_, i) => (
-                        <div key={i} style={{ width: 8, height: 8, borderRadius: 2, background: i < contract.years_remaining ? '#4caf50' : T.bgCard }} />
+                        <div key={i} style={{ width: 8, height: 8, borderRadius: 2, background: i < contract.years_remaining ? '#FF8740' : '#1a1a1a' }} />
                       ))}
                     </div>
-                    <div style={{ fontSize: 11, color: isExpiring ? '#FF8740' : T.textMuted }}>{contract.years_remaining}yr{isExpiring ? ' ⚠' : ''}</div>
+                    <span style={{ color: isExpiring ? '#FF8740' : '#555', fontSize: 11, marginTop: 2 }}>{contract.years_remaining}yr{isExpiring ? ' ⚠' : ''}</span>
                   </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: 6, paddingLeft: 8, paddingBottom: 4 }}>
-                  <button
-                    onClick={() => { isExtending ? setExtendingId(null) : openExtend(contract); }}
-                    style={{ padding: '4px 10px', background: isExtending ? '#1a3a1a' : T.bgPanel, border: `1px solid ${isExtending ? '#4caf50' : T.borderMid}`, borderRadius: 4, color: isExtending ? '#4caf50' : T.textMuted, fontSize: 11, cursor: 'pointer' }}>
-                    {isExtending ? 'Cancel' : 'Extend'}
-                  </button>
-                  <button
-                    onClick={() => { isRestructuring ? setRestructuringId(null) : (setRestructuringId(contract.id), setExtendingId(null), setReleasingId(null)); }}
-                    disabled={contract.years_remaining < 2}
-                    style={{ padding: '4px 10px', background: isRestructuring ? '#0d1f2d' : T.bgPanel, border: `1px solid ${isRestructuring ? '#4FC3F7' : contract.years_remaining < 2 ? T.bgCard : T.borderMid}`, borderRadius: 4, color: isRestructuring ? '#4FC3F7' : contract.years_remaining < 2 ? T.borderMid : T.textMuted, fontSize: 11, cursor: contract.years_remaining < 2 ? 'not-allowed' : 'pointer', opacity: contract.years_remaining < 2 ? 0.4 : 1 }}>
-                    {isRestructuring ? 'Cancel' : 'Restructure'}
-                  </button>
-                  <button
-                    onClick={() => { isReleasing ? setReleasingId(null) : (setReleasingId(contract.id), setExtendingId(null), setRestructuringId(null)); }}
-                    style={{ padding: '4px 10px', background: isReleasing ? T.bgRed : T.bgPanel, border: `1px solid ${isReleasing ? '#e57373' : T.borderMid}`, borderRadius: 4, color: isReleasing ? '#e57373' : T.textMuted, fontSize: 11, cursor: 'pointer' }}>
-                    {isReleasing ? 'Cancel' : 'Cut'}
-                  </button>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => isExtending ? setExtendingId(null) : openExtend(contract)} style={{ padding: '4px 10px', background: isExtending ? '#1a3a1a' : '#141414', border: `1px solid ${isExtending ? '#4caf50' : '#2a2a2a'}`, borderRadius: 4, color: isExtending ? '#4caf50' : '#555', fontSize: 11, cursor: 'pointer' }}>
+                      {isExtending ? 'Cancel' : 'Extend'}
+                    </button>
+                    <button onClick={() => isReleasing ? setReleasingId(null) : (setReleasingId(contract.id), setExtendingId(null))} style={{ padding: '4px 10px', background: isReleasing ? '#3a0a0a' : '#141414', border: `1px solid ${isReleasing ? '#e57373' : '#2a2a2a'}`, borderRadius: 4, color: isReleasing ? '#e57373' : '#555', fontSize: 11, cursor: 'pointer' }}>
+                      {isReleasing ? 'Cancel' : 'Cut'}
+                    </button>
+                  </div>
                 </div>
 
                 {isExtending && currentExtend && (
-                  <div style={{ margin: '8px 0 4px', padding: '12px 16px', background: '#0d1a0d', borderRadius: 6, border: '1px solid #4caf50' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#4caf50', marginBottom: 10 }}>OFFER EXTENSION — {contract.first_name} {contract.last_name}</div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-                      <span style={{ fontSize: 11, color: T.textMuted, minWidth: 50 }}>YEARS</span>
-                      {[1,2,3,4,5].map(y => (
-                        <button key={y} onClick={() => setExtendYears(y)} style={{ width: 32, height: 32, background: extendYears === y ? '#4caf50' : T.bgPanel, border: `1px solid ${extendYears === y ? '#4caf50' : T.borderMid}`, borderRadius: 4, color: extendYears === y ? '#000' : T.textMuted, fontWeight: 'bold', fontSize: 12, cursor: 'pointer' }}>{y}</button>
-                      ))}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-                      <span style={{ fontSize: 11, color: T.textMuted, minWidth: 50 }}>ANNUAL SALARY (M)</span>
-                      <span style={{ color: T.textMuted }}>$</span>
-                      <input type="number" value={extendSalary} onChange={e => setExtendSalary(e.target.value)} min="0.1" step="0.5"
-                        style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 4, color: T.textPrimary, padding: '6px 10px', fontSize: 13, width: 80 }} />
-                      <span style={{ color: T.textMuted }}>M</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 10, fontSize: 11 }}>
-                      <div style={{ color: T.textMuted }}>CAP IMPACT <span style={{ color: capDelta > 0 ? '#e57373' : '#4caf50', fontSize: 13 }}>{capDelta > 0 ? '+' : ''}{fmtSalary(capDelta)} vs current</span></div>
-                      <div style={{ color: T.textMuted }}>{fmtSalary(Math.max(0, newAvailable))} remaining after</div>
-                    </div>
-                    <button onClick={handleExtend} disabled={working} style={{ padding: '6px 18px', background: '#4caf50', color: '#000', border: 'none', borderRadius: 4, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                      {working ? '...' : 'Confirm Extension'}
-                    </button>
-                    {newAvailable < 0 && <span style={{ marginLeft: 10, fontSize: 11, color: '#e57373' }}>Over cap by {fmtSalary(Math.abs(newAvailable))} — reduce salary or cut a player first.</span>}
-                  </div>
-                )}
-
-                {isRestructuring && currentRestructure && (
-                  <div style={{ margin: '8px 0 4px', padding: '12px 16px', background: '#0d1f2d', borderRadius: 6, border: '1px solid #4FC3F7' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#4FC3F7', marginBottom: 10 }}>RESTRUCTURE — {contract.first_name} {contract.last_name}</div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-                      <span style={{ fontSize: 11, color: T.textMuted, minWidth: 60 }}>CONVERT</span>
-                      {[0.2, 0.3, 0.4, 0.5].map(p => (
-                        <button key={p} onClick={() => setRestructurePct(p)}
-                          style={{ width: 44, height: 28, background: restructurePct === p ? '#4FC3F7' : T.bgPanel, border: `1px solid ${restructurePct === p ? '#4FC3F7' : T.borderMid}`, borderRadius: 4, color: restructurePct === p ? '#000' : T.textMuted, fontWeight: 'bold', fontSize: 11, cursor: 'pointer' }}>
-                          {(p * 100).toFixed(0)}%
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
-                      <div style={{ fontSize: 11, color: T.textMuted }}>
-                        Cap savings<br />
-                        <span style={{ fontSize: 14, color: '#4caf50', fontWeight: 700 }}>+{fmtSalary(restructureSavings)}</span>
+                  <div style={{ background: '#0a180a', border: '1px solid #1a3a1a', borderRadius: 6, margin: '0 12px 10px', padding: '12px 16px' }}>
+                    <div style={{ color: '#4caf50', fontSize: 11, fontWeight: 700, marginBottom: 10 }}>OFFER EXTENSION — {contract.first_name} {contract.last_name}</div>
+                    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ color: '#333', fontSize: 10, marginBottom: 6 }}>YEARS</div>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {[1,2,3,4,5].map(y => (
+                            <button key={y} onClick={() => setExtendYears(y)} style={{ width: 32, height: 32, background: extendYears === y ? '#4caf50' : '#141414', border: `1px solid ${extendYears === y ? '#4caf50' : '#2a2a2a'}`, borderRadius: 4, color: extendYears === y ? '#000' : '#555', fontWeight: 'bold', fontSize: 12, cursor: 'pointer' }}>{y}</button>
+                          ))}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 11, color: T.textMuted }}>
-                        New salary<br />
-                        <span style={{ fontSize: 14, color: T.textPrimary, fontWeight: 700 }}>{fmtSalary(restructureNewSalary)}</span>
+                      <div>
+                        <div style={{ color: '#333', fontSize: 10, marginBottom: 6 }}>ANNUAL SALARY (M)</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ color: '#555', fontSize: 13 }}>$</span>
+                          <input type="number" value={extendSalary} onChange={e => setExtendSalary(e.target.value)} min="0.1" step="0.5"
+                            style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4, color: '#ccc', padding: '6px 10px', fontSize: 13, width: 80 }} />
+                          <span style={{ color: '#555', fontSize: 13 }}>M</span>
+                        </div>
                       </div>
-                      <div style={{ fontSize: 11, color: T.textMuted }}>
-                        New guaranteed<br />
-                        <span style={{ fontSize: 14, color: '#FF8740', fontWeight: 700 }}>{fmtSalary(restructureNewGtd)}</span>
+                      <div>
+                        <div style={{ color: '#333', fontSize: 10, marginBottom: 6 }}>CAP IMPACT</div>
+                        <div style={{ color: capDelta > 0 ? '#e57373' : '#4caf50', fontSize: 13 }}>{capDelta > 0 ? '+' : ''}{fmtSalary(capDelta)} vs current</div>
+                        <div style={{ color: '#555', fontSize: 11 }}>{fmtSalary(Math.max(0, newAvailable))} remaining after</div>
                       </div>
                     </div>
-                    <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 8 }}>
-                      ⚠ Increases dead cap — if cut, {fmtSalary(restructureNewGtd)} remains on books.
+                    <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <button onClick={handleExtend} disabled={working || newAvailable < 0} style={{ padding: '6px 16px', background: newAvailable < 0 ? '#1a1a1a' : '#1a3a1a', border: `1px solid ${newAvailable < 0 ? '#2a2a2a' : '#4caf50'}`, borderRadius: 4, color: newAvailable < 0 ? '#333' : '#4caf50', fontSize: 12, cursor: newAvailable < 0 ? 'not-allowed' : 'pointer' }}>
+                        {working ? '...' : 'Confirm Extension'}
+                      </button>
+                      {newAvailable < 0 && <span style={{ color: '#e57373', fontSize: 11 }}>Over cap by {fmtSalary(Math.abs(newAvailable))} — reduce salary or cut a player first.</span>}
                     </div>
-                    <button onClick={handleRestructure} disabled={working}
-                      style={{ padding: '6px 18px', background: '#4FC3F7', color: '#000', border: 'none', borderRadius: 4, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                      {working ? '...' : 'Confirm Restructure'}
-                    </button>
                   </div>
                 )}
 
                 {isReleasing && (
-                  <div style={{ margin: '8px 0 4px', padding: '10px 14px', background: '#1a0d0d', borderRadius: 6, border: '1px solid #e57373', display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontSize: 12, color: T.textMuted }}>Release {contract.first_name} {contract.last_name}? Frees {fmtSalary(contract.annual_salary)} in cap space.</span>
-                    <button onClick={handleRelease} style={{ padding: '6px 16px', background: '#e57373', color: '#000', border: 'none', borderRadius: 4, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                      {working ? '...' : 'Confirm Release'}
-                    </button>
-                    <button onClick={() => setReleasingId(null)} style={{ padding: '6px 16px', background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 4, color: T.textMuted, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+                  <div style={{ background: '#180a0a', border: '1px solid #3a1a1a', borderRadius: 6, margin: '0 12px 10px', padding: '12px 16px' }}>
+                    <div style={{ color: '#e57373', fontSize: 12, marginBottom: 10 }}>Release {contract.first_name} {contract.last_name}? Frees {fmtSalary(contract.annual_salary)} in cap space.</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={handleRelease} style={{ padding: '6px 16px', background: '#2a0a0a', border: '1px solid #e57373', borderRadius: 4, color: '#e57373', fontSize: 12, cursor: 'pointer' }}>
+                        {working ? '...' : 'Confirm Release'}
+                      </button>
+                      <button onClick={() => setReleasingId(null)} style={{ padding: '6px 16px', background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4, color: '#555', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -691,7 +598,7 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
           })}
 
           {contracts.length > 0 && (
-            <div style={{ fontSize: 11, color: T.textDim, marginTop: 8, paddingLeft: 8 }}>
+            <div style={{ color: '#333', fontSize: 11, padding: '10px 12px' }}>
               {filtered.length} player{filtered.length !== 1 ? 's' : ''} · {fmtSalary(filtered.reduce((s, c) => s + c.annual_salary, 0))} shown
             </div>
           )}
@@ -701,42 +608,43 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
       {/* ── Practice Squad ── */}
       {activeTab === 'ps' && (
         <div>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '4px 8px', padding: '4px 8px', fontSize: 10, color: T.textDim, letterSpacing: 1, borderBottom: `1px solid ${T.borderFaint}`, marginBottom: 4 }}>
-            <span>PLAYER</span><span>AGE / OVR</span><span>DEV</span><span>SALARY</span><span></span>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 80px 80px auto', gap: 8, padding: '6px 12px', fontSize: 10, color: '#333', letterSpacing: 1, borderBottom: '1px solid #1a1a1a', marginBottom: 4 }}>
+            <span>PLAYER</span><span>AGE / OVR</span><span>DEV</span><span>SALARY</span>
           </div>
           {practiceSquad.length === 0 ? (
-            <div style={{ color: T.textDim, fontSize: 13, padding: 16 }}>No practice squad players</div>
+            <div style={{ color: '#333', padding: '20px 12px', fontSize: 13 }}>No practice squad players</div>
           ) : practiceSquad.map(p => {
             const trait = TRAIT_META[p.dev_trait] ?? TRAIT_META['Normal'];
             const traj = trajectory(p.age);
             return (
-              <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '4px 8px', padding: '6px 8px', alignItems: 'center', borderBottom: `1px solid ${T.borderFaint}` }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ fontSize: 13, color: T.textPrimary }}>{p.first_name} {p.last_name}</span>
-                    {trait.short && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: trait.color + '22', color: trait.color, fontWeight: 700 }}>{trait.short}</span>}
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid #0d0d0d' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ color: '#ddd', fontWeight: 600, fontSize: 13 }}>{p.first_name} {p.last_name}</span>
+                    {trait.short && <span style={{ background: trait.color, color: '#000', fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3 }}>{trait.short}</span>}
                   </div>
-                  <div style={{ fontSize: 11, color: T.textDim }}>{p.position_label || p.position}</div>
+                  <span style={{ color: '#444', fontSize: 11 }}>{p.position_label || p.position}</span>
                 </div>
-                <div>
-                  <div style={{ fontSize: 12, color: T.textMuted }}>{p.age} <span style={{ color: traj.color }}>{traj.label}</span></div>
-                  <div style={{ fontSize: 13, color: ratingColor(p.overall_rating), fontWeight: 700 }}>{p.overall_rating}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 60 }}>
+                  <span style={{ color: traj.color, fontSize: 12 }}>{p.age} {traj.label}</span>
+                  <span style={{ color: ratingColor(p.overall_rating), fontWeight: 700, fontSize: 14 }}>{p.overall_rating}</span>
                 </div>
-                <div style={{ fontSize: 11, color: trait.color }}>{p.dev_trait === 'Normal' ? '—' : p.dev_trait}</div>
-                <div style={{ fontSize: 13, color: T.textPrimary }}>{fmtSalary(p.annual_salary ?? 1.165)}</div>
-                <button onClick={async () => {
-                  const result = await window.api.promoteFromPs(p.id);
-                  if (result.success) {
-                    showToast(`${result.name} promoted to active roster.`, 'success');
-                    loadData();
-                  } else {
-                    showToast(result.reason ?? 'Could not promote.', 'error');
-                  }
-                }}
+                <div style={{ width: 70, color: '#555', fontSize: 11, textAlign: 'center' }}>{p.dev_trait === 'Normal' ? '—' : p.dev_trait}</div>
+                <div style={{ width: 80, color: '#888', fontSize: 12 }}>{fmtSalary(p.annual_salary ?? 1.165)}</div>
+                <button
+                  onClick={async () => {
+                    const result = await window.api.promoteFromPs(p.id);
+                    if (result.success) {
+                      showToast(`${result.name} promoted to active roster.`, 'success');
+                      loadData();
+                    } else {
+                      showToast(result.reason ?? 'Could not promote.', 'error');
+                    }
+                  }}
                   disabled={!!(rosterSpots && rosterSpots.activeFree <= 0)}
                   style={{
                     padding: '4px 10px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
-                    background: T.bgGreen, border: '1px solid #1a4a1a', color: '#4caf50',
+                    background: '#0a1a0a', border: '1px solid #1a4a1a', color: '#4caf50',
                     opacity: rosterSpots && rosterSpots.activeFree <= 0 ? 0.3 : 1,
                   }}>
                   Promote
@@ -744,110 +652,45 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
               </div>
             );
           })}
-          <div style={{ fontSize: 11, color: T.textDim, marginTop: 8, paddingLeft: 8 }}>
-            {practiceSquad.length} / 16 practice squad slots used
-          </div>
-        </div>
-      )}
-
-      {/* ── Waivers ── */}
-      {activeTab === 'waivers' && (
-        <div>
-          <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 10 }}>
-            Players placed on waivers during the season. CPU teams claim in reverse standings order each week. Unclaimed players become free agents after the week.
-          </div>
-
-          {rosterSpots && (
-            <div style={{ fontSize: 12, marginBottom: 10, color: rosterSpots.activeFree > 0 ? '#4caf50' : '#e57373' }}>
-              Active roster: {rosterSpots.active}/53 · {rosterSpots.activeFree > 0 ? `${rosterSpots.activeFree} open spots` : 'FULL — release a player to claim'}
-            </div>
-          )}
-
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '4px 8px', padding: '4px 8px', fontSize: 10, color: T.textDim, letterSpacing: 1, borderBottom: `1px solid ${T.borderFaint}`, marginBottom: 4 }}>
-            <span>PLAYER</span><span>OVR</span><span>AGE</span><span>POS</span><span></span>
-          </div>
-
-          {waiverPlayers.length === 0 ? (
-            <div style={{ color: T.textDim, fontSize: 13, padding: 16, textAlign: 'center' }}>
-              No players on waivers
-            </div>
-          ) : waiverPlayers.map(p => {
-            const trait = TRAIT_META[p.dev_trait] ?? TRAIT_META['Normal'];
-            const traj = trajectory(p.age);
-            return (
-              <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '4px 8px', padding: '6px 8px', alignItems: 'center', borderBottom: `1px solid ${T.borderFaint}` }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ fontSize: 13, color: T.textPrimary }}>{p.first_name} {p.last_name}</span>
-                    {trait.short && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: trait.color + '22', color: trait.color, fontWeight: 700 }}>{trait.short}</span>}
-                  </div>
-                </div>
-                <div style={{ fontSize: 13, color: ratingColor(p.overall_rating), fontWeight: 700 }}>{p.overall_rating}</div>
-                <div style={{ fontSize: 12, color: T.textMuted }}>{p.age} <span style={{ color: traj.color }}>{traj.label}</span></div>
-                <div style={{ fontSize: 11, color: T.textDim }}>{p.position_label || p.position}</div>
-                {p.canClaim ? (
-                  <button onClick={async () => {
-                    const result = await window.api.claimWaiver(p.id);
-                    if (result.success) {
-                      showToast(`${result.name} claimed off waivers.`, 'success');
-                      loadData();
-                    } else {
-                      showToast(result.reason ?? 'Could not claim.', 'error');
-                    }
-                  }}
-                    disabled={!!(rosterSpots && rosterSpots.activeFree <= 0)}
-                    style={{
-                      padding: '4px 14px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
-                      background: T.bgPanel,
-                      border: `1px solid ${rosterSpots && rosterSpots.activeFree <= 0 ? T.bgCard : '#4FC3F7'}`,
-                      color: rosterSpots && rosterSpots.activeFree <= 0 ? T.borderMid : '#4FC3F7',
-                      opacity: rosterSpots && rosterSpots.activeFree <= 0 ? 0.4 : 1,
-                    }}>
-                    Claim
-                  </button>
-                ) : (
-                  <span style={{ fontSize: 10, color: T.borderMid, fontStyle: 'italic' }}>Released by you</span>
-                )}
-              </div>
-            );
-          })}
-
-          <div style={{ fontSize: 11, color: T.textDim, marginTop: 8, paddingLeft: 8 }}>
-            {waiverPlayers.length} player{waiverPlayers.length !== 1 ? 's' : ''} on waivers
-          </div>
+          <div style={{ color: '#333', fontSize: 11, padding: '10px 12px' }}>{practiceSquad.length} / 16 practice squad slots used</div>
         </div>
       )}
 
       {/* ── Free Agents ── */}
       {activeTab === 'fa' && (
         <div>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            {POSITIONS.map(pos => (
-              <button key={pos} onClick={() => { setFaPos(pos); setSigningId(null); }} style={{
-                padding: '3px 9px', background: faPos === pos ? '#4FC3F7' : T.bgPanel,
-                border: `1px solid ${faPos === pos ? '#4FC3F7' : T.borderFaint}`, borderRadius: 3,
-                color: faPos === pos ? '#000' : T.textMuted, fontSize: 11, cursor: 'pointer',
-                fontWeight: faPos === pos ? 'bold' : 'normal',
-              }}>{pos}</button>
-            ))}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {POSITIONS.map(pos => (
+                <button key={pos} onClick={() => { setFaPos(pos); setSigningId(null); }} style={{
+                  padding: '3px 9px', background: faPos === pos ? '#4FC3F7' : '#141414',
+                  border: `1px solid ${faPos === pos ? '#4FC3F7' : '#222'}`, borderRadius: 3,
+                  color: faPos === pos ? '#000' : '#555', fontSize: 11, cursor: 'pointer',
+                  fontWeight: faPos === pos ? 'bold' : 'normal',
+                }}>{pos}</button>
+              ))}
+            </div>
             <select onChange={e => setFaSortBy(e.target.value as any)} value={faSortBy} style={{
-              marginLeft: 'auto', background: T.bgInput, border: `1px solid ${T.borderMid}`,
-              borderRadius: 5, color: T.textPrimary, padding: '4px 10px', fontSize: 12,
+              marginLeft: 'auto', background: '#161616', border: '1px solid #2a2a2a',
+              borderRadius: 5, color: '#ccc', padding: '4px 10px', fontSize: 12,
             }}>
               <option value="ovr">Sort: OVR</option>
               <option value="value">Sort: Market Value</option>
               <option value="age">Sort: Age</option>
             </select>
-            <input placeholder="Search..." value={faSearch} onChange={e => setFaSearch(e.target.value)}
+            <input
+              placeholder="Search player..."
+              value={faSearch}
+              onChange={e => setFaSearch(e.target.value)}
               style={{
-                background: T.bgInput, border: `1px solid ${T.borderMid}`, borderRadius: 5,
-                color: T.textPrimary, padding: '4px 10px', fontSize: 12, width: 160,
+                background: '#161616', border: '1px solid #2a2a2a', borderRadius: 5,
+                color: '#ccc', padding: '4px 10px', fontSize: 12, width: 160,
               }}
             />
           </div>
 
           {rosterSpots && cap && (
-            <div style={{ display: 'flex', gap: 16, marginBottom: 10, fontSize: 12 }}>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 12 }}>
               <span style={{ color: rosterSpots.activeFree > 0 ? '#4caf50' : '#e57373' }}>
                 Active roster: {rosterSpots.active}/53 · {rosterSpots.activeFree > 0 ? `${rosterSpots.activeFree} open` : 'FULL'}
               </span>
@@ -857,14 +700,12 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
             </div>
           )}
 
-          <TeamNeedsBar needs={needs} />
-
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '4px 8px', padding: '4px 8px', fontSize: 10, color: T.textDim, letterSpacing: 1, borderBottom: `1px solid ${T.borderFaint}`, marginBottom: 4 }}>
-            <span>PLAYER</span><span>AGE / OVR</span><span>DEV</span><span>MARKET VALUE</span><span></span>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 80px 100px auto', gap: 8, padding: '6px 12px', fontSize: 10, color: '#333', letterSpacing: 1, borderBottom: '1px solid #1a1a1a', marginBottom: 4 }}>
+            <span>PLAYER</span><span>AGE / OVR</span><span>DEV</span><span>MARKET VALUE</span>
           </div>
 
           {filteredFa.length === 0 ? (
-            <div style={{ color: T.textDim, fontSize: 13, padding: 16 }}>No free agents found</div>
+            <div style={{ color: '#333', padding: '20px 12px', fontSize: 13 }}>No free agents found</div>
           ) : filteredFa.map(fa => {
             const trait = TRAIT_META[fa.dev_trait] ?? TRAIT_META['Normal'];
             const traj = trajectory(fa.age);
@@ -872,80 +713,63 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
             const isSigning = signingId === fa.id;
 
             return (
-              <div key={fa.id} style={{ borderBottom: `1px solid ${T.borderFaint}`, paddingBottom: 4, marginBottom: 4 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '4px 8px', padding: '6px 8px', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <span style={{ fontSize: 13, color: T.textPrimary, fontWeight: 500 }}>{fa.first_name} {fa.last_name}</span>
-                      {trait.short && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: trait.color + '22', color: trait.color, fontWeight: 700 }}>{trait.short}</span>}
-                      {needs.some(n => n.position === fa.position) && (
-                        <span style={{ background: (needs.find(n => n.position === fa.position)?.severity === 'critical') ? '#3a1a1a' : '#2a2a1a', color: (needs.find(n => n.position === fa.position)?.severity === 'critical') ? '#e57373' : '#e8b800', fontSize: 8, fontWeight: 800, padding: '1px 4px', borderRadius: 3, letterSpacing: 0.5 }}>NEED</span>
-                      )}
+              <div key={fa.id} style={{ borderBottom: '1px solid #0d0d0d' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: '#ddd', fontWeight: 600, fontSize: 13 }}>{fa.first_name} {fa.last_name}</span>
+                      {trait.short && <span style={{ background: trait.color, color: '#000', fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3 }}>{trait.short}</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: T.textDim }}>{fa.position_label || fa.position}</div>
+                    <span style={{ color: '#444', fontSize: 11 }}>{fa.position_label || fa.position}</span>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 12, color: T.textMuted }}>{fa.age} <span style={{ color: traj.color }}>{traj.label}</span></div>
-                    <div style={{ fontSize: 13, color: ratingColor(fa.overall_rating), fontWeight: 700 }}>{fa.overall_rating}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 60 }}>
+                    <span style={{ color: traj.color, fontSize: 12 }}>{fa.age} {traj.label}</span>
+                    <span style={{ color: ratingColor(fa.overall_rating), fontWeight: 700, fontSize: 14 }}>{fa.overall_rating}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: trait.color }}>{fa.dev_trait === 'Normal' ? '—' : fa.dev_trait}</div>
-                  <div style={{ fontSize: 13, color: T.textPrimary }}>{fmtSalary(mv)}/yr</div>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button onClick={async () => {
-                      const result = await window.api.signFreeAgentToPs(fa.id);
-                      if (result.success) {
-                        showToast(`${result.name} signed to practice squad.`, 'success');
-                        loadData();
-                      } else {
-                        showToast(result.reason ?? 'Could not sign to PS.', 'error');
-                      }
-                    }}
-                      disabled={!!(rosterSpots && rosterSpots.psFree <= 0)}
-                      title="Sign to practice squad ($0.87M / 1 yr)"
-                      style={{
-                        padding: '4px 8px', fontSize: 10, cursor: 'pointer', borderRadius: 4,
-                        background: T.bgPanel, border: `1px solid ${rosterSpots && rosterSpots.psFree <= 0 ? T.bgCard : T.borderMid}`,
-                        color: rosterSpots && rosterSpots.psFree <= 0 ? T.borderMid : T.textDim,
-                        opacity: rosterSpots && rosterSpots.psFree <= 0 ? 0.4 : 1,
-                      }}>
-                      PS
-                    </button>
-                    <button onClick={() => isSigning ? setSigningId(null) : openSign(fa)}
-                      disabled={!!(rosterSpots && rosterSpots.activeFree <= 0)}
-                      style={{
-                        padding: '4px 12px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
-                        background: isSigning ? T.bgBlue : T.bgPanel,
-                        border: `1px solid ${isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? T.bgCard : T.borderMid}`,
-                        color: isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? T.borderMid : T.textMuted,
-                      }}>
-                      {isSigning ? 'Cancel' : 'Sign'}
-                    </button>
-                  </div>
+                  <div style={{ width: 70, color: '#555', fontSize: 11, textAlign: 'center' }}>{fa.dev_trait === 'Normal' ? '—' : fa.dev_trait}</div>
+                  <div style={{ width: 100, color: '#888', fontSize: 12 }}>{fmtSalary(mv)}/yr</div>
+                  <button
+                    onClick={() => isSigning ? setSigningId(null) : openSign(fa)}
+                    disabled={!!(rosterSpots && rosterSpots.activeFree <= 0)}
+                    style={{
+                      padding: '4px 12px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
+                      background: isSigning ? '#0a1a3a' : '#141414',
+                      border: `1px solid ${isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? '#1a1a1a' : '#2a2a2a'}`,
+                      color: isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? '#2a2a2a' : '#555',
+                    }}>
+                    {isSigning ? 'Cancel' : 'Sign'}
+                  </button>
                 </div>
 
                 {isSigning && signingPlayer && (
-                  <div style={{ margin: '8px 0 4px', padding: '12px 16px', background: '#0d1520', borderRadius: 6, border: '1px solid #4FC3F7' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#4FC3F7', marginBottom: 10 }}>OFFER CONTRACT — {fa.first_name} {fa.last_name}</div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-                      <span style={{ fontSize: 11, color: T.textMuted, minWidth: 50 }}>YEARS</span>
-                      {[1,2,3,4,5].map(y => (
-                        <button key={y} onClick={() => setSignYears(y)} style={{ width: 32, height: 32, background: signYears === y ? '#4FC3F7' : T.bgPanel, border: `1px solid ${signYears === y ? '#4FC3F7' : T.borderMid}`, borderRadius: 4, color: signYears === y ? '#000' : T.textMuted, fontWeight: 'bold', fontSize: 12, cursor: 'pointer' }}>{y}</button>
-                      ))}
+                  <div style={{ background: '#080e18', border: '1px solid #1a2a3a', borderRadius: 6, margin: '0 12px 10px', padding: '12px 16px' }}>
+                    <div style={{ color: '#4FC3F7', fontSize: 11, fontWeight: 700, marginBottom: 10 }}>OFFER CONTRACT — {fa.first_name} {fa.last_name}</div>
+                    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ color: '#333', fontSize: 10, marginBottom: 6 }}>YEARS</div>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {[1,2,3,4,5].map(y => (
+                            <button key={y} onClick={() => setSignYears(y)} style={{ width: 32, height: 32, background: signYears === y ? '#4FC3F7' : '#141414', border: `1px solid ${signYears === y ? '#4FC3F7' : '#2a2a2a'}`, borderRadius: 4, color: signYears === y ? '#000' : '#555', fontWeight: 'bold', fontSize: 12, cursor: 'pointer' }}>{y}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ color: '#333', fontSize: 10, marginBottom: 6 }}>ANNUAL SALARY (M)</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ color: '#555', fontSize: 13 }}>$</span>
+                          <input type="number" value={signSalary} onChange={e => setSignSalary(e.target.value)} min="0.9" step="0.5"
+                            style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4, color: '#ccc', padding: '6px 10px', fontSize: 13, width: 80 }} />
+                          <span style={{ color: '#555', fontSize: 13 }}>M</span>
+                        </div>
+                        <div style={{ color: '#333', fontSize: 10, marginTop: 4 }}>Market: {fmtSalary(mv)}/yr</div>
+                      </div>
+                      <div>
+                        <div style={{ color: '#333', fontSize: 10, marginBottom: 6 }}>CAP AFTER SIGNING</div>
+                        <div style={{ color: signCapLeft < 0 ? '#e57373' : '#4caf50', fontSize: 13 }}>{fmtSalary(signCapLeft)} remaining</div>
+                        <div style={{ color: '#555', fontSize: 11 }}>{rosterSpots && `${rosterSpots.activeFree - 1} roster spot${rosterSpots.activeFree - 1 !== 1 ? 's' : ''} left after`}</div>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-                      <span style={{ fontSize: 11, color: T.textMuted, minWidth: 50 }}>ANNUAL SALARY (M)</span>
-                      <span style={{ color: T.textMuted }}>$</span>
-                      <input type="number" value={signSalary} onChange={e => setSignSalary(e.target.value)} min="0.9" step="0.5"
-                        style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 4, color: T.textPrimary, padding: '6px 10px', fontSize: 13, width: 80 }} />
-                      <span style={{ color: T.textMuted }}>M</span>
-                      <span style={{ fontSize: 11, color: T.textMuted }}>Market: {fmtSalary(mv)}/yr</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 10, fontSize: 11 }}>
-                      <div style={{ color: T.textMuted }}>CAP AFTER SIGNING <span style={{ color: signCapLeft >= 0 ? '#4caf50' : '#e57373', fontSize: 13 }}>{fmtSalary(signCapLeft)} remaining</span></div>
-                      {rosterSpots && <div style={{ color: T.textMuted }}>{rosterSpots.activeFree - 1} roster spot{rosterSpots.activeFree - 1 !== 1 ? 's' : ''} left after</div>}
-                    </div>
-                    <button onClick={handleSign} disabled={working || signCapLeft < 0}
-                      style={{ padding: '6px 18px', background: signCapLeft < 0 ? T.bgCard : '#4FC3F7', color: signCapLeft < 0 ? T.textDim : '#000', border: 'none', borderRadius: 4, fontWeight: 700, fontSize: 12, cursor: signCapLeft < 0 ? 'not-allowed' : 'pointer' }}>
+                    <button onClick={handleSign} disabled={working || signCapLeft < 0} style={{ marginTop: 10, padding: '6px 16px', background: signCapLeft < 0 ? '#1a1a1a' : '#0a1a3a', border: `1px solid ${signCapLeft < 0 ? '#2a2a2a' : '#4FC3F7'}`, borderRadius: 4, color: signCapLeft < 0 ? '#333' : '#4FC3F7', fontSize: 12, cursor: signCapLeft < 0 ? 'not-allowed' : 'pointer' }}>
                       {working ? '...' : signCapLeft < 0 ? 'OVER CAP' : 'Confirm Signing'}
                     </button>
                   </div>
@@ -953,8 +777,7 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
               </div>
             );
           })}
-
-          <div style={{ fontSize: 11, color: T.textDim, marginTop: 8, paddingLeft: 8 }}>
+          <div style={{ color: '#333', fontSize: 11, padding: '10px 12px' }}>
             {filteredFa.length} free agent{filteredFa.length !== 1 ? 's' : ''} shown (top 200 by OVR)
           </div>
         </div>
@@ -964,15 +787,15 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
       {activeTab === 'offseason' && (
         <div>
           {/* Your Re-signing Window */}
-          <div style={{ background: T.bgPanel, border: `1px solid ${T.borderFaint}`, borderRadius: 8, padding: '14px 16px', marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: T.textPrimary, letterSpacing: 1, marginBottom: 6 }}>RE-SIGNING WINDOW</div>
-            <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 10 }}>
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ color: '#FF8740', fontSize: 11, fontWeight: 700, letterSpacing: 1, marginBottom: 8 }}>RE-SIGNING WINDOW</div>
+            <div style={{ color: '#555', fontSize: 12, marginBottom: 10 }}>
               {expiringPlayers.length === 0
                 ? 'No players entering the final year of their contract.'
                 : `${expiringPlayers.length} player${expiringPlayers.length !== 1 ? 's' : ''} in the final year of their contract. Make your decisions before advancing the season.`}
             </div>
             {expiringPlayers.length > 0 && (
-              <div style={{ display: 'flex', gap: 16, fontSize: 11 }}>
+              <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 11 }}>
                 <span style={{ color: '#4caf50' }}>✓ {Object.values(playerDecisions).filter(d => d === 'resigned').length} re-signed</span>
                 <span style={{ color: '#e57373' }}>→ {Object.values(playerDecisions).filter(d => d === 'walking').length} letting walk</span>
                 <span style={{ color: '#FF8740' }}>⏳ {pendingCount} pending decision</span>
@@ -981,7 +804,7 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
           </div>
 
           {expiringPlayers.length === 0 ? (
-            <div style={{ color: T.textDim, fontSize: 13, padding: 16 }}>
+            <div style={{ color: '#333', padding: '16px 0', fontSize: 13 }}>
               No expiring contracts — you're good to advance the season.
             </div>
           ) : expiringPlayers.map(player => {
@@ -991,80 +814,92 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
             const ap = askingPrice(player.position, player.overall_rating, player.dev_trait, player.age);
             const isResigning = resigningId === player.id;
 
-            const decisionColor = decision === 'resigned' ? '#4caf50' : decision === 'walking' ? '#e57373' : '#FF8740';
-            const decisionLabel = decision === 'resigned' ? 'RE-SIGNED' : decision === 'walking' ? 'LETTING WALK' : 'PENDING';
+            const decisionColor =
+              decision === 'resigned' ? '#4caf50' :
+              decision === 'walking' ? '#e57373' : '#FF8740';
+
+            const decisionLabel =
+              decision === 'resigned' ? 'RE-SIGNED' :
+              decision === 'walking' ? 'LETTING WALK' : 'PENDING';
 
             return (
-              <div key={player.id} style={{ borderBottom: `1px solid ${T.borderFaint}`, paddingBottom: 4, marginBottom: 4 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: '4px 8px', padding: '6px 8px', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <span style={{ fontSize: 13, color: T.textPrimary, fontWeight: 500 }}>{player.first_name} {player.last_name}</span>
-                      {trait.short && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: trait.color + '22', color: trait.color, fontWeight: 700 }}>{trait.short}</span>}
+              <div key={player.id} style={{ borderBottom: '1px solid #0d0d0d' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: '#ddd', fontWeight: 600, fontSize: 13 }}>{player.first_name} {player.last_name}</span>
+                      {trait.short && <span style={{ background: trait.color, color: '#000', fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3 }}>{trait.short}</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: T.textDim }}>{player.position_label || player.position}</div>
+                    <span style={{ color: '#444', fontSize: 11 }}>{player.position_label || player.position}</span>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 12, color: T.textMuted }}>{player.age} <span style={{ color: traj.color }}>{traj.label}</span></div>
-                    <div style={{ fontSize: 13, color: ratingColor(player.overall_rating), fontWeight: 700 }}>{player.overall_rating}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 60 }}>
+                    <span style={{ color: traj.color, fontSize: 12 }}>{player.age} {traj.label}</span>
+                    <span style={{ color: ratingColor(player.overall_rating), fontWeight: 700, fontSize: 14 }}>{player.overall_rating}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: trait.color }}>{player.dev_trait === 'Normal' ? '—' : player.dev_trait}</div>
-                  <div>
-                    <div style={{ fontSize: 10, color: T.textDim }}>Current</div>
-                    <div style={{ fontSize: 12, color: T.textMuted }}>{fmtSalary(player.annual_salary)}/yr</div>
+                  <div style={{ width: 70, color: '#555', fontSize: 11, textAlign: 'center' }}>{player.dev_trait === 'Normal' ? '—' : player.dev_trait}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', width: 100 }}>
+                    <span style={{ color: '#444', fontSize: 10 }}>Current</span>
+                    <span style={{ color: '#888', fontSize: 12 }}>{fmtSalary(player.annual_salary)}/yr</span>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: T.textDim }}>Asking ~</div>
-                    <div style={{ fontSize: 12, color: T.textPrimary }}>{fmtSalary(ap)}/yr</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', width: 100 }}>
+                    <span style={{ color: '#444', fontSize: 10 }}>Asking ~</span>
+                    <span style={{ color: '#FF8740', fontSize: 12 }}>{fmtSalary(ap)}/yr</span>
                   </div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: decisionColor }}>{decisionLabel}</div>
-                </div>
-
-                <div style={{ display: 'flex', gap: 6, paddingLeft: 8, paddingBottom: 4 }}>
-                  {decision === 'pending' && (
-                    <>
-                      <button onClick={() => isResigning ? setResigningId(null) : openResign(player)} style={{
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ color: decisionColor, fontSize: 10, fontWeight: 700 }}>{decisionLabel}</span>
+                    {decision === 'pending' && (
+                      <>
+                        <button onClick={() => isResigning ? setResigningId(null) : openResign(player)} style={{
+                          padding: '3px 9px', fontSize: 10, cursor: 'pointer', borderRadius: 3,
+                          background: isResigning ? '#1a3a1a' : '#141414',
+                          border: `1px solid ${isResigning ? '#4caf50' : '#2a2a2a'}`,
+                          color: isResigning ? '#4caf50' : '#555',
+                        }}>{isResigning ? 'Cancel' : 'Re-Sign'}</button>
+                        <button onClick={() => handleLetWalk(player.id)} style={{
+                          padding: '3px 9px', fontSize: 10, cursor: 'pointer', borderRadius: 3,
+                          background: '#141414', border: '1px solid #2a2a2a', color: '#555',
+                        }}>Let Walk</button>
+                      </>
+                    )}
+                    {decision === 'walking' && (
+                      <button onClick={() => setPlayerDecisions(prev => ({ ...prev, [player.id]: 'pending' }))} style={{
                         padding: '3px 9px', fontSize: 10, cursor: 'pointer', borderRadius: 3,
-                        background: isResigning ? '#1a3a1a' : T.bgPanel,
-                        border: `1px solid ${isResigning ? '#4caf50' : T.borderMid}`,
-                        color: isResigning ? '#4caf50' : T.textMuted,
-                      }}>{isResigning ? 'Cancel' : 'Re-Sign'}</button>
-                      <button onClick={() => handleLetWalk(player.id)} style={{
-                        padding: '3px 9px', fontSize: 10, cursor: 'pointer', borderRadius: 3,
-                        background: T.bgPanel, border: `1px solid ${T.borderMid}`, color: T.textMuted,
-                      }}>Let Walk</button>
-                    </>
-                  )}
-                  {decision === 'walking' && (
-                    <button onClick={() => setPlayerDecisions(prev => ({ ...prev, [player.id]: 'pending' }))} style={{
-                      padding: '3px 9px', fontSize: 10, cursor: 'pointer', borderRadius: 3,
-                      background: T.bgPanel, border: `1px solid ${T.borderMid}`, color: T.textMuted,
-                    }}>Undo</button>
-                  )}
+                        background: '#141414', border: '1px solid #2a2a2a', color: '#555',
+                      }}>Undo</button>
+                    )}
+                  </div>
                 </div>
 
                 {isResigning && decision === 'pending' && (
-                  <div style={{ margin: '8px 0 4px', padding: '12px 16px', background: '#0d1a0d', borderRadius: 6, border: '1px solid #4caf50' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#4caf50', marginBottom: 10 }}>RE-SIGN OFFER — {player.first_name} {player.last_name}</div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-                      <span style={{ fontSize: 11, color: T.textMuted, minWidth: 50 }}>YEARS</span>
-                      {[1,2,3,4,5].map(y => (
-                        <button key={y} onClick={() => setResignYears(y)} style={{ width: 32, height: 32, background: resignYears === y ? '#4caf50' : T.bgPanel, border: `1px solid ${resignYears === y ? '#4caf50' : T.borderMid}`, borderRadius: 4, color: resignYears === y ? '#000' : T.textMuted, fontWeight: 'bold', fontSize: 12, cursor: 'pointer' }}>{y}</button>
-                      ))}
+                  <div style={{ background: '#0a180a', border: '1px solid #1a3a1a', borderRadius: 6, margin: '0 12px 10px', padding: '12px 16px' }}>
+                    <div style={{ color: '#4caf50', fontSize: 11, fontWeight: 700, marginBottom: 10 }}>
+                      RE-SIGN OFFER — {player.first_name} {player.last_name}
                     </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-                      <span style={{ fontSize: 11, color: T.textMuted, minWidth: 50 }}>ANNUAL SALARY (M)</span>
-                      <span style={{ color: T.textMuted }}>$</span>
-                      <input type="number" value={resignSalary} onChange={e => setResignSalary(e.target.value)} min="0.9" step="0.5"
-                        style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 4, color: T.textPrimary, padding: '6px 10px', fontSize: 13, width: 80 }} />
-                      <span style={{ color: T.textMuted }}>M</span>
-                      <span style={{ fontSize: 11, color: T.textMuted }}>Asking: ~{fmtSalary(ap)}/yr</span>
+                    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ color: '#333', fontSize: 10, marginBottom: 6 }}>YEARS</div>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {[1,2,3,4,5].map(y => (
+                            <button key={y} onClick={() => setResignYears(y)} style={{ width: 32, height: 32, background: resignYears === y ? '#4caf50' : '#141414', border: `1px solid ${resignYears === y ? '#4caf50' : '#2a2a2a'}`, borderRadius: 4, color: resignYears === y ? '#000' : '#555', fontWeight: 'bold', fontSize: 12, cursor: 'pointer' }}>{y}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ color: '#333', fontSize: 10, marginBottom: 6 }}>ANNUAL SALARY (M)</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ color: '#555', fontSize: 13 }}>$</span>
+                          <input type="number" value={resignSalary} onChange={e => setResignSalary(e.target.value)} min="0.9" step="0.5"
+                            style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4, color: '#ccc', padding: '6px 10px', fontSize: 13, width: 80 }} />
+                          <span style={{ color: '#555', fontSize: 13 }}>M</span>
+                        </div>
+                        <div style={{ color: '#333', fontSize: 10, marginTop: 4 }}>Asking: ~{fmtSalary(ap)}/yr</div>
+                      </div>
+                      <div>
+                        <div style={{ color: '#333', fontSize: 10, marginBottom: 6 }}>CAP AFTER SIGNING</div>
+                        <div style={{ color: resignCapLeft < 0 ? '#e57373' : '#4caf50', fontSize: 13 }}>{fmtSalary(resignCapLeft)} remaining</div>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 10, fontSize: 11 }}>
-                      <div style={{ color: T.textMuted }}>CAP AFTER SIGNING <span style={{ color: resignCapLeft >= 0 ? '#4caf50' : '#e57373', fontSize: 13 }}>{fmtSalary(resignCapLeft)} remaining</span></div>
-                    </div>
-                    <button onClick={handleResign} disabled={working || resignCapLeft < 0}
-                      style={{ padding: '6px 18px', background: resignCapLeft < 0 ? T.bgCard : '#4caf50', color: resignCapLeft < 0 ? T.textDim : '#000', border: 'none', borderRadius: 4, fontWeight: 700, fontSize: 12, cursor: resignCapLeft < 0 ? 'not-allowed' : 'pointer' }}>
+                    <button onClick={handleResign} disabled={working || resignCapLeft < 0} style={{ marginTop: 10, padding: '6px 16px', background: resignCapLeft < 0 ? '#1a1a1a' : '#0a1a0a', border: `1px solid ${resignCapLeft < 0 ? '#2a2a2a' : '#4caf50'}`, borderRadius: 4, color: resignCapLeft < 0 ? '#333' : '#4caf50', fontSize: 12, cursor: resignCapLeft < 0 ? 'not-allowed' : 'pointer' }}>
                       {working ? '...' : resignCapLeft < 0 ? 'OVER CAP' : 'Confirm Re-Sign'}
                     </button>
                   </div>
@@ -1074,34 +909,49 @@ export default function Franchise({ userTeam, currentSeason }: Props) {
           })}
 
           {expiringPlayers.length > 0 && (
-            <div style={{ fontSize: 11, color: T.textDim, margin: '12px 0', padding: '10px 14px', background: T.bgPanel, borderRadius: 6 }}>
+            <div style={{ color: '#333', fontSize: 11, padding: '12px 0', borderBottom: '1px solid #1a1a1a', marginBottom: 24 }}>
               Once you've made your decisions, advance the season from the main menu. Players marked "Letting Walk" will automatically become free agents when the season advances.
             </div>
           )}
 
           {/* CPU Free Agency Section */}
-          <div style={{ background: T.bgPanel, border: `1px solid ${T.borderFaint}`, borderRadius: 8, padding: '14px 16px', marginTop: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: T.textPrimary, letterSpacing: 1, marginBottom: 6 }}>CPU FREE AGENCY</div>
-            <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 12 }}>
+          <div style={{ background: '#0d0d14', border: '1px solid #1a1a2a', borderRadius: 8, padding: '16px 20px' }}>
+            <div style={{ color: '#4FC3F7', fontSize: 11, fontWeight: 700, letterSpacing: 1, marginBottom: 6 }}>
+              CPU FREE AGENCY
+            </div>
+            <div style={{ color: '#444', fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
               Run CPU free agency to let the other 31 teams fill their roster gaps.
               CPU teams also automatically re-sign their own key players when you advance the season.
-              Best done after you've finished your own FA signings.
+              <br />
+              <span style={{ color: '#333' }}>Best done after you've finished your own FA signings.</span>
             </div>
 
             {cpuFaDone && cpuFaResult ? (
-              <div>
-                <div style={{ fontSize: 13, color: '#4caf50', fontWeight: 600, marginBottom: 6 }}>✓ CPU Free Agency Complete</div>
-                <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 10 }}>
-                  {cpuFaResult.totalSigned} players signed across {cpuFaResult.teamsActive} teams.
+              <div style={{ background: '#080e18', border: '1px solid #1a3a5a', borderRadius: 6, padding: '12px 16px', marginBottom: 14 }}>
+                <div style={{ color: '#4FC3F7', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                  ✓ CPU Free Agency Complete
                 </div>
-                <button onClick={() => { setCpuFaDone(false); setCpuFaResult(null); }}
-                  style={{ marginTop: 10, padding: '4px 12px', background: 'transparent', border: '1px solid #2a2a3a', borderRadius: 4, color: T.textDim, fontSize: 11, cursor: 'pointer' }}>
+                <div style={{ color: '#888', fontSize: 12 }}>
+                  <span style={{ color: '#fff', fontWeight: 600 }}>{cpuFaResult.totalSigned}</span> players signed across{' '}
+                  <span style={{ color: '#fff', fontWeight: 600 }}>{cpuFaResult.teamsActive}</span> teams.
+                </div>
+                <button
+                  onClick={() => { setCpuFaDone(false); setCpuFaResult(null); }}
+                  style={{ marginTop: 10, padding: '4px 12px', background: 'transparent', border: '1px solid #2a2a3a', borderRadius: 4, color: '#444', fontSize: 11, cursor: 'pointer' }}>
                   Run Again
                 </button>
               </div>
             ) : (
-              <button onClick={handleCpuFa} disabled={working}
-                style={{ padding: '8px 20px', background: working ? T.bgCard : '#FF8740', color: working ? T.textDim : '#000', border: 'none', borderRadius: 4, fontWeight: 700, fontSize: 12, cursor: working ? 'not-allowed' : 'pointer' }}>
+              <button
+                onClick={handleCpuFa}
+                disabled={working}
+                style={{
+                  padding: '8px 20px', fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
+                  cursor: working ? 'not-allowed' : 'pointer', borderRadius: 5,
+                  background: working ? '#141420' : '#0a1020',
+                  border: `1px solid ${working ? '#2a2a3a' : '#4FC3F7'}`,
+                  color: working ? '#333' : '#4FC3F7',
+                }}>
                 {working ? 'Running...' : 'RUN CPU FREE AGENCY'}
               </button>
             )}

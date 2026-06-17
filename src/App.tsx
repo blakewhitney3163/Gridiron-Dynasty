@@ -326,7 +326,7 @@ useEffect(() => {
   )}
   {activeTab === 'trades' && <Trades userTeam={userTeam} />}
   {activeTab === 'franchise' && (
-    <Franchise userTeam={userTeam} currentSeason={currentSeason} />
+    <Franchise userTeam={userTeam} currentSeason={currentSeason} playoffsComplete={playoffsComplete} />
   )}
   {activeTab === 'depth' && <DepthChart userTeam={userTeam} />}
   {activeTab === 'draft' && (
