@@ -2,6 +2,9 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 const { db, generateContracts } = require('./database');
 const { importFromMadden } = require('./importfromMadden');
 const { simulateGame } = require('./simulateGame');
+import { getCurrentSeason } from './helpers/getCurrentSeason';
+import { balanceRosters } from './helpers/balanceRosters';
+import { registerSettingsHandlers, getDifficultyFactor } from './handlers/settingsHandlers';
 
 // Auto-seed teams if fresh DB
 const teamCount = (db.prepare('SELECT COUNT(*) as cnt FROM teams').get() as any).cnt;
@@ -90,10 +93,10 @@ if (histCount === 0 || !hasPassTds) {
     const headers = lines[0].split(',').map((h: string) => h.trim());
     const insert = db.prepare(`
       INSERT INTO historical_records
-        (record_type, category, rank, player_name, team_display, position, season, games_played,
-         pass_yards, pass_tds, interceptions, completions, pass_attempts,
-         rush_yards, rush_tds, rush_attempts, rec_yards, rec_tds, receptions,
-         tackles, assisted_tackles, sacks, def_interceptions, pass_deflections, forced_fumbles)
+      (record_type, category, rank, player_name, team_display, position, season, games_played,
+       pass_yards, pass_tds, interceptions, completions, pass_attempts,
+       rush_yards, rush_tds, rush_attempts, rec_yards, rec_tds, receptions,
+       tackles, assisted_tackles, sacks, def_interceptions, pass_deflections, forced_fumbles)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const run = db.transaction(() => {
@@ -180,13 +183,13 @@ db.exec(`
     season INTEGER NOT NULL,
     round INTEGER NOT NULL,
     is_used INTEGER DEFAULT 0,
-      UNIQUE(original_team_id, season, round)
-    )
+    UNIQUE(original_team_id, season, round)
+  )
 `);
 
 try { db.exec(`CREATE TABLE IF NOT EXISTS team_trade_overrides (
   team_id INTEGER PRIMARY KEY,
-  status  TEXT    NOT NULL
+  status TEXT NOT NULL
 )`); } catch (_) {}
 
 try { db.exec(`CREATE TABLE IF NOT EXISTS hall_of_fame (
@@ -198,10 +201,10 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS hall_of_fame (
   career_games INTEGER DEFAULT 0,
   career_pass_yards INTEGER DEFAULT 0, career_pass_tds INTEGER DEFAULT 0,
   career_rush_yards INTEGER DEFAULT 0, career_rush_tds INTEGER DEFAULT 0,
-  career_rec_yards INTEGER DEFAULT 0,  career_rec_tds INTEGER DEFAULT 0,
+  career_rec_yards INTEGER DEFAULT 0, career_rec_tds INTEGER DEFAULT 0,
   career_receptions INTEGER DEFAULT 0,
-  career_tackles INTEGER DEFAULT 0,   career_sacks REAL DEFAULT 0,
-  career_def_ints INTEGER DEFAULT 0,  career_pass_deflections INTEGER DEFAULT 0
+  career_tackles INTEGER DEFAULT 0, career_sacks REAL DEFAULT 0,
+  career_def_ints INTEGER DEFAULT 0, career_pass_deflections INTEGER DEFAULT 0
 )`); } catch (_) {}
 
 try { db.exec(`ALTER TABLE games ADD COLUMN home_q1 INTEGER DEFAULT 0`); } catch (_) {}
@@ -233,7 +236,7 @@ const POSITION_TO_GROUP: Record<string, string> = {
 const WAIVER_POS_MAX: Record<string, number> = {
   QB: 3, RB: 4, WR: 6, TE: 3, OL: 9, DL: 6, LB: 5, CB: 5, S: 4, K: 2,
 };
-const SOFT_CAP_M = 275; // $275M soft cap for waiver claims
+const SOFT_CAP_M = 275;
 
 function initDepthChart(teamId: number) {
   const existing = (db.prepare('SELECT COUNT(*) as count FROM depth_chart WHERE team_id = ?').get(teamId) as any).count;
@@ -274,30 +277,6 @@ function initPickAssets(): void {
 }
 initPickAssets();
 
-function balanceRosters() {
-  const teams = db.prepare('SELECT id FROM teams').all() as any[];
-  const run = db.transaction(() => {
-    for (const team of teams) {
-      const players = db.prepare(`
-        SELECT id FROM players
-        WHERE team_id = ? AND roster_status IN ('active', 'practice_squad')
-        ORDER BY overall_rating DESC
-      `).all(team.id) as any[];
-      players.forEach((p: any, i: number) => {
-        if (i < 53) {
-          db.prepare(`UPDATE players SET roster_status = 'active' WHERE id = ?`).run(p.id);
-        } else if (i < 69) {
-          db.prepare(`UPDATE players SET roster_status = 'practice_squad' WHERE id = ?`).run(p.id);
-        } else {
-          db.prepare(`UPDATE players SET team_id = NULL, is_free_agent = 1, roster_status = 'free_agent' WHERE id = ?`).run(p.id);
-          db.prepare('DELETE FROM contracts WHERE player_id = ?').run(p.id);
-        }
-      });
-    }
-  });
-  run();
-}
-
 ipcMain.handle('balance-rosters', () => {
   balanceRosters();
   const faCount = (db.prepare('SELECT COUNT(*) as count FROM players WHERE is_free_agent = 1').get() as any).count;
@@ -319,11 +298,6 @@ const createWindow = (): void => {
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
   mainWindow.webContents.openDevTools();
 };
-
-function getCurrentSeason(): number {
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'current_season'").get() as any;
-  return row ? parseInt(row.value) : 2025;
-}
 
 // ─── Market Rate Helper ───────────────────────────────────────────────────────
 
@@ -386,7 +360,7 @@ function getTeamNeedsInternal(teamId: number): string[] {
     WR: { min: 4, ideal: 5, topN: 3, minOvr: 70 }, TE: { min: 2, ideal: 3, topN: 1, minOvr: 68 },
     OL: { min: 6, ideal: 8, topN: 5, minOvr: 68 }, DL: { min: 4, ideal: 6, topN: 4, minOvr: 68 },
     LB: { min: 3, ideal: 5, topN: 3, minOvr: 68 }, CB: { min: 3, ideal: 5, topN: 2, minOvr: 68 },
-    S:  { min: 2, ideal: 3, topN: 2, minOvr: 68 }, K:  { min: 1, ideal: 1, topN: 1, minOvr: 60 },
+    S: { min: 2, ideal: 3, topN: 2, minOvr: 68 }, K: { min: 1, ideal: 1, topN: 1, minOvr: 60 },
   };
   const roster = db.prepare(`SELECT position, overall_rating FROM players WHERE team_id = ? AND roster_status = 'active' ORDER BY overall_rating DESC`).all(teamId) as any[];
   const needs: string[] = [];
@@ -400,27 +374,27 @@ function getTeamNeedsInternal(teamId: number): string[] {
 }
 
 function isHOFEligible(position: string, career: any): boolean {
-  const games   = career.games ?? 0;
+  const games = career.games ?? 0;
   const passYds = career.pass_yards ?? 0; const passTds = career.pass_tds ?? 0;
   const rushYds = career.rush_yards ?? 0; const rushTds = career.rush_tds ?? 0;
-  const recYds  = career.rec_yards ?? 0;  const recTds  = career.rec_tds ?? 0;
-  const recs    = career.receptions ?? 0;
+  const recYds = career.rec_yards ?? 0; const recTds = career.rec_tds ?? 0;
+  const recs = career.receptions ?? 0;
   const tackles = career.tackles ?? 0;
-  const sacks   = parseFloat(String(career.sacks ?? 0));
+  const sacks = parseFloat(String(career.sacks ?? 0));
   const defInts = career.def_interceptions ?? 0;
-  const pds     = career.pass_deflections ?? 0;
+  const pds = career.pass_deflections ?? 0;
   switch (position) {
-    case 'QB':  return passYds >= 40000 || passTds >= 300;
-    case 'RB':  return rushYds >= 10000 || rushTds >= 100;
-    case 'WR':  return recYds  >= 10000 || recTds  >= 75  || recs >= 750;
-    case 'TE':  return recYds  >=  8000 || recTds  >= 60  || recs >= 600;
-    case 'OL':  return games   >= 160;
-    case 'DL':  return sacks   >= 100   || tackles >= 600;
-    case 'LB':  return tackles >= 1000  || sacks   >= 80;
-    case 'CB':  return defInts >= 30    || pds     >= 100;
-    case 'S':   return defInts >= 25    || pds     >= 80  || tackles >= 800;
-    case 'K':   return games   >= 200;
-    default:    return false;
+    case 'QB': return passYds >= 40000 || passTds >= 300;
+    case 'RB': return rushYds >= 10000 || rushTds >= 100;
+    case 'WR': return recYds >= 10000 || recTds >= 75 || recs >= 750;
+    case 'TE': return recYds >= 8000 || recTds >= 60 || recs >= 600;
+    case 'OL': return games >= 160;
+    case 'DL': return sacks >= 100 || tackles >= 600;
+    case 'LB': return tackles >= 1000 || sacks >= 80;
+    case 'CB': return defInts >= 30 || pds >= 100;
+    case 'S': return defInts >= 25 || pds >= 80 || tackles >= 800;
+    case 'K': return games >= 200;
+    default: return false;
   }
 }
 
@@ -438,11 +412,11 @@ function getPlayerAvailabilityPremium(player: { age: number; position: string; d
 }
 
 const STATUS_META_BACKEND: Record<string, { description: string; acceptanceThreshold: number }> = {
-  Contender:  { description: 'Competing for a title — demands full value in any deal.',      acceptanceThreshold: -3  },
-  Buyer:      { description: 'Looking to add a piece for a playoff push.',                    acceptanceThreshold: -8  },
-  Neutral:    { description: 'No strong inclination to buy or sell right now.',               acceptanceThreshold: -8  },
-  Seller:     { description: 'Moving veterans for future assets — open to dealing.',          acceptanceThreshold: -18 },
-  Rebuilding: { description: 'Tearing it down. Will move anyone for the right offer.',        acceptanceThreshold: -22 },
+  Contender: { description: 'Competing for a title — demands full value in any deal.', acceptanceThreshold: -3 },
+  Buyer: { description: 'Looking to add a piece for a playoff push.', acceptanceThreshold: -8 },
+  Neutral: { description: 'No strong inclination to buy or sell right now.', acceptanceThreshold: -8 },
+  Seller: { description: 'Moving veterans for future assets — open to dealing.', acceptanceThreshold: -18 },
+  Rebuilding: { description: 'Tearing it down. Will move anyone for the right offer.', acceptanceThreshold: -22 },
 };
 
 function getTeamTradeProfile(teamId: number): {
@@ -451,25 +425,23 @@ function getTeamTradeProfile(teamId: number): {
 } {
   const season = getCurrentSeason();
 
-  // ── Record ────────────────────────────────────────────────────────────────
   const record = db.prepare(`
     SELECT
       SUM(CASE WHEN (home_team_id = ? AND home_score > away_score)
-                 OR (away_team_id = ? AND away_score > home_score) THEN 1 ELSE 0 END) as wins,
+               OR (away_team_id = ? AND away_score > home_score) THEN 1 ELSE 0 END) as wins,
       SUM(CASE WHEN (home_team_id = ? AND home_score < away_score)
-                 OR (away_team_id = ? AND away_score < home_score) THEN 1 ELSE 0 END) as losses,
+               OR (away_team_id = ? AND away_score < home_score) THEN 1 ELSE 0 END) as losses,
       COUNT(*) as games_played
     FROM games
     WHERE (home_team_id = ? OR away_team_id = ?)
       AND season = ? AND is_simulated = 1 AND is_playoff = 0
   `).get(teamId, teamId, teamId, teamId, teamId, teamId, season) as any;
 
-  const wins       = record?.wins        ?? 0;
-  const losses     = record?.losses      ?? 0;
+  const wins = record?.wins ?? 0;
+  const losses = record?.losses ?? 0;
   const gamesPlayed = record?.games_played ?? 0;
-  const winPct     = gamesPlayed >= 4 ? wins / gamesPlayed : 0.5;
+  const winPct = gamesPlayed >= 4 ? wins / gamesPlayed : 0.5;
 
-  // ── Roster signals ────────────────────────────────────────────────────────
   const roster = db.prepare(`
     SELECT overall_rating, age, dev_trait, position
     FROM players
@@ -482,27 +454,25 @@ function getTeamTradeProfile(teamId: number): {
   const avgAge = roster.length
     ? roster.reduce((s: number, p: any) => s + p.age, 0) / roster.length : 26;
   const eliteCount = roster.filter((p: any) => p.overall_rating >= 85).length;
-  const topQBAge   = roster.find((p: any) => p.position === 'QB')?.age ?? 26;
+  const topQBAge = roster.find((p: any) => p.position === 'QB')?.age ?? 26;
   const hasXFactor = roster.some((p: any) =>
     (p.dev_trait === 'X-Factor' || p.dev_trait === 'Superstar') && p.age >= 27);
 
-  // ── Auto-detect status ────────────────────────────────────────────────────
   function autoDetect(): string {
-    const winning    = winPct >= 0.55;
-    const losing     = winPct < 0.40;
-    const talented   = avgOverall >= 78;
-    const old        = avgAge >= 27.5;
-    const young      = avgAge <= 25.5;
-    const winNow     = old || (hasXFactor && topQBAge >= 28);
+    const winning = winPct >= 0.55;
+    const losing = winPct < 0.40;
+    const talented = avgOverall >= 78;
+    const old = avgAge >= 27.5;
+    const young = avgAge <= 25.5;
+    const winNow = old || (hasXFactor && topQBAge >= 28);
 
     if (winning && talented && (winNow || eliteCount >= 4)) return 'Contender';
-    if (winning || (talented && !young && winNow))           return 'Buyer';
-    if (losing  && talented && old)                          return 'Seller';
-    if (losing  || (young   && !talented))                   return 'Rebuilding';
+    if (winning || (talented && !young && winNow)) return 'Buyer';
+    if (losing && talented && old) return 'Seller';
+    if (losing || (young && !talented)) return 'Rebuilding';
     return 'Neutral';
   }
 
-  // ── Manual override takes priority ────────────────────────────────────────
   const override = db.prepare(
     'SELECT status FROM team_trade_overrides WHERE team_id = ?'
   ).get(teamId) as any;
@@ -511,13 +481,13 @@ function getTeamTradeProfile(teamId: number): {
   const meta = STATUS_META_BACKEND[resolvedStatus] ?? STATUS_META_BACKEND['Neutral'];
 
   return {
-    status:              resolvedStatus,
-    description:         meta.description,
+    status: resolvedStatus,
+    description: meta.description,
     acceptanceThreshold: meta.acceptanceThreshold,
     wins,
     losses,
     avgOverall,
-    isOverridden:        !!override?.status,
+    isOverridden: !!override?.status,
   };
 }
 
@@ -553,6 +523,7 @@ function rollInjuries(playerStats: any[]): { player_id: number; team_id: number;
   }
   return newlyInjured;
 }
+
 function getPosGroup(pos: string): string[] {
   if (['RB', 'HB', 'FB'].includes(pos)) return ['RB', 'HB', 'FB'];
   if (['OL', 'LT', 'LG', 'C', 'RG', 'RT'].includes(pos)) return ['OL', 'LT', 'LG', 'C', 'RG', 'RT'];
@@ -564,7 +535,6 @@ function getPosGroup(pos: string): string[] {
 
 function processWaivers(userTeamId: number, week: number): void {
   const season = getCurrentSeason();
-  // Only process players placed on waivers before this week (clears next week)
   const waiverPlayers = db.prepare(`
     SELECT p.id, p.waived_by_team_id, p.position,
            COALESCE(c.annual_salary, 1.0) as annual_salary
@@ -575,11 +545,10 @@ function processWaivers(userTeamId: number, week: number): void {
   `).all(week) as any[];
   if (waiverPlayers.length === 0) return;
 
-  // CPU teams by waiver priority (worst record first), excluding user
   const cpuTeams = db.prepare(`
     SELECT t.id,
       COUNT(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score)
-               OR (g.away_team_id = t.id AND g.away_score > g.home_score) THEN 1 END) as wins
+                 OR (g.away_team_id = t.id AND g.away_score > g.home_score) THEN 1 END) as wins
     FROM teams t
     LEFT JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id)
       AND g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
@@ -597,7 +566,6 @@ function processWaivers(userTeamId: number, week: number): void {
     ).get(team.id) as any).count;
     if (active >= 53) continue;
 
-    // Team's current total salary
     const teamSalary = (db.prepare(`
       SELECT COALESCE(SUM(c.annual_salary), 0) as total
       FROM contracts c
@@ -605,7 +573,6 @@ function processWaivers(userTeamId: number, week: number): void {
       WHERE p.team_id = ?
     `).get(team.id) as any).total;
 
-    // Find first eligible player: not waived by this team, fits cap, fills a positional need
     let claimedIdx = -1;
     for (let i = 0; i < remaining.length; i++) {
       const p = remaining[i];
@@ -629,7 +596,6 @@ function processWaivers(userTeamId: number, week: number): void {
     const claimed = remaining.splice(claimedIdx, 1)[0];
     db.prepare("UPDATE players SET team_id = ?, roster_status = 'active', is_free_agent = 0, waived_by_team_id = NULL, waiver_placed_week = NULL WHERE id = ?")
       .run(team.id, claimed.id);
-    // Preserve existing salary — just reassign contract to claiming team
     const existing = db.prepare('SELECT id FROM contracts WHERE player_id = ?').get(claimed.id);
     if (existing) {
       db.prepare('UPDATE contracts SET team_id = ? WHERE player_id = ?').run(team.id, claimed.id);
@@ -639,12 +605,10 @@ function processWaivers(userTeamId: number, week: number): void {
     }
   }
 
-  // Unclaimed → free agency; contract voided, eligible for new deal
   for (const p of remaining) {
     db.prepare('DELETE FROM contracts WHERE player_id = ?').run(p.id);
     db.prepare("UPDATE players SET roster_status = 'free_agent', is_free_agent = 1, waived_by_team_id = NULL, waiver_placed_week = NULL WHERE id = ?").run(p.id);
   }
-}
 }
 
 function processRosterAdjustments(
@@ -653,7 +617,6 @@ function processRosterAdjustments(
 ): { callups: { name: string; position: string; teamName: string; isUserTeam: boolean }[]; userPSOpenSpots: number } {
   const callups: any[] = [];
 
-  // Auto call-up for out/ir injuries
   for (const injured of newlyInjured.filter(p => p.injury_status === 'out' || p.injury_status === 'ir')) {
     const group = getPosGroup(injured.position);
     const placeholders = group.map(() => '?').join(', ');
@@ -681,7 +644,6 @@ function processRosterAdjustments(
     }
   }
 
-  // CPU teams: auto-fill open PS spots from free agents
   const allTeams = db.prepare('SELECT id FROM teams').all() as any[];
   for (const team of allTeams) {
     if (team.id === userTeamId) continue;
@@ -711,7 +673,6 @@ function processRosterAdjustments(
     }
   }
 
-  // Count user's open PS spots
   const userPSCount = (db.prepare(
     "SELECT COUNT(*) as count FROM players WHERE team_id = ? AND roster_status = 'practice_squad'"
   ).get(userTeamId) as any).count;
@@ -724,8 +685,8 @@ ipcMain.handle('get-waiver-wire', () => {
   const userTeamId = teamRow ? parseInt(teamRow.value) : -1;
   const players = db.prepare(`
     SELECT id, first_name, last_name, position, position_label,
-      overall_rating, age, dev_trait,
-      speed, strength, awareness, waived_by_team_id
+           overall_rating, age, dev_trait,
+           speed, strength, awareness, waived_by_team_id
     FROM players WHERE roster_status = 'waivers'
     ORDER BY overall_rating DESC
   `).all() as any[];
@@ -754,7 +715,6 @@ ipcMain.handle('claim-waiver', (_event: any, playerId: number) => {
   db.prepare("UPDATE players SET team_id = ?, roster_status = 'active', is_free_agent = 0, waived_by_team_id = NULL WHERE id = ?")
     .run(teamId, playerId);
 
-  // Preserve existing salary — just reassign contract to claiming team
   const existing = db.prepare('SELECT id FROM contracts WHERE player_id = ?').get(playerId);
   if (existing) {
     db.prepare('UPDATE contracts SET team_id = ? WHERE player_id = ?').run(teamId, playerId);
@@ -773,9 +733,9 @@ ipcMain.handle('get-standings', (_event: any, season?: number) => {
   const teams = db.prepare('SELECT id, city, name, conference, division FROM teams').all();
   return teams.map((team: any) => {
     const wins = db.prepare(`SELECT COUNT(*) as count FROM games WHERE season = ? AND is_simulated = 1 AND is_playoff = 0 AND ((home_team_id = ? AND home_score > away_score) OR (away_team_id = ? AND away_score > home_score))`).get(s, team.id, team.id).count;
-const losses = db.prepare(`SELECT COUNT(*) as count FROM games WHERE season = ? AND is_simulated = 1 AND is_playoff = 0 AND ((home_team_id = ? AND home_score < away_score) OR (away_team_id = ? AND away_score < home_score))`).get(s, team.id, team.id).count;
-const ties = db.prepare(`SELECT COUNT(*) as count FROM games WHERE season = ? AND is_simulated = 1 AND is_playoff = 0 AND (home_team_id = ? OR away_team_id = ?) AND home_score = away_score`).get(s, team.id, team.id).count;
-return { ...team, wins, losses, ties };
+    const losses = db.prepare(`SELECT COUNT(*) as count FROM games WHERE season = ? AND is_simulated = 1 AND is_playoff = 0 AND ((home_team_id = ? AND home_score < away_score) OR (away_team_id = ? AND away_score < home_score))`).get(s, team.id, team.id).count;
+    const ties = db.prepare(`SELECT COUNT(*) as count FROM games WHERE season = ? AND is_simulated = 1 AND is_playoff = 0 AND (home_team_id = ? OR away_team_id = ?) AND home_score = away_score`).get(s, team.id, team.id).count;
+    return { ...team, wins, losses, ties };
   });
 });
 
@@ -786,9 +746,9 @@ ipcMain.handle('get-teams', () => {
 ipcMain.handle('get-roster', (_event: any, teamId: number) => {
   return db.prepare(`
     SELECT id, first_name, last_name, position, position_label, overall_rating, age,
-    speed, strength, awareness, dev_trait,
-    throw_accuracy, throw_power, catching, route_running,
-    tackle_rating, coverage, pass_rush
+           speed, strength, awareness, dev_trait,
+           throw_accuracy, throw_power, catching, route_running,
+           tackle_rating, coverage, pass_rush
     FROM players WHERE team_id = ?
     ORDER BY CASE position
       WHEN 'QB' THEN 1 WHEN 'RB' THEN 2 WHEN 'WR' THEN 3 WHEN 'TE' THEN 4
@@ -802,13 +762,13 @@ ipcMain.handle('get-player-stats', (_event: any, playerId: number) => {
   const season = getCurrentSeason();
   return db.prepare(`
     SELECT COUNT(DISTINCT s.game_id) as games,
-      SUM(s.pass_attempts) as pass_attempts, SUM(s.completions) as completions,
-      SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds, SUM(s.interceptions) as interceptions,
-      SUM(s.rush_attempts) as rush_attempts, SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds,
-      SUM(s.targets) as targets, SUM(s.receptions) as receptions, SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
-      SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
-      SUM(s.sacks) as sacks, SUM(s.tfl) as tfl,
-      SUM(s.def_interceptions) as def_interceptions, SUM(s.pass_deflections) as pass_deflections
+           SUM(s.pass_attempts) as pass_attempts, SUM(s.completions) as completions,
+           SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds, SUM(s.interceptions) as interceptions,
+           SUM(s.rush_attempts) as rush_attempts, SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds,
+           SUM(s.targets) as targets, SUM(s.receptions) as receptions, SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
+           SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
+           SUM(s.sacks) as sacks, SUM(s.tfl) as tfl,
+           SUM(s.def_interceptions) as def_interceptions, SUM(s.pass_deflections) as pass_deflections
     FROM stats s JOIN games g ON s.game_id = g.id WHERE s.player_id = ? AND g.season = ?
   `).get(playerId, season);
 });
@@ -816,17 +776,17 @@ ipcMain.handle('get-player-stats', (_event: any, playerId: number) => {
 ipcMain.handle('get-player-career-stats', (_event: any, playerId: number) => {
   const live = db.prepare(`
     SELECT g.season,
-      COUNT(DISTINCT s.game_id) as games,
-      SUM(s.completions) as completions, SUM(s.pass_attempts) as pass_attempts,
-      SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
-      SUM(s.interceptions) as interceptions,
-      SUM(s.rush_attempts) as rush_attempts, SUM(s.rush_yards) as rush_yards,
-      SUM(s.rush_tds) as rush_tds,
-      SUM(s.targets) as targets, SUM(s.receptions) as receptions,
-      SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
-      SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
-      SUM(s.sacks) as sacks, SUM(s.tfl) as tfl,
-      SUM(s.def_interceptions) as def_interceptions, SUM(s.pass_deflections) as pass_deflections
+           COUNT(DISTINCT s.game_id) as games,
+           SUM(s.completions) as completions, SUM(s.pass_attempts) as pass_attempts,
+           SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
+           SUM(s.interceptions) as interceptions,
+           SUM(s.rush_attempts) as rush_attempts, SUM(s.rush_yards) as rush_yards,
+           SUM(s.rush_tds) as rush_tds,
+           SUM(s.targets) as targets, SUM(s.receptions) as receptions,
+           SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
+           SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
+           SUM(s.sacks) as sacks, SUM(s.tfl) as tfl,
+           SUM(s.def_interceptions) as def_interceptions, SUM(s.pass_deflections) as pass_deflections
     FROM stats s JOIN games g ON s.game_id = g.id
     WHERE s.player_id = ? GROUP BY g.season
   `).all(playerId) as any[];
@@ -861,16 +821,16 @@ ipcMain.handle('get-dashboard', (_event: any, season?: number) => {
   const s = season ?? getCurrentSeason();
   const topAFC = db.prepare(`
     SELECT t.city || ' ' || t.name AS team_name,
-      SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score) OR (g.away_team_id = t.id AND g.away_score > g.home_score) THEN 1 ELSE 0 END) AS wins,
-      SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score < g.away_score) OR (g.away_team_id = t.id AND g.away_score < g.home_score) THEN 1 ELSE 0 END) AS losses
+           SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score) OR (g.away_team_id = t.id AND g.away_score > g.home_score) THEN 1 ELSE 0 END) AS wins,
+           SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score < g.away_score) OR (g.away_team_id = t.id AND g.away_score < g.home_score) THEN 1 ELSE 0 END) AS losses
     FROM teams t JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id)
     WHERE g.season = ? AND g.is_simulated = 1 AND t.conference = 'AFC'
     GROUP BY t.id ORDER BY wins DESC LIMIT 5
   `).all(s);
   const topNFC = db.prepare(`
     SELECT t.city || ' ' || t.name AS team_name,
-      SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score) OR (g.away_team_id = t.id AND g.away_score > g.home_score) THEN 1 ELSE 0 END) AS wins,
-      SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score < g.away_score) OR (g.away_team_id = t.id AND g.away_score < g.home_score) THEN 1 ELSE 0 END) AS losses
+           SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score) OR (g.away_team_id = t.id AND g.away_score > g.home_score) THEN 1 ELSE 0 END) AS wins,
+           SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score < g.away_score) OR (g.away_team_id = t.id AND g.away_score < g.home_score) THEN 1 ELSE 0 END) AS losses
     FROM teams t JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id)
     WHERE g.season = ? AND g.is_simulated = 1 AND t.conference = 'NFC'
     GROUP BY t.id ORDER BY wins DESC LIMIT 5
@@ -888,58 +848,58 @@ ipcMain.handle('get-stats', (_event: any, season?: number) => {
   const s = season ?? getCurrentSeason();
   const passing = db.prepare(`
     SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
-      p.overall_rating, p.age, p.position, p.dev_trait,
-      t.city || ' ' || t.name AS team_name,
-      SUM(st.pass_yards) AS pass_yards, SUM(st.pass_tds) AS pass_tds,
-      SUM(st.interceptions) AS interceptions, SUM(st.completions) AS completions,
-      SUM(st.pass_attempts) AS pass_attempts
+           p.overall_rating, p.age, p.position, p.dev_trait,
+           t.city || ' ' || t.name AS team_name,
+           SUM(st.pass_yards) AS pass_yards, SUM(st.pass_tds) AS pass_tds,
+           SUM(st.interceptions) AS interceptions, SUM(st.completions) AS completions,
+           SUM(st.pass_attempts) AS pass_attempts
     FROM stats st JOIN players p ON st.player_id = p.id JOIN teams t ON st.team_id = t.id JOIN games g ON st.game_id = g.id
     WHERE g.season = ? AND g.is_simulated = 1 AND st.pass_attempts > 0 GROUP BY p.id ORDER BY pass_yards DESC LIMIT 15
   `).all(s);
   const rushing = db.prepare(`
     SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
-      p.overall_rating, p.age, p.position, p.dev_trait,
-      t.city || ' ' || t.name AS team_name,
-      SUM(st.rush_yards) AS rush_yards, SUM(st.rush_tds) AS rush_tds,
-      SUM(st.rush_attempts) AS rush_attempts
+           p.overall_rating, p.age, p.position, p.dev_trait,
+           t.city || ' ' || t.name AS team_name,
+           SUM(st.rush_yards) AS rush_yards, SUM(st.rush_tds) AS rush_tds,
+           SUM(st.rush_attempts) AS rush_attempts
     FROM stats st JOIN players p ON st.player_id = p.id JOIN teams t ON st.team_id = t.id JOIN games g ON st.game_id = g.id
     WHERE g.season = ? AND g.is_simulated = 1 AND st.rush_attempts > 0 GROUP BY p.id ORDER BY rush_yards DESC LIMIT 15
   `).all(s);
   const receiving = db.prepare(`
     SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
-      p.overall_rating, p.age, p.position, p.dev_trait,
-      t.city || ' ' || t.name AS team_name,
-      SUM(st.rec_yards) AS rec_yards, SUM(st.rec_tds) AS rec_tds,
-      SUM(st.receptions) AS receptions, SUM(st.targets) AS targets
+           p.overall_rating, p.age, p.position, p.dev_trait,
+           t.city || ' ' || t.name AS team_name,
+           SUM(st.rec_yards) AS rec_yards, SUM(st.rec_tds) AS rec_tds,
+           SUM(st.receptions) AS receptions, SUM(st.targets) AS targets
     FROM stats st JOIN players p ON st.player_id = p.id JOIN teams t ON st.team_id = t.id JOIN games g ON st.game_id = g.id
     WHERE g.season = ? AND g.is_simulated = 1 AND st.targets > 0 GROUP BY p.id ORDER BY rec_yards DESC LIMIT 15
   `).all(s);
   const tackles = db.prepare(`
     SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
-      p.overall_rating, p.age, p.position, p.dev_trait,
-      t.city || ' ' || t.name AS team_name,
-      SUM(st.tackles) AS tackles, SUM(st.assisted_tackles) AS assisted_tackles,
-      SUM(st.sacks) AS sacks, SUM(st.tfl) AS tfl,
-      SUM(st.forced_fumbles) AS forced_fumbles
+           p.overall_rating, p.age, p.position, p.dev_trait,
+           t.city || ' ' || t.name AS team_name,
+           SUM(st.tackles) AS tackles, SUM(st.assisted_tackles) AS assisted_tackles,
+           SUM(st.sacks) AS sacks, SUM(st.tfl) AS tfl,
+           SUM(st.forced_fumbles) AS forced_fumbles
     FROM stats st JOIN players p ON st.player_id = p.id JOIN teams t ON st.team_id = t.id JOIN games g ON st.game_id = g.id
     WHERE g.season = ? AND g.is_simulated = 1 AND st.tackles > 0 GROUP BY p.id ORDER BY tackles DESC LIMIT 15
   `).all(s);
   const sacks = db.prepare(`
     SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
-      p.overall_rating, p.age, p.position, p.dev_trait,
-      t.city || ' ' || t.name AS team_name,
-      SUM(st.sacks) AS sacks, SUM(st.tfl) AS tfl,
-      SUM(st.forced_fumbles) AS forced_fumbles, SUM(st.tackles) AS tackles
+           p.overall_rating, p.age, p.position, p.dev_trait,
+           t.city || ' ' || t.name AS team_name,
+           SUM(st.sacks) AS sacks, SUM(st.tfl) AS tfl,
+           SUM(st.forced_fumbles) AS forced_fumbles, SUM(st.tackles) AS tackles
     FROM stats st JOIN players p ON st.player_id = p.id JOIN teams t ON st.team_id = t.id JOIN games g ON st.game_id = g.id
     WHERE g.season = ? AND g.is_simulated = 1 AND st.sacks > 0 GROUP BY p.id ORDER BY sacks DESC LIMIT 15
   `).all(s);
   const defInterceptions = db.prepare(`
     SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
-      p.overall_rating, p.age, p.position, p.dev_trait,
-      t.city || ' ' || t.name AS team_name,
-      SUM(st.def_interceptions) AS def_interceptions,
-      SUM(st.pass_deflections) AS pass_deflections,
-      SUM(st.def_tds) AS def_tds, SUM(st.tackles) AS tackles
+           p.overall_rating, p.age, p.position, p.dev_trait,
+           t.city || ' ' || t.name AS team_name,
+           SUM(st.def_interceptions) AS def_interceptions,
+           SUM(st.pass_deflections) AS pass_deflections,
+           SUM(st.def_tds) AS def_tds, SUM(st.tackles) AS tackles
     FROM stats st JOIN players p ON st.player_id = p.id JOIN teams t ON st.team_id = t.id JOIN games g ON st.game_id = g.id
     WHERE g.season = ? AND g.is_simulated = 1 AND (st.def_interceptions > 0 OR st.pass_deflections > 0) GROUP BY p.id ORDER BY def_interceptions DESC, pass_deflections DESC LIMIT 15
   `).all(s);
@@ -954,11 +914,11 @@ ipcMain.handle('get-team-season-stats', (_event: any, season?: number) => {
   const s = season ?? getCurrentSeason();
   const pointRows = db.prepare(`
     SELECT t.id, t.city, t.name,
-      COUNT(g.id) as games,
-      SUM(CASE WHEN g.home_team_id = t.id THEN g.home_score ELSE g.away_score END) as points_for,
-      SUM(CASE WHEN g.home_team_id = t.id THEN g.away_score ELSE g.home_score END) as points_against,
-      SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score) OR (g.away_team_id = t.id AND g.away_score > g.home_score) THEN 1 ELSE 0 END) as wins,
-      SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score < g.away_score) OR (g.away_team_id = t.id AND g.away_score < g.home_score) THEN 1 ELSE 0 END) as losses
+           COUNT(g.id) as games,
+           SUM(CASE WHEN g.home_team_id = t.id THEN g.home_score ELSE g.away_score END) as points_for,
+           SUM(CASE WHEN g.home_team_id = t.id THEN g.away_score ELSE g.home_score END) as points_against,
+           SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score) OR (g.away_team_id = t.id AND g.away_score > g.home_score) THEN 1 ELSE 0 END) as wins,
+           SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score < g.away_score) OR (g.away_team_id = t.id AND g.away_score < g.home_score) THEN 1 ELSE 0 END) as losses
     FROM teams t
     JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id)
     WHERE g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
@@ -967,27 +927,27 @@ ipcMain.handle('get-team-season-stats', (_event: any, season?: number) => {
 
   const statRows = db.prepare(`
     SELECT s.team_id,
-      SUM(s.pass_yards + s.rush_yards) as off_yards,
-      SUM(s.interceptions) as turnovers_given,
-      SUM(s.def_interceptions + COALESCE(s.fumble_recoveries, 0)) as turnovers_taken
+           SUM(s.pass_yards + s.rush_yards) as off_yards,
+           SUM(s.interceptions) as turnovers_given,
+           SUM(s.def_interceptions + COALESCE(s.fumble_recoveries, 0)) as turnovers_taken
     FROM stats s JOIN games g ON s.game_id = g.id
     WHERE g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
     GROUP BY s.team_id
   `).all(s) as any[];
 
   return pointRows.map((t: any) => {
-    const st  = statRows.find((r: any) => r.team_id === t.id) ?? {};
-    const g   = Math.max(t.games, 1);
-    const toGiven  = st.turnovers_given  ?? 0;
-    const toTaken  = st.turnovers_taken  ?? 0;
+    const st = statRows.find((r: any) => r.team_id === t.id) ?? {};
+    const g = Math.max(t.games, 1);
+    const toGiven = st.turnovers_given ?? 0;
+    const toTaken = st.turnovers_taken ?? 0;
     return {
       ...t,
-      ppg:     Math.round((t.points_for    / g) * 10) / 10,
-      papg:    Math.round((t.points_against / g) * 10) / 10,
-      ypg:     Math.round((st.off_yards    ?? 0) / g),
+      ppg: Math.round((t.points_for / g) * 10) / 10,
+      papg: Math.round((t.points_against / g) * 10) / 10,
+      ypg: Math.round((st.off_yards ?? 0) / g),
       to_diff: toTaken - toGiven,
-      to_given:  toGiven,
-      to_taken:  toTaken,
+      to_given: toGiven,
+      to_taken: toTaken,
     };
   }).sort((a: any, b: any) => b.ppg - a.ppg);
 });
@@ -1007,12 +967,12 @@ ipcMain.handle('simulate-playoffs', (_event: any, season?: number) => {
 
   const afcTeams = seedTeams('AFC');
   const nfcTeams = seedTeams('NFC');
-    const insertGame = db.prepare(`INSERT INTO games (season, week, home_team_id, away_team_id, home_score, away_score, home_q1, home_q2, home_q3, home_q4, away_q1, away_q2, away_q3, away_q4, weather, is_playoff, is_simulated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)`);
+  const insertGame = db.prepare(`INSERT INTO games (season, week, home_team_id, away_team_id, home_score, away_score, home_q1, home_q2, home_q3, home_q4, away_q1, away_q2, away_q3, away_q4, weather, is_playoff, is_simulated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)`);
 
-    const simGame = (homeTeam: any, awayTeam: any, week: number) => {
+  const simGame = (homeTeam: any, awayTeam: any, week: number) => {
     const result = simulateGame(homeTeam.id, awayTeam.id);
-            insertGame.run(s, week, homeTeam.id, awayTeam.id, result.homeScore, result.awayScore, result.homeQuarters[0], result.homeQuarters[1], result.homeQuarters[2], result.homeQuarters[3], result.awayQuarters[0], result.awayQuarters[1], result.awayQuarters[2], result.awayQuarters[3], result.weather ?? 'clear');
-        return { home: homeTeam, away: awayTeam, homeScore: result.homeScore, awayScore: result.awayScore, winner: result.homeScore > result.awayScore ? homeTeam : awayTeam };
+    insertGame.run(s, week, homeTeam.id, awayTeam.id, result.homeScore, result.awayScore, result.homeQuarters[0], result.homeQuarters[1], result.homeQuarters[2], result.homeQuarters[3], result.awayQuarters[0], result.awayQuarters[1], result.awayQuarters[2], result.awayQuarters[3], result.weather ?? 'clear');
+    return { home: homeTeam, away: awayTeam, homeScore: result.homeScore, awayScore: result.awayScore, winner: result.homeScore > result.awayScore ? homeTeam : awayTeam };
   };
 
   const afcWC = [simGame(afcTeams[1], afcTeams[6], 18), simGame(afcTeams[2], afcTeams[5], 18), simGame(afcTeams[3], afcTeams[4], 18)];
@@ -1058,14 +1018,13 @@ ipcMain.handle('advance-season', () => {
   const current = getCurrentSeason();
   const next = current + 1;
 
-  // Age every non-retired player including free agents
   db.prepare("UPDATE players SET age = age + 1 WHERE roster_status != 'retired'").run();
 
   const players = db.prepare(
-  `SELECT id, age, overall_rating, speed, strength, awareness, dev_trait, position,
-   throw_accuracy, throw_power, catching, route_running, tackle_rating, coverage, pass_rush
-   FROM players WHERE roster_status != 'retired'`
-).all() as any[];
+    `SELECT id, age, overall_rating, speed, strength, awareness, dev_trait, position,
+     throw_accuracy, throw_power, catching, route_running, tackle_rating, coverage, pass_rush
+     FROM players WHERE roster_status != 'retired'`
+  ).all() as any[];
 
   const progressionTable: Record<string, Record<string, [number, number]>> = {
     young:   { Normal: [0, 1], Star: [1, 2], Superstar: [2, 3], 'X-Factor': [3, 4] },
@@ -1077,118 +1036,90 @@ ipcMain.handle('advance-season', () => {
   };
 
   const updatePlayer = db.prepare(`
-  UPDATE players SET overall_rating = ?, speed = ?, strength = ?, awareness = ?,
-  throw_accuracy = ?, throw_power = ?, catching = ?, route_running = ?,
-  tackle_rating = ?, coverage = ?, pass_rush = ?
-  WHERE id = ?
-`);
-const attr = (cur: number, growP: number, decP: number, amt = 1): number => {
-  const r = Math.random();
-  if (r < growP) return Math.min(99, cur + amt);
-  if (r < growP + decP) return Math.max(40, cur - amt);
-  return cur;
-};
-const progressPlayers = db.transaction(() => {
-  for (const p of players) {
-    const trait = p.dev_trait ?? 'Normal';
-    const bracket =
-      p.age <= 23 ? 'young' : p.age <= 26 ? 'rising' : p.age <= 29 ? 'prime' :
-      p.age <= 32 ? 'decline' : p.age <= 35 ? 'old' : 'veteran';
-    const [min, max] = progressionTable[bracket][trait] ?? [0, 0];
-    const ovrChange = Math.floor(Math.random() * (max - min + 1)) + min;
-    const newOvr = Math.max(40, Math.min(99, p.overall_rating + ovrChange));
-    const isYoung = p.age <= 26;
-    const isOld = p.age >= 32;
-    // Speed — peaks early, declines late
-    const newSpeed = attr(p.speed ?? 70,
-      isYoung ? 0.20 : 0.03,
-      p.age >= 34 ? 0.70 : p.age >= 31 ? 0.40 : p.age >= 29 ? 0.15 : 0.03);
-    // Strength — peaks mid-20s, slow decline
-    const newStrength = attr(p.strength ?? 70,
-      p.age <= 25 ? 0.35 : 0.05,
-      isOld ? 0.30 : 0.05);
-    // Awareness — grows with experience
-    const newAwareness = attr(p.awareness ?? 70,
-      isYoung ? 0.35 : p.age <= 31 ? 0.15 : 0.05,
-      p.age >= 35 ? 0.30 : 0.05);
-    const pos = p.position;
-    // Passing
-    const newThrowAcc = attr(p.throw_accuracy ?? 70,
-      isYoung && pos === 'QB' ? 0.40 : 0.03,
-      isOld ? 0.25 : 0.04);
-    const newThrowPwr = attr(p.throw_power ?? 70,
-      isYoung && pos === 'QB' ? 0.25 : 0.02,
-      isOld ? 0.30 : 0.05);
-    // Receiving
-    const isRecvr = ['WR', 'TE', 'RB', 'HB', 'FB'].includes(pos);
-    const newCatching = attr(p.catching ?? 70,
-      isYoung && isRecvr ? 0.35 : 0.04,
-      isOld ? 0.25 : 0.04);
-    const newRouteRunning = attr(p.route_running ?? 70,
-      isYoung && ['WR', 'TE'].includes(pos) ? 0.35 : 0.03,
-      isOld ? 0.20 : 0.04);
-    // Defense
-    const isDef = ['DL', 'DE', 'DT', 'LE', 'RE', 'IDL', 'LB', 'MLB', 'OLB', 'CB', 'S', 'FS', 'SS'].includes(pos);
-    const newTackle = attr(p.tackle_rating ?? 70,
-      isYoung && isDef ? 0.30 : 0.04,
-      isOld ? 0.25 : 0.05);
-    const newCoverage = attr(p.coverage ?? 70,
-      isYoung && ['CB', 'S', 'FS', 'SS', 'LB', 'MLB', 'OLB'].includes(pos) ? 0.30 : 0.04,
-      isOld ? 0.25 : 0.05);
-    const newPassRush = attr(p.pass_rush ?? 70,
-      isYoung && ['DL', 'DE', 'DT', 'LE', 'RE', 'IDL', 'LB', 'OLB'].includes(pos) ? 0.30 : 0.04,
-      isOld ? 0.25 : 0.05);
-    updatePlayer.run(
-      newOvr, newSpeed, newStrength, newAwareness,
-      newThrowAcc, newThrowPwr, newCatching, newRouteRunning,
-      newTackle, newCoverage, newPassRush,
-      p.id
-    );
-  }
-});
-progressPlayers();
-
-  // Breakout bonus — exceptional season performances earn young players an extra OVR bump
-const breakoutIds = new Set<number>();
-const bSeason = current;
-const breakoutStats = db.prepare(`
-  SELECT s.player_id, p.age, p.position,
-    SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
-    SUM(s.rush_yards) as rush_yards,
-    SUM(s.rec_yards) as rec_yards,
-    SUM(s.sacks) as sacks, SUM(s.def_interceptions) as def_int,
-    SUM(s.tackles) + SUM(s.assisted_tackles) as total_tkl
-  FROM stats s
-  JOIN games g ON s.game_id = g.id
-  JOIN players p ON s.player_id = p.id
-  WHERE g.season = ? AND g.is_simulated = 1
-  GROUP BY s.player_id
-`).all(bSeason) as any[];
-
-for (const row of breakoutStats) {
-  const isBreakout =
-    (row.position === 'QB' && (row.pass_yards > 4000 || row.pass_tds > 30)) ||
-    (['RB','HB','FB'].includes(row.position) && row.rush_yards > 1300) ||
-    (['WR','TE'].includes(row.position) && row.rec_yards > 1100) ||
-    (row.sacks > 10) ||
-    (row.def_int > 5) ||
-    (row.total_tkl > 130);
-
-  if (isBreakout && row.age <= 28) breakoutIds.add(row.player_id);
-}
-
-if (breakoutIds.size > 0) {
-  const applyBreakout = db.transaction(() => {
-    for (const pid of breakoutIds) {
-      const pp = db.prepare('SELECT age FROM players WHERE id = ?').get(pid) as any;
-      const bonus = pp && pp.age <= 24 ? 2 : 1;
-      db.prepare('UPDATE players SET overall_rating = MIN(99, overall_rating + ?) WHERE id = ?').run(bonus, pid);
+    UPDATE players SET overall_rating = ?, speed = ?, strength = ?, awareness = ?,
+    throw_accuracy = ?, throw_power = ?, catching = ?, route_running = ?,
+    tackle_rating = ?, coverage = ?, pass_rush = ?
+    WHERE id = ?
+  `);
+  const attr = (cur: number, growP: number, decP: number, amt = 1): number => {
+    const r = Math.random();
+    if (r < growP) return Math.min(99, cur + amt);
+    if (r < growP + decP) return Math.max(40, cur - amt);
+    return cur;
+  };
+  const progressPlayers = db.transaction(() => {
+    for (const p of players) {
+      const trait = p.dev_trait ?? 'Normal';
+      const bracket =
+        p.age <= 23 ? 'young' : p.age <= 26 ? 'rising' : p.age <= 29 ? 'prime' :
+        p.age <= 32 ? 'decline' : p.age <= 35 ? 'old' : 'veteran';
+      const [min, max] = progressionTable[bracket][trait] ?? [0, 0];
+      const ovrChange = Math.floor(Math.random() * (max - min + 1)) + min;
+      const newOvr = Math.max(40, Math.min(99, p.overall_rating + ovrChange));
+      const isYoung = p.age <= 26;
+      const isOld = p.age >= 32;
+      const newSpeed = attr(p.speed ?? 70, isYoung ? 0.20 : 0.03, p.age >= 34 ? 0.70 : p.age >= 31 ? 0.40 : p.age >= 29 ? 0.15 : 0.03);
+      const newStrength = attr(p.strength ?? 70, p.age <= 25 ? 0.35 : 0.05, isOld ? 0.30 : 0.05);
+      const newAwareness = attr(p.awareness ?? 70, isYoung ? 0.35 : p.age <= 31 ? 0.15 : 0.05, p.age >= 35 ? 0.30 : 0.05);
+      const pos = p.position;
+      const newThrowAcc = attr(p.throw_accuracy ?? 70, isYoung && pos === 'QB' ? 0.40 : 0.03, isOld ? 0.25 : 0.04);
+      const newThrowPwr = attr(p.throw_power ?? 70, isYoung && pos === 'QB' ? 0.25 : 0.02, isOld ? 0.30 : 0.05);
+      const isRecvr = ['WR', 'TE', 'RB', 'HB', 'FB'].includes(pos);
+      const newCatching = attr(p.catching ?? 70, isYoung && isRecvr ? 0.35 : 0.04, isOld ? 0.25 : 0.04);
+      const newRouteRunning = attr(p.route_running ?? 70, isYoung && ['WR', 'TE'].includes(pos) ? 0.35 : 0.03, isOld ? 0.20 : 0.04);
+      const isDef = ['DL', 'DE', 'DT', 'LE', 'RE', 'IDL', 'LB', 'MLB', 'OLB', 'CB', 'S', 'FS', 'SS'].includes(pos);
+      const newTackle = attr(p.tackle_rating ?? 70, isYoung && isDef ? 0.30 : 0.04, isOld ? 0.25 : 0.05);
+      const newCoverage = attr(p.coverage ?? 70, isYoung && ['CB', 'S', 'FS', 'SS', 'LB', 'MLB', 'OLB'].includes(pos) ? 0.30 : 0.04, isOld ? 0.25 : 0.05);
+      const newPassRush = attr(p.pass_rush ?? 70, isYoung && ['DL', 'DE', 'DT', 'LE', 'RE', 'IDL', 'LB', 'OLB'].includes(pos) ? 0.30 : 0.04, isOld ? 0.25 : 0.05);
+      updatePlayer.run(
+        newOvr, newSpeed, newStrength, newAwareness,
+        newThrowAcc, newThrowPwr, newCatching, newRouteRunning,
+        newTackle, newCoverage, newPassRush,
+        p.id
+      );
     }
   });
-  applyBreakout();
-}
+  progressPlayers();
 
-  // Dev trait regression AND breakout upgrades
+  const breakoutIds = new Set();
+  const bSeason = current;
+  const breakoutStats = db.prepare(`
+    SELECT s.player_id, p.age, p.position,
+           SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
+           SUM(s.rush_yards) as rush_yards,
+           SUM(s.rec_yards) as rec_yards,
+           SUM(s.sacks) as sacks, SUM(s.def_interceptions) as def_int,
+           SUM(s.tackles) + SUM(s.assisted_tackles) as total_tkl
+    FROM stats s
+    JOIN games g ON s.game_id = g.id
+    JOIN players p ON s.player_id = p.id
+    WHERE g.season = ? AND g.is_simulated = 1
+    GROUP BY s.player_id
+  `).all(bSeason) as any[];
+
+  for (const row of breakoutStats) {
+    const isBreakout =
+      (row.position === 'QB' && (row.pass_yards > 4000 || row.pass_tds > 30)) ||
+      (['RB','HB','FB'].includes(row.position) && row.rush_yards > 1300) ||
+      (['WR','TE'].includes(row.position) && row.rec_yards > 1100) ||
+      (row.sacks > 10) ||
+      (row.def_int > 5) ||
+      (row.total_tkl > 130);
+
+    if (isBreakout && row.age <= 28) breakoutIds.add(row.player_id);
+  }
+
+  if (breakoutIds.size > 0) {
+    const applyBreakout = db.transaction(() => {
+      for (const pid of breakoutIds) {
+        const pp = db.prepare('SELECT age FROM players WHERE id = ?').get(pid) as any;
+        const bonus = pp && pp.age <= 24 ? 2 : 1;
+        db.prepare('UPDATE players SET overall_rating = MIN(99, overall_rating + ?) WHERE id = ?').run(bonus, pid);
+      }
+    });
+    applyBreakout();
+  }
+
   const setTrait = db.prepare('UPDATE players SET dev_trait = ? WHERE id = ?');
   const traitChanges = db.transaction(() => {
     for (const p of players) {
@@ -1209,7 +1140,6 @@ if (breakoutIds.size > 0) {
   });
   traitChanges();
 
-  // Retirement — probabilistic by age
   const retireCandidates = db.prepare(
     "SELECT id, first_name, last_name, position, age, overall_rating FROM players WHERE age >= 33 AND roster_status != 'retired'"
   ).all() as any[];
@@ -1232,9 +1162,6 @@ if (breakoutIds.size > 0) {
   });
   retirePlayers();
 
-  // ─── CPU Re-signing ────────────────────────────────────────────────────────
-  // Before contracts expire, CPU teams try to keep their own players.
-  // The user's team is excluded — the user handles their re-signings manually.
   const userTeamIdRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
   const userTeamId = userTeamIdRow ? parseInt(userTeamIdRow.value) : -1;
 
@@ -1250,7 +1177,6 @@ if (breakoutIds.size > 0) {
   let cpuResigns = 0;
   const doResigns = db.transaction(() => {
     for (const p of expiringCpuPlayers) {
-      // Re-sign probability scales with player quality
       const resignChance =
         p.overall_rating >= 88 ? 0.90 :
         p.overall_rating >= 82 ? 0.80 :
@@ -1259,19 +1185,16 @@ if (breakoutIds.size > 0) {
 
       if (Math.random() < resignChance) {
         const fair = calcFairMarket(p.overall_rating, p.position, p.dev_trait);
-        // CPU pays a small loyalty premium (0–10% over market)
         const salary = Math.round(fair * (1.0 + Math.random() * 0.10) * 10) / 10;
         const years = p.age <= 26 ? 3 : p.age <= 30 ? 2 : 1;
         db.prepare('UPDATE contracts SET years_total = ?, years_remaining = ?, annual_salary = ? WHERE player_id = ?')
           .run(years, years, salary, p.id);
         cpuResigns++;
       }
-      // If not re-signed, the contract decrement below will release them to FA
     }
   });
   doResigns();
 
-  // Decrement contract years, release expired players to free agency
   db.prepare('UPDATE contracts SET years_remaining = years_remaining - 1').run();
   const expiredPlayers = db.prepare('SELECT player_id FROM contracts WHERE years_remaining <= 0').all() as any[];
   const expireContracts = db.transaction(() => {
@@ -1282,11 +1205,9 @@ if (breakoutIds.size > 0) {
   });
   expireContracts();
 
-  // Clear injuries for new season
   db.prepare("UPDATE players SET injury_status = 'healthy', weeks_out = 0, injury_type = NULL").run();
   db.prepare("UPDATE players SET roster_status = 'free_agent', is_free_agent = 1 WHERE roster_status = 'waivers'").run();
 
-  // Archive current season stats to career_stats_history before bumping the season
   db.prepare(`
     INSERT INTO career_stats_history (
       player_id, season, games,
@@ -1323,44 +1244,43 @@ if (breakoutIds.size > 0) {
       pass_deflections = excluded.pass_deflections, def_tds = excluded.def_tds
   `).run(current);
 
-// ─── Hall of Fame inductions ──────────────────────────────────────────────────
-const hofInductees: { name: string; position: string }[] = [];
-const runHof = db.transaction(() => {
-  for (const r of retired) {
-    if (db.prepare('SELECT id FROM hall_of_fame WHERE player_id = ?').get(r.id)) continue;
-    const detail = db.prepare('SELECT dev_trait FROM players WHERE id = ?').get(r.id) as any;
-    const career = db.prepare(`
-      SELECT SUM(games) as games,
-             SUM(pass_yards) as pass_yards, SUM(pass_tds) as pass_tds,
-             SUM(rush_yards) as rush_yards, SUM(rush_tds) as rush_tds,
-             SUM(rec_yards) as rec_yards,   SUM(rec_tds) as rec_tds,
-             SUM(receptions) as receptions,
-             SUM(tackles) as tackles, SUM(CAST(sacks AS REAL)) as sacks,
-             SUM(def_interceptions) as def_interceptions,
-             SUM(pass_deflections) as pass_deflections
-      FROM career_stats_history WHERE player_id = ?
-    `).get(r.id) as any;
-    if (!career?.games || !isHOFEligible(r.position, career)) continue;
-    db.prepare(`INSERT OR IGNORE INTO hall_of_fame (
-      player_id, name, position, inducted_season, dev_trait, peak_ovr,
-      career_games, career_pass_yards, career_pass_tds,
-      career_rush_yards, career_rush_tds,
-      career_rec_yards, career_rec_tds, career_receptions,
-      career_tackles, career_sacks, career_def_ints, career_pass_deflections
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(r.id, r.name, r.position, next,
-      detail?.dev_trait ?? 'Normal', r.ovr,
-      career.games ?? 0,
-      career.pass_yards ?? 0, career.pass_tds ?? 0,
-      career.rush_yards ?? 0, career.rush_tds ?? 0,
-      career.rec_yards ?? 0, career.rec_tds ?? 0, career.receptions ?? 0,
-      career.tackles ?? 0, career.sacks ?? 0,
-      career.def_interceptions ?? 0, career.pass_deflections ?? 0);
-    hofInductees.push({ name: r.name, position: r.position });
-  }
-});
-runHof();
-  
+  const hofInductees: { name: string; position: string }[] = [];
+  const runHof = db.transaction(() => {
+    for (const r of retired) {
+      if (db.prepare('SELECT id FROM hall_of_fame WHERE player_id = ?').get(r.id)) continue;
+      const detail = db.prepare('SELECT dev_trait FROM players WHERE id = ?').get(r.id) as any;
+      const career = db.prepare(`
+        SELECT SUM(games) as games,
+               SUM(pass_yards) as pass_yards, SUM(pass_tds) as pass_tds,
+               SUM(rush_yards) as rush_yards, SUM(rush_tds) as rush_tds,
+               SUM(rec_yards) as rec_yards, SUM(rec_tds) as rec_tds,
+               SUM(receptions) as receptions,
+               SUM(tackles) as tackles, SUM(CAST(sacks AS REAL)) as sacks,
+               SUM(def_interceptions) as def_interceptions,
+               SUM(pass_deflections) as pass_deflections
+        FROM career_stats_history WHERE player_id = ?
+      `).get(r.id) as any;
+      if (!career?.games || !isHOFEligible(r.position, career)) continue;
+      db.prepare(`INSERT OR IGNORE INTO hall_of_fame (
+        player_id, name, position, inducted_season, dev_trait, peak_ovr,
+        career_games, career_pass_yards, career_pass_tds,
+        career_rush_yards, career_rush_tds,
+        career_rec_yards, career_rec_tds, career_receptions,
+        career_tackles, career_sacks, career_def_ints, career_pass_deflections
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(r.id, r.name, r.position, next,
+          detail?.dev_trait ?? 'Normal', r.ovr,
+          career.games ?? 0,
+          career.pass_yards ?? 0, career.pass_tds ?? 0,
+          career.rush_yards ?? 0, career.rush_tds ?? 0,
+          career.rec_yards ?? 0, career.rec_tds ?? 0, career.receptions ?? 0,
+          career.tackles ?? 0, career.sacks ?? 0,
+          career.def_interceptions ?? 0, career.pass_deflections ?? 0);
+      hofInductees.push({ name: r.name, position: r.position });
+    }
+  });
+  runHof();
+
   db.prepare("UPDATE settings SET value = ? WHERE key = 'current_season'").run(String(next));
 
   return { nextSeason: next, retired, cpuResigns, breakouts: breakoutIds.size, hofInductees };
@@ -1419,28 +1339,6 @@ ipcMain.handle('get-week-matchups', (_event: any, week: number) => {
   `).all(season, week);
 });
 
-
-// ─── Difficulty ───────────────────────────────────────────────────────────────
-
-const DIFFICULTY_FACTORS: Record<string, number> = { easy: 8, normal: 0, hard: -8 };
-
-function getDifficulty(): string {
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'difficulty'").get() as any;
-  return row?.value ?? 'normal';
-}
-
-function getDifficultyFactor(): number {
-  return DIFFICULTY_FACTORS[getDifficulty()] ?? 0;
-}
-
-ipcMain.handle('get-difficulty', () => getDifficulty());
-
-ipcMain.handle('set-difficulty', (_event: any, level: string) => {
-  if (!['easy', 'normal', 'hard'].includes(level)) return { success: false };
-  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('difficulty', ?)").run(level);
-  return { success: true };
-});
-
 ipcMain.handle('simulate-week', (_event: any, week: number) => {
   const season = getCurrentSeason();
   const games = db.prepare(`
@@ -1452,7 +1350,7 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
   db.prepare(`UPDATE players SET weeks_out = MAX(0, weeks_out - 1) WHERE weeks_out > 0`).run();
   db.prepare(`UPDATE players SET injury_status = 'healthy', injury_type = NULL WHERE weeks_out = 0 AND injury_status != 'healthy'`).run();
 
-    const updateGame = db.prepare('UPDATE games SET home_score = ?, away_score = ?, home_q1 = ?, home_q2 = ?, home_q3 = ?, home_q4 = ?, away_q1 = ?, away_q2 = ?, away_q3 = ?, away_q4 = ?, weather = ?, is_simulated = 1 WHERE id = ?');
+  const updateGame = db.prepare('UPDATE games SET home_score = ?, away_score = ?, home_q1 = ?, home_q2 = ?, home_q3 = ?, home_q4 = ?, away_q1 = ?, away_q2 = ?, away_q3 = ?, away_q4 = ?, weather = ?, is_simulated = 1 WHERE id = ?');
   const insertStat = db.prepare(`
     INSERT INTO stats (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
       interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds,
@@ -1464,12 +1362,15 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
       @def_interceptions, @pass_deflections, @def_tds)
   `);
 
-    const allStats: any[] = [];
+  const allStats: any[] = [];
+
+  const userTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
+  const userTeamId = userTeamRow ? parseInt(userTeamRow.value) : -1;
 
   const runWeek = db.transaction(() => {
     for (const game of games) {
       const result = simulateGame(game.home_team_id, game.away_team_id, game.week ?? 1, userTeamId, getDifficultyFactor());
-            updateGame.run(result.homeScore, result.awayScore, result.homeQuarters[0], result.homeQuarters[1], result.homeQuarters[2], result.homeQuarters[3], result.awayQuarters[0], result.awayQuarters[1], result.awayQuarters[2], result.awayQuarters[3], result.weather ?? 'clear', game.id);
+      updateGame.run(result.homeScore, result.awayScore, result.homeQuarters[0], result.homeQuarters[1], result.homeQuarters[2], result.homeQuarters[3], result.awayQuarters[0], result.awayQuarters[1], result.awayQuarters[2], result.awayQuarters[3], result.weather ?? 'clear', game.id);
       for (const stat of [...result.homePlayerStats, ...result.awayPlayerStats]) {
         insertStat.run({ game_id: game.id, ...stat });
         allStats.push(stat);
@@ -1479,13 +1380,10 @@ ipcMain.handle('simulate-week', (_event: any, week: number) => {
   runWeek();
 
   const newlyInjured = rollInjuries(allStats);
-  const userTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
-  const userTeamId = userTeamRow ? parseInt(userTeamRow.value) : -1;
   const rosterResult = processRosterAdjustments(newlyInjured, userTeamId);
   processWaivers(userTeamId, week);
   return { week, season, gamesSimulated: games.length, callups: rosterResult.callups, userPSOpenSpots: rosterResult.userPSOpenSpots };
 });
-
 
 ipcMain.handle('simulate-game', (_event: any, gameId: number) => {
   const game = db.prepare(`SELECT * FROM games WHERE id = ?`).get(gameId) as any;
@@ -1507,6 +1405,9 @@ ipcMain.handle('simulate-game', (_event: any, gameId: number) => {
   let gameResult: any;
   const allStats: any[] = [];
 
+  const userTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
+  const userTeamId = userTeamRow ? parseInt(userTeamRow.value) : -1;
+
   const runGame = db.transaction(() => {
     gameResult = simulateGame(game.home_team_id, game.away_team_id, game.week ?? 1, userTeamId, getDifficultyFactor());
     updateGame.run(
@@ -1522,19 +1423,14 @@ ipcMain.handle('simulate-game', (_event: any, gameId: number) => {
   });
   runGame();
 
-  // Check if this was the last unplayed game of the week
   const remaining = (db.prepare(
     `SELECT COUNT(*) as cnt FROM games WHERE season = ? AND week = ? AND is_simulated = 0 AND is_playoff = 0`
   ).get(game.season, game.week) as any).cnt;
   const weekComplete = remaining === 0;
 
-  // Roll injuries for this game
   const newlyInjured = rollInjuries(allStats);
-  const userTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
-  const userTeamId = userTeamRow ? parseInt(userTeamRow.value) : -1;
   const rosterResult = processRosterAdjustments(newlyInjured, userTeamId);
 
-  // Only process waivers when the full week is done
   if (weekComplete) {
     db.prepare(`UPDATE players SET weeks_out = MAX(0, weeks_out - 1) WHERE weeks_out > 0`).run();
     db.prepare(`UPDATE players SET injury_status = 'healthy', injury_type = NULL WHERE weeks_out = 0 AND injury_status != 'healthy'`).run();
@@ -1564,7 +1460,7 @@ ipcMain.handle('get-injury-report', (_event: any, teamId: number) => {
 });
 
 ipcMain.handle('get-game-box-score', (_event: any, gameId: number) => {
-    const game = db.prepare(`
+  const game = db.prepare(`
     SELECT g.id, g.week, g.home_score, g.away_score,
            g.home_q1, g.home_q2, g.home_q3, g.home_q4,
            g.away_q1, g.away_q2, g.away_q3, g.away_q4,
@@ -1585,23 +1481,6 @@ ipcMain.handle('get-game-box-score', (_event: any, gameId: number) => {
   return { game, players };
 });
 
-ipcMain.handle('reset-dynasty', () => {
-  const pathModule = require('path');
-  const csvPath = pathModule.join(app.getAppPath(), 'src', 'madden-ratings.csv');
-  db.prepare('DELETE FROM stats').run();
-  db.prepare('DELETE FROM games').run();
-  db.prepare('DELETE FROM champions').run();
-  db.prepare('DELETE FROM contracts').run();
-  db.prepare('DELETE FROM depth_chart').run();
-  db.prepare('DELETE FROM draft_prospects').run();
-  db.prepare('DELETE FROM career_stats_history').run();
-  importFromMadden(csvPath);
-  db.prepare("UPDATE settings SET value = '2025' WHERE key = 'current_season'").run();
-  generateContracts();
-  balanceRosters();
-  return { success: true };
-});
-
 ipcMain.handle('get-playoff-seeds', () => {
   const season = getCurrentSeason();
   const getConferenceSeeds = (conference: string) => {
@@ -1613,23 +1492,6 @@ ipcMain.handle('get-playoff-seeds', () => {
     }).sort((a: any, b: any) => b.wins - a.wins).slice(0, 7);
   };
   return { afc: getConferenceSeeds('AFC'), nfc: getConferenceSeeds('NFC') };
-});
-
-ipcMain.handle('get-user-team', () => {
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
-  if (!row) return null;
-  const teamId = parseInt(row.value);
-  return db.prepare('SELECT * FROM teams WHERE id = ?').get(teamId) ?? null;
-});
-
-ipcMain.handle('set-user-team', (_event: any, teamId: number) => {
-  const existing = db.prepare("SELECT * FROM settings WHERE key = 'user_team_id'").get();
-  if (existing) {
-    db.prepare("UPDATE settings SET value = ? WHERE key = 'user_team_id'").run(String(teamId));
-  } else {
-    db.prepare("INSERT INTO settings (key, value) VALUES ('user_team_id', ?)").run(String(teamId));
-  }
-  return { success: true };
 });
 
 // ─── Team Status ──────────────────────────────────────────────────────────────
@@ -1700,7 +1562,6 @@ ipcMain.handle('propose-trade', (_event: any, { myPlayerIds, theirPlayerIds, the
   const profile = getTeamTradeProfile(theirTeamId);
   const availabilityPremium = theirPlayers.reduce((sum: number, p: any) => sum + getPlayerAvailabilityPremium(p), 0);
 
-  // CPU positional need bonus: if you're offering a player they need, lower threshold
   const cpuNeeds = getTeamNeedsInternal(theirTeamId);
   const needBonus = myPlayers.filter(p => cpuNeeds.includes(p.position)).length * 8;
 
@@ -1768,7 +1629,6 @@ ipcMain.handle('get-cpu-trade-offer', () => {
     const profile = getTeamTradeProfile(cpuTeam.id);
     const { status } = profile;
 
-    // ── BUYER / CONTENDER: CPU wants a player the user has ────────────────
     if (status === 'Buyer' || status === 'Contender') {
       const cpuNeeds = getTeamNeedsInternal(cpuTeam.id);
       if (cpuNeeds.length === 0) continue;
@@ -1820,30 +1680,28 @@ ipcMain.handle('get-cpu-trade-offer', () => {
       };
     }
 
-    // ── SELLER / REBUILDING: CPU wants to dump a veteran for youth/picks ──
     if (status === 'Seller' || status === 'Rebuilding') {
       const veterans = db.prepare(`
-  SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
-  FROM players WHERE team_id = ? AND roster_status = 'active'
-  AND overall_rating >= 76
-  AND dev_trait != 'X-Factor'
-  AND (age >= 28 OR dev_trait IN ('Star','Superstar'))
-  ORDER BY overall_rating DESC
-`).all(cpuTeam.id) as any[];
+        SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
+        FROM players WHERE team_id = ? AND roster_status = 'active'
+          AND overall_rating >= 76
+          AND dev_trait != 'X-Factor'
+          AND (age >= 28 OR dev_trait IN ('Star','Superstar'))
+        ORDER BY overall_rating DESC
+      `).all(cpuTeam.id) as any[];
       if (veterans.length === 0) continue;
 
       const offering = veterans[Math.floor(Math.random() * Math.min(4, veterans.length))];
       const offerValue = calcPlayerTradeValue(offering.overall_rating, offering.age, offering.position, offering.dev_trait);
 
-      // Target: a young user player they can develop
       const userPlayers = db.prepare(`
-  SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
-  FROM players WHERE team_id = ? AND roster_status = 'active'
-  AND age <= 26 AND overall_rating >= 68
-  ORDER BY
-    CASE dev_trait WHEN 'X-Factor' THEN 4 WHEN 'Superstar' THEN 3 WHEN 'Star' THEN 2 ELSE 1 END DESC,
-    overall_rating DESC
-`).all(userTeamId) as any[];
+        SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
+        FROM players WHERE team_id = ? AND roster_status = 'active'
+          AND age <= 26 AND overall_rating >= 68
+        ORDER BY
+          CASE dev_trait WHEN 'X-Factor' THEN 4 WHEN 'Superstar' THEN 3 WHEN 'Star' THEN 2 ELSE 1 END DESC,
+          overall_rating DESC
+      `).all(userTeamId) as any[];
 
       const target = userPlayers.find((p: any) => {
         const v = calcPlayerTradeValue(p.overall_rating, p.age, p.position, p.dev_trait);
@@ -1853,7 +1711,6 @@ ipcMain.handle('get-cpu-trade-offer', () => {
 
       const requestedValue = calcPlayerTradeValue(target.overall_rating, target.age, target.position, target.dev_trait);
 
-      // CPU sweetens with a pick since they're dumping a premium player
       const picks = db.prepare(`
         SELECT id, round, season FROM pick_assets
         WHERE owner_team_id = ? AND is_used = 0 AND season >= ?
@@ -2030,11 +1887,9 @@ ipcMain.handle('release-player', (_event: any, playerId: number) => {
   const releasingTeamId = playerRow?.team_id ?? null;
 
   if (isInSeason) {
-    // Leave contract intact — salary travels with the player through waivers
     db.prepare(`UPDATE players SET team_id = NULL, is_free_agent = 0, roster_status = 'waivers', waived_by_team_id = ?, waiver_placed_week = ? WHERE id = ?`)
       .run(releasingTeamId, currentWeek, playerId);
   } else {
-    // Off-season: void the contract, player enters FA eligible for a new deal
     db.prepare('DELETE FROM contracts WHERE player_id = ?').run(playerId);
     db.prepare(`UPDATE players SET team_id = NULL, is_free_agent = 1, roster_status = 'free_agent', waived_by_team_id = NULL, waiver_placed_week = NULL WHERE id = ?`)
       .run(playerId);
@@ -2046,18 +1901,18 @@ ipcMain.handle('get-team-stats', (_event: any, teamId: number, season?: number) 
   const s = season ?? getCurrentSeason();
   return db.prepare(`
     SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
-      p.overall_rating, p.age, p.position, p.dev_trait,
-      t.city || ' ' || t.name AS team_name,
-      SUM(st.pass_yards) AS pass_yards, SUM(st.pass_tds) AS pass_tds,
-      SUM(st.interceptions) AS interceptions, SUM(st.completions) AS completions,
-      SUM(st.pass_attempts) AS pass_attempts,
-      SUM(st.rush_yards) AS rush_yards, SUM(st.rush_tds) AS rush_tds, SUM(st.rush_attempts) AS rush_attempts,
-      SUM(st.rec_yards) AS rec_yards, SUM(st.rec_tds) AS rec_tds,
-      SUM(st.receptions) AS receptions, SUM(st.targets) AS targets,
-      SUM(st.tackles) AS tackles, SUM(st.assisted_tackles) AS assisted_tackles,
-      SUM(st.sacks) AS sacks, SUM(st.tfl) AS tfl, SUM(st.forced_fumbles) AS forced_fumbles,
-      SUM(st.def_interceptions) AS def_interceptions,
-      SUM(st.pass_deflections) AS pass_deflections, SUM(st.def_tds) AS def_tds
+           p.overall_rating, p.age, p.position, p.dev_trait,
+           t.city || ' ' || t.name AS team_name,
+           SUM(st.pass_yards) AS pass_yards, SUM(st.pass_tds) AS pass_tds,
+           SUM(st.interceptions) AS interceptions, SUM(st.completions) AS completions,
+           SUM(st.pass_attempts) AS pass_attempts,
+           SUM(st.rush_yards) AS rush_yards, SUM(st.rush_tds) AS rush_tds, SUM(st.rush_attempts) AS rush_attempts,
+           SUM(st.rec_yards) AS rec_yards, SUM(st.rec_tds) AS rec_tds,
+           SUM(st.receptions) AS receptions, SUM(st.targets) AS targets,
+           SUM(st.tackles) AS tackles, SUM(st.assisted_tackles) AS assisted_tackles,
+           SUM(st.sacks) AS sacks, SUM(st.tfl) AS tfl, SUM(st.forced_fumbles) AS forced_fumbles,
+           SUM(st.def_interceptions) AS def_interceptions,
+           SUM(st.pass_deflections) AS pass_deflections, SUM(st.def_tds) AS def_tds
     FROM stats st
     JOIN players p ON st.player_id = p.id
     JOIN teams t ON st.team_id = t.id
@@ -2235,14 +2090,11 @@ ipcMain.handle('get-offseason-status', () => {
 });
 
 // ─── CPU Free Agency ──────────────────────────────────────────────────────────
-// CPU teams scan for thin positions and sign the best available free agents.
-// Call this from the frontend after the user has finished their own FA signings.
 
 ipcMain.handle('cpu-fa-signing', () => {
   const userTeamIdRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
   const userTeamId = userTeamIdRow ? parseInt(userTeamIdRow.value) : -1;
 
-  // Minimum roster thresholds per position group
   const MIN_ROSTER: Record<string, number> = {
     QB: 2, RB: 3, WR: 4, TE: 2, OL: 6, DL: 4, LB: 4, CB: 4, S: 2, K: 1,
   };
@@ -2280,7 +2132,6 @@ ipcMain.handle('cpu-fa-signing', () => {
           if (!fa) break;
 
           const fair = calcFairMarket(fa.overall_rating, fa.position, fa.dev_trait);
-          // CPU signs at 90–105% of market
           const salary = Math.round(fair * (0.90 + Math.random() * 0.15) * 10) / 10;
           const years = fa.age <= 27 ? 2 : 1;
           const gtd = Math.round(salary * years * 0.30 * 10) / 10;
@@ -2328,20 +2179,20 @@ ipcMain.handle('generate-draft-class', () => {
   const prospects: any[] = [];
   for (let i = 0; i < 280; i++) {
     let ovr: number;
-    if (i < 10)       ovr = Math.floor(Math.random() * 7) + 76;
-    else if (i < 32)  ovr = Math.floor(Math.random() * 7) + 71;
-    else if (i < 64)  ovr = Math.floor(Math.random() * 6) + 67;
-    else if (i < 96)  ovr = Math.floor(Math.random() * 6) + 64;
+    if (i < 10) ovr = Math.floor(Math.random() * 7) + 76;
+    else if (i < 32) ovr = Math.floor(Math.random() * 7) + 71;
+    else if (i < 64) ovr = Math.floor(Math.random() * 6) + 67;
+    else if (i < 96) ovr = Math.floor(Math.random() * 6) + 64;
     else if (i < 128) ovr = Math.floor(Math.random() * 5) + 61;
     else if (i < 160) ovr = Math.floor(Math.random() * 5) + 59;
     else if (i < 224) ovr = Math.floor(Math.random() * 5) + 57;
-    else              ovr = Math.floor(Math.random() * 6) + 52;
+    else ovr = Math.floor(Math.random() * 6) + 52;
 
     prospects.push({
       season,
       first_name: FIRST[Math.floor(Math.random() * FIRST.length)],
-      last_name:  LAST[Math.floor(Math.random() * LAST.length)],
-      position:   POS_POOL[Math.floor(Math.random() * POS_POOL.length)],
+      last_name: LAST[Math.floor(Math.random() * LAST.length)],
+      position: POS_POOL[Math.floor(Math.random() * POS_POOL.length)],
       overall_rating: ovr,
       dev_trait: getDevTrait(ovr),
       age: Math.random() < 0.6 ? 21 : Math.random() < 0.6 ? 22 : 23,
@@ -2402,12 +2253,12 @@ ipcMain.handle('get-round-pick-order', (_event: any, { round }: { round: number 
     return {
       slot: idx + 1,
       originalTeamId: ts.team_id,
-      ownerTeamId:    pick?.owner_team_id ?? ts.team_id,
-      ownerCity:      pick?.owner_city ?? '',
-      ownerName:      pick?.owner_name ?? '',
-      pickAssetId:    pick?.id ?? null,
-      isUsed:         pick?.is_used === 1,
-      isTraded:       pick ? pick.owner_team_id !== pick.original_team_id : false,
+      ownerTeamId: pick?.owner_team_id ?? ts.team_id,
+      ownerCity: pick?.owner_city ?? '',
+      ownerName: pick?.owner_name ?? '',
+      pickAssetId: pick?.id ?? null,
+      isUsed: pick?.is_used === 1,
+      isTraded: pick ? pick.owner_team_id !== pick.original_team_id : false,
     };
   });
 });
@@ -2435,7 +2286,7 @@ ipcMain.handle('make-draft-pick', (_event: any, { prospectId, teamId, round, pic
     .run(rookie.lastInsertRowid, teamId, sal, sal * 4 * 0.5);
   const usedPick = db.prepare('SELECT id FROM pick_assets WHERE owner_team_id = ? AND round = ? AND season = ? AND is_used = 0 LIMIT 1').get(teamId, round, getCurrentSeason()) as any;
   if (usedPick) db.prepare('UPDATE pick_assets SET is_used = 1 WHERE id = ?').run(usedPick.id);
-  
+
   return { success: true };
 });
 
@@ -2601,7 +2452,6 @@ ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
   }
 
   let matched = 0;
-  // Strip name suffixes before comparing so "Patrick Mahomes II" matches "Patrick Mahomes"
   const normalize = (s: string) => s.toLowerCase()
     .replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '')
     .replace(/[^a-z]/g, '');
@@ -2611,7 +2461,7 @@ ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
       const nameParts = row.name.trim().split(/\s+/);
       if (nameParts.length < 2) continue;
       const first = normalize(nameParts[0]);
-      const last  = normalize(nameParts[nameParts.length - 1]);
+      const last = normalize(nameParts[nameParts.length - 1]);
 
       const players = db.prepare(`
         SELECT p.id, p.first_name, p.last_name FROM players p
@@ -2619,7 +2469,6 @@ ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
         WHERE p.is_free_agent = 0 AND p.roster_status = 'active'
       `).all() as any[];
 
-      // Try exact first+last match first, then fall back to last name + first initial
       let player = players.find((p: any) =>
         normalize(p.first_name) === first && normalize(p.last_name) === last
       );
@@ -2638,7 +2487,7 @@ ipcMain.handle('import-otc-contracts', (_event: any, filePath?: string) => {
 
       db.prepare(`
         UPDATE contracts SET annual_salary = ?, years_remaining = ?, years_total = ?,
-          guaranteed_amount = ?, guaranteed_pct = ?
+        guaranteed_amount = ?, guaranteed_pct = ?
         WHERE player_id = ?
       `).run(row.aav, row.years, row.years, row.guaranteed || Math.round(row.aav * row.years * 0.3 * 10) / 10, gtdPct, player.id);
       matched++;
@@ -2720,26 +2569,22 @@ ipcMain.handle('get-alltime-leaders', () => {
   `).all() as any[];
 
   const sortBy: Record<string, string> = {
-  passing: 'pass_yards', rushing: 'rush_yards', receiving: 'rec_yards',
-  tds: '_skill_tds', passTds: 'pass_tds',
-  tackles: 'tackles', sacks: 'sacks', defInts: 'def_interceptions',
-};
+    passing: 'pass_yards', rushing: 'rush_yards', receiving: 'rec_yards',
+    tds: '_skill_tds', passTds: 'pass_tds',
+    tackles: 'tackles', sacks: 'sacks', defInts: 'def_interceptions',
+  };
 
-const result: any = {};
-for (const [cat, sortKey] of Object.entries(sortBy)) {
-  const combined = [...historical.filter((r: any) => r.category === cat), ...ingame];
-  const sorted = combined.sort((a: any, b: any) => {
-    const av = sortKey === '_skill_tds'
-      ? ((a.rush_tds || 0) + (a.rec_tds || 0))
-      : (parseFloat(a[sortKey]) || 0);
-    const bv = sortKey === '_skill_tds'
-      ? ((b.rush_tds || 0) + (b.rec_tds || 0))
-      : (parseFloat(b[sortKey]) || 0);
-    return bv - av;
-  }).slice(0, 15);
-  result[cat] = sorted;
-}
-return result;
+  const result: any = {};
+  for (const [cat, sortKey] of Object.entries(sortBy)) {
+    const combined = [...historical.filter((r: any) => r.category === cat), ...ingame];
+    const sorted = combined.sort((a: any, b: any) => {
+      const av = sortKey === '_skill_tds' ? ((a.rush_tds || 0) + (a.rec_tds || 0)) : (parseFloat(a[sortKey]) || 0);
+      const bv = sortKey === '_skill_tds' ? ((b.rush_tds || 0) + (b.rec_tds || 0)) : (parseFloat(b[sortKey]) || 0);
+      return bv - av;
+    }).slice(0, 15);
+    result[cat] = sorted;
+  }
+  return result;
 });
 
 ipcMain.handle('get-season-records', () => {
@@ -2773,26 +2618,22 @@ ipcMain.handle('get-season-records', () => {
   `).all() as any[];
 
   const sortBy: Record<string, string> = {
-  passing: 'pass_yards', rushing: 'rush_yards', receiving: 'rec_yards',
-  tds: '_skill_tds', passTds: 'pass_tds',
-  tackles: 'tackles', sacks: 'sacks', defInts: 'def_interceptions',
-};
+    passing: 'pass_yards', rushing: 'rush_yards', receiving: 'rec_yards',
+    tds: '_skill_tds', passTds: 'pass_tds',
+    tackles: 'tackles', sacks: 'sacks', defInts: 'def_interceptions',
+  };
 
-const result: any = {};
-for (const [cat, sortKey] of Object.entries(sortBy)) {
-  const combined = [...historical.filter((r: any) => r.category === cat), ...ingame];
-  const sorted = combined.sort((a: any, b: any) => {
-    const av = sortKey === '_skill_tds'
-      ? ((a.rush_tds || 0) + (a.rec_tds || 0))
-      : (parseFloat(a[sortKey]) || 0);
-    const bv = sortKey === '_skill_tds'
-      ? ((b.rush_tds || 0) + (b.rec_tds || 0))
-      : (parseFloat(b[sortKey]) || 0);
-    return bv - av;
-  }).slice(0, 15);
-  result[cat] = sorted;
-}
-return result;
+  const result: any = {};
+  for (const [cat, sortKey] of Object.entries(sortBy)) {
+    const combined = [...historical.filter((r: any) => r.category === cat), ...ingame];
+    const sorted = combined.sort((a: any, b: any) => {
+      const av = sortKey === '_skill_tds' ? ((a.rush_tds || 0) + (a.rec_tds || 0)) : (parseFloat(a[sortKey]) || 0);
+      const bv = sortKey === '_skill_tds' ? ((b.rush_tds || 0) + (b.rec_tds || 0)) : (parseFloat(b[sortKey]) || 0);
+      return bv - av;
+    }).slice(0, 15);
+    result[cat] = sorted;
+  }
+  return result;
 });
 
 ipcMain.handle('get-season-awards', (_event: any, season: number) => {
@@ -2850,9 +2691,9 @@ ipcMain.handle('get-season-awards', (_event: any, season: number) => {
 
   const coyRow = db.prepare(`
     SELECT t.id, t.city, t.name,
-      SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score)
-                 OR (g.away_team_id = t.id AND g.away_score > g.home_score)
-               THEN 1 ELSE 0 END) as wins
+           SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score)
+                    OR (g.away_team_id = t.id AND g.away_score > g.home_score)
+                    THEN 1 ELSE 0 END) as wins
     FROM games g
     JOIN teams t ON g.home_team_id = t.id OR g.away_team_id = t.id
     WHERE g.season = ? AND g.is_playoff = 0 AND g.is_simulated = 1
@@ -2860,12 +2701,12 @@ ipcMain.handle('get-season-awards', (_event: any, season: number) => {
   `).get(season) as any;
 
   return {
-    mvp:   topOff[0] || null,
-    opoy:  topOff.find((p: any) => p.position !== 'QB') || null,
-    dpoy:  topDef[0] || null,
+    mvp: topOff[0] || null,
+    opoy: topOff.find((p: any) => p.position !== 'QB') || null,
+    dpoy: topDef[0] || null,
     oroty: topOff.filter((p: any) => p.age <= 23)[0] || null,
     droty: topDef.filter((p: any) => p.age <= 23)[0] || null,
-    coy:   coyRow || null,
+    coy: coyRow || null,
   };
 });
 
@@ -2913,7 +2754,6 @@ ipcMain.handle('import-nflverse-stats', () => {
   const pathModule = require('path');
   const fsModule = require('fs');
 
-  // ── Offense ──────────────────────────────────────────────────────────────
   const csvPath = pathModule.join(process.cwd(), 'src', 'data', 'player-career-stats.csv');
   if (!fsModule.existsSync(csvPath)) {
     return { success: false, matched: 0, error: 'player-career-stats.csv not found — run scripts/fetch-career-stats.js first' };
@@ -2981,7 +2821,6 @@ ipcMain.handle('import-nflverse-stats', () => {
   });
   runOff();
 
-  // ── Defense ───────────────────────────────────────────────────────────────
   const defCsvPath = pathModule.join(process.cwd(), 'src', 'data', 'player-career-stats-def.csv');
   let defMatched = 0;
 
@@ -2990,19 +2829,19 @@ ipcMain.handle('import-nflverse-stats', () => {
 
     const upsertDef = db.prepare(`
       INSERT INTO career_stats_history
-        (player_id, season, games, tackles, assisted_tackles, sacks, tfl,
-         forced_fumbles, def_interceptions, pass_deflections, def_tds)
+      (player_id, season, games, tackles, assisted_tackles, sacks, tfl,
+       forced_fumbles, def_interceptions, pass_deflections, def_tds)
       VALUES (?,?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT(player_id, season) DO UPDATE SET
-        tackles           = excluded.tackles,
-        assisted_tackles  = excluded.assisted_tackles,
-        sacks             = excluded.sacks,
-        tfl               = excluded.tfl,
-        forced_fumbles    = excluded.forced_fumbles,
+        tackles = excluded.tackles,
+        assisted_tackles = excluded.assisted_tackles,
+        sacks = excluded.sacks,
+        tfl = excluded.tfl,
+        forced_fumbles = excluded.forced_fumbles,
         def_interceptions = excluded.def_interceptions,
-        pass_deflections  = excluded.pass_deflections,
-        def_tds           = excluded.def_tds,
-        games             = MAX(career_stats_history.games, excluded.games)
+        pass_deflections = excluded.pass_deflections,
+        def_tds = excluded.def_tds,
+        games = MAX(career_stats_history.games, excluded.games)
     `);
 
     const runDef = db.transaction(() => {
@@ -3033,29 +2872,9 @@ ipcMain.handle('import-nflverse-stats', () => {
   return { success: true, matched: matched + defMatched, skipped };
 });
 
-ipcMain.handle('check-setup-done', () => {
-  const cnt = (db.prepare('SELECT COUNT(*) as cnt FROM career_stats_history').get() as any).cnt;
-  return cnt > 0;
-});
-
-ipcMain.handle('reset-save', () => {
-  const pathModule = require('path');
-  const csvPath = pathModule.join(app.getAppPath(), 'src', 'madden-ratings.csv');
-  db.prepare("DELETE FROM settings WHERE key = 'user_team_id'").run();
-  db.prepare('DELETE FROM stats').run();
-  db.prepare('DELETE FROM games').run();
-  db.prepare('DELETE FROM champions').run();
-  db.prepare('DELETE FROM contracts').run();
-  db.prepare('DELETE FROM depth_chart').run();
-  db.prepare('DELETE FROM draft_prospects').run();
-  db.prepare('DELETE FROM career_stats_history').run();
-  importFromMadden(csvPath);
-  db.prepare("UPDATE settings SET value = '2025' WHERE key = 'current_season'").run();
-  generateContracts();
-  return { success: true };
-});
-
 // ─── App Lifecycle ────────────────────────────────────────────────────────────
+
+registerSettingsHandlers();
 
 app.on('ready', createWindow);
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
