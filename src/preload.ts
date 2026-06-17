@@ -166,6 +166,15 @@ acceptCpuTradeOffer: (payload: { myPlayerId: number; theirPlayerId: number; thei
   completeDraft: () =>
     ipcRenderer.invoke('complete-draft'),
 
+  getRoundPickOrder: (payload: { round: number }) =>
+  ipcRenderer.invoke('get-round-pick-order', payload),
+
+scoutProspect: (prospectId: number) =>
+  ipcRenderer.invoke('scout-prospect', prospectId),
+
+getScoutCount: () =>
+  ipcRenderer.invoke('get-scout-count'),
+
   getTeamStats: (teamId: number, season?: number) =>
   ipcRenderer.invoke('get-team-stats', teamId, season),
 
