@@ -459,10 +459,10 @@ export default function Franchise({ userTeam, currentSeason, playoffsComplete }:
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
         {([
-          { key: 'roster',    label: `ACTIVE ROSTER (${contracts.length})`,                          warn: false },
+                    { key: 'roster',    label: `ACTIVE ROSTER (${contracts.length})`,                          warn: false },
           { key: 'ps',        label: `PRACTICE SQUAD (${practiceSquad.length})`,                     warn: false },
           { key: 'fa',        label: 'FREE AGENTS',                                                   warn: false },
-          { key: 'offseason', label: expiringCount > 0 ? `OFFSEASON ⚠ ${expiringCount}` : 'OFFSEASON', warn: expiringCount > 0 },
+          ...(playoffsComplete ? [{ key: 'offseason' as const, label: expiringCount > 0 ? `OFFSEASON ⚠ ${expiringCount}` : 'OFFSEASON', warn: expiringCount > 0 }] : []),
         ] as const).map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
             padding: '5px 16px', fontSize: 11, letterSpacing: 1, cursor: 'pointer', borderRadius: 4,
