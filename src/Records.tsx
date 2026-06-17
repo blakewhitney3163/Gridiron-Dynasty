@@ -258,18 +258,18 @@ export default function Records() {
   const [sortDir, setSortDir]     = useState<'asc' | 'desc'>('desc');
   const [hofData, setHofData] = useState<HofEntry[]>([]);
 
-  useEffect(() => {
+    useEffect(() => {
     Promise.all([
       window.api.getAlltimeLeaders(),
       window.api.getSeasonRecords(),
       window.api.getCurrentSeason(),
-      window.api.getHallOfFame().then((hof: HofEntry[]) => setHofData(hof));
     ]).then(([at, sr, s]: [RecordsData, RecordsData, number]) => {
       setAlltime(at);
       setSeason(sr);
       setCurrentSeason(s);
       setLoading(false);
       window.api.getSeasonAwards(s).then((aw: SeasonAwards) => setAwards(aw));
+      window.api.getHallOfFame().then((hof: HofEntry[]) => setHofData(hof));
     }).catch(() => setLoading(false));
   }, []);
 
