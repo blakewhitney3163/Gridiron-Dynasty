@@ -104,6 +104,9 @@ contextBridge.exposeInMainWorld('api', {
 
   promoteFromPs: (playerId: number) =>
     ipcRenderer.invoke('promote-from-ps', playerId),
+  
+  signFreeAgentToPs: (playerId: number) =>
+    ipcRenderer.invoke('sign-free-agent-to-ps', playerId),
 
   signFreeAgent: (payload: { playerId: number; years: number; salary: number }) =>
     ipcRenderer.invoke('sign-free-agent', payload),
