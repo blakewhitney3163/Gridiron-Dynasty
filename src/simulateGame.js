@@ -307,6 +307,7 @@ function simulateGame(homeTeamId, awayTeamId) {
   ));
   homeScore = Math.max(0, homeScore);
   awayScore = Math.max(0, awayScore);
+if (homeScore === awayScore) awayScore = Math.random() > 0.5 ? awayScore + 3 : Math.max(0, awayScore - 3);
 
   const homeOffStats = generatePlayerStats(homeTeamId, homeScore, homeRatings.offenseRating);
   const awayOffStats = generatePlayerStats(awayTeamId, awayScore, awayRatings.offenseRating);
