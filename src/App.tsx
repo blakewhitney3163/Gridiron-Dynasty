@@ -90,6 +90,7 @@ useEffect(() => {
     markStep('Building player career histories...', true);
 
     markStep('Finalizing dynasty setup...', false);
+    await window.api.balanceRosters();
     await new Promise(r => setTimeout(r, 600));
     markStep('Finalizing dynasty setup...', true);
 
