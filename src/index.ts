@@ -171,6 +171,7 @@ try { db.exec(`ALTER TABLE career_stats_history ADD COLUMN tfl REAL DEFAULT 0`);
 try { db.exec(`ALTER TABLE players ADD COLUMN waived_by_team_id INTEGER DEFAULT NULL`); } catch (_) {}
 try { db.exec(`ALTER TABLE players ADD COLUMN waived_by_team_id INTEGER DEFAULT NULL`); } catch (_) {}
 try { db.exec(`ALTER TABLE players ADD COLUMN waiver_placed_week INTEGER DEFAULT NULL`); } catch (_) {}
+try { db.exec(`ALTER TABLE draft_prospects ADD COLUMN scouted INTEGER DEFAULT 0`); } catch (_) {}
 db.exec(`
   CREATE TABLE IF NOT EXISTS pick_assets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2142,9 +2143,48 @@ ipcMain.handle('get-draft-order', () => {
         WHERE g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
           AND ((g.home_team_id = t.id AND g.home_score > g.away_score)
             OR (g.away_team_id = t.id AND g.away_score > g.home_score))
-      ), 0) as wins
-    FROM teams t ORDER BY wins ASC
-  `).all(season);
+      ), 0) as wins,
+      COALESCE((
+        SELECT COUNT(*) FROM games g
+        WHERE g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
+          AND (g.home_team_id = t.id OR g.away_team_id = t.id)
+      ), 0) as losses
+    FROM teams t ORDER BY wins ASC, losses DESC, t.id ASC
+  `).all(season, season);
+});
+
+ipcMain.handle('get-round-pick-order', (_event: any, { round }: { round: number }) => {
+  const season = getCurrentSeason();
+  const teamSlots = db.prepare(`
+    SELECT t.id as team_id,
+      COALESCE((SELECT COUNT(*) FROM games g WHERE g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
+        AND ((g.home_team_id = t.id AND g.home_score > g.away_score) OR (g.away_team_id = t.id AND g.away_score > g.home_score))), 0) as wins,
+      COALESCE((SELECT COUNT(*) FROM games g WHERE g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
+        AND (g.home_team_id = t.id OR g.away_team_id = t.id)), 0) as losses
+    FROM teams t ORDER BY wins ASC, losses DESC, t.id ASC
+  `).all(season, season) as any[];
+
+  const picks = db.prepare(`
+    SELECT pa.id, pa.owner_team_id, pa.original_team_id, pa.is_used,
+           ow.city as owner_city, ow.name as owner_name
+    FROM pick_assets pa
+    JOIN teams ow ON ow.id = pa.owner_team_id
+    WHERE pa.season = ? AND pa.round = ?
+  `).all(season, round) as any[];
+
+  return teamSlots.map((ts: any, idx: number) => {
+    const pick = picks.find((p: any) => p.original_team_id === ts.team_id);
+    return {
+      slot: idx + 1,
+      originalTeamId: ts.team_id,
+      ownerTeamId:    pick?.owner_team_id ?? ts.team_id,
+      ownerCity:      pick?.owner_city ?? '',
+      ownerName:      pick?.owner_name ?? '',
+      pickAssetId:    pick?.id ?? null,
+      isUsed:         pick?.is_used === 1,
+      isTraded:       pick ? pick.owner_team_id !== pick.original_team_id : false,
+    };
+  });
 });
 
 ipcMain.handle('make-draft-pick', (_event: any, { prospectId, teamId, round, pick }: {
@@ -2168,31 +2208,57 @@ ipcMain.handle('make-draft-pick', (_event: any, { prospectId, teamId, round, pic
   const sal = Math.round((0.9 + (prospect.overall_rating - 60) * 0.05) * 10) / 10;
   db.prepare(`INSERT INTO contracts (player_id,team_id,years_total,years_remaining,annual_salary,guaranteed_amount,guaranteed_pct) VALUES (?,?,4,4,?,?,50)`)
     .run(rookie.lastInsertRowid, teamId, sal, sal * 4 * 0.5);
-
+  const usedPick = db.prepare('SELECT id FROM pick_assets WHERE owner_team_id = ? AND round = ? AND season = ? AND is_used = 0 LIMIT 1').get(teamId, round, getCurrentSeason()) as any;
+  if (usedPick) db.prepare('UPDATE pick_assets SET is_used = 1 WHERE id = ?').run(usedPick.id);
+  
   return { success: true };
+});
+
+ipcMain.handle('scout-prospect', (_event: any, prospectId: number) => {
+  const season = getCurrentSeason();
+  const used = (db.prepare('SELECT COUNT(*) as c FROM draft_prospects WHERE season = ? AND scouted = 1').get(season) as any).c;
+  if (used >= 25) return { success: false, reason: 'No scouts remaining.' };
+  db.prepare('UPDATE draft_prospects SET scouted = 1 WHERE id = ?').run(prospectId);
+  return { success: true };
+});
+
+ipcMain.handle('get-scout-count', () => {
+  const season = getCurrentSeason();
+  return (db.prepare('SELECT COUNT(*) as c FROM draft_prospects WHERE season = ? AND scouted = 1').get(season) as any).c;
 });
 
 ipcMain.handle('run-cpu-round', (_event: any, { round, userTeamId }: { round: number; userTeamId: number }) => {
   const season = getCurrentSeason();
-  const teams = db.prepare(`
-    SELECT t.id,
-      COALESCE((SELECT COUNT(*) FROM games g WHERE g.season=? AND g.is_simulated=1 AND g.is_playoff=0
-        AND ((g.home_team_id=t.id AND g.home_score>g.away_score) OR (g.away_team_id=t.id AND g.away_score>g.home_score))),0) as wins
-    FROM teams t ORDER BY wins ASC
-  `).all(season) as any[];
+  const teamSlots = db.prepare(`
+    SELECT t.id as team_id,
+      COALESCE((SELECT COUNT(*) FROM games g WHERE g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
+        AND ((g.home_team_id = t.id AND g.home_score > g.away_score) OR (g.away_team_id = t.id AND g.away_score > g.home_score))), 0) as wins,
+      COALESCE((SELECT COUNT(*) FROM games g WHERE g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
+        AND (g.home_team_id = t.id OR g.away_team_id = t.id)), 0) as losses
+    FROM teams t ORDER BY wins ASC, losses DESC, t.id ASC
+  `).all(season, season) as any[];
 
-  const results: any[] = [];
+  const roundPicks = db.prepare(`
+    SELECT pa.id, pa.owner_team_id, pa.original_team_id
+    FROM pick_assets pa
+    WHERE pa.season = ? AND pa.round = ? AND pa.is_used = 0
+  `).all(season, round) as any[];
+
   const THRESHOLDS: Record<string, number> = { QB:2, RB:3, WR:5, TE:2, OL:5, DL:4, LB:4, CB:4, S:2, K:1 };
+  const results: any[] = [];
 
   const runPicks = db.transaction(() => {
-    let pickNum = 1;
-    for (const team of teams) {
-      if (team.id === userTeamId) { pickNum++; continue; }
+    for (let i = 0; i < teamSlots.length; i++) {
+      const original = teamSlots[i];
+      const pickAsset = roundPicks.find((p: any) => p.original_team_id === original.team_id);
+      const ownerTeamId = pickAsset?.owner_team_id ?? original.team_id;
 
-      const counts = db.prepare(`SELECT position, COUNT(*) as cnt FROM players WHERE team_id=? GROUP BY position`).all(team.id) as any[];
+      if (ownerTeamId === userTeamId) continue;
+      if (pickAsset?.is_used) continue;
+
+      const counts = db.prepare(`SELECT position, COUNT(*) as cnt FROM players WHERE team_id=? GROUP BY position`).all(ownerTeamId) as any[];
       const byPos: Record<string, number> = {};
       for (const r of counts) byPos[r.position] = r.cnt;
-
       const needs = Object.keys(THRESHOLDS).filter(pos => (byPos[pos] ?? 0) < THRESHOLDS[pos]);
 
       let prospect: any = null;
@@ -2200,25 +2266,23 @@ ipcMain.handle('run-cpu-round', (_event: any, { round, userTeamId }: { round: nu
         const ph = needs.map(() => '?').join(',');
         prospect = db.prepare(`SELECT * FROM draft_prospects WHERE season=? AND is_drafted=0 AND position IN (${ph}) ORDER BY overall_rating DESC LIMIT 1`).get(season, ...needs);
       }
-      if (!prospect) {
-        prospect = db.prepare('SELECT * FROM draft_prospects WHERE season=? AND is_drafted=0 ORDER BY overall_rating DESC LIMIT 1').get(season);
-      }
-      if (!prospect) { pickNum++; continue; }
+      if (!prospect) prospect = db.prepare('SELECT * FROM draft_prospects WHERE season=? AND is_drafted=0 ORDER BY overall_rating DESC LIMIT 1').get(season);
+      if (!prospect) continue;
 
-      const overallPick = (round - 1) * 32 + pickNum;
+      const overallPick = (round - 1) * 32 + (i + 1);
       db.prepare('UPDATE draft_prospects SET is_drafted=1, draft_round=?, draft_pick=?, drafted_by_team_id=? WHERE id=?')
-        .run(round, overallPick, team.id, prospect.id);
+        .run(round, overallPick, ownerTeamId, prospect.id);
 
       const r = db.prepare(`INSERT INTO players (first_name,last_name,position,age,overall_rating,speed,strength,awareness,team_id,is_free_agent,dev_trait,roster_status) VALUES (?,?,?,?,?,?,?,?,?,0,?,'active')`).run(
         prospect.first_name, prospect.last_name, prospect.position, prospect.age, prospect.overall_rating,
         Math.floor(60 + Math.random() * 30), Math.floor(50 + Math.random() * 30), Math.floor(40 + Math.random() * 30),
-        team.id, prospect.dev_trait
+        ownerTeamId, prospect.dev_trait
       ) as any;
       const sal = Math.round((0.9 + (prospect.overall_rating - 60) * 0.05) * 10) / 10;
-      db.prepare(`INSERT INTO contracts (player_id,team_id,years_total,years_remaining,annual_salary,guaranteed_amount,guaranteed_pct) VALUES (?,?,4,4,?,?,50)`).run(r.lastInsertRowid, team.id, sal, sal * 4 * 0.5);
+      db.prepare(`INSERT INTO contracts (player_id,team_id,years_total,years_remaining,annual_salary,guaranteed_amount,guaranteed_pct) VALUES (?,?,4,4,?,?,50)`).run(r.lastInsertRowid, ownerTeamId, sal, sal * 4 * 0.5);
 
-      results.push({ round, pickInRound: pickNum, teamId: team.id, prospect });
-      pickNum++;
+      if (pickAsset) db.prepare('UPDATE pick_assets SET is_used = 1 WHERE id = ?').run(pickAsset.id);
+      results.push({ round, pickInRound: i + 1, teamId: ownerTeamId, prospect });
     }
   });
   runPicks();
