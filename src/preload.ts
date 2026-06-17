@@ -105,6 +105,9 @@ contextBridge.exposeInMainWorld('api', {
   extendPlayer: (payload: { playerId: number; years: number; salary: number }) =>
     ipcRenderer.invoke('extend-player', payload),
 
+  restructurePlayer: (payload: { playerId: number; pct: number }) =>
+  ipcRenderer.invoke('restructure-player', payload),
+
   releasePlayer: (playerId: number) =>
     ipcRenderer.invoke('release-player', playerId),
 
