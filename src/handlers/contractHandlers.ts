@@ -131,7 +131,6 @@ export function registerContractHandlers(): void {
   });
 
   ipcMain.handle('get-team-stats', (_event: any, teamId: number, season?: number) => {
-    const { db } = require('../database');
     const s = season ?? getCurrentSeason();
     return db.prepare(`
       SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
@@ -265,7 +264,6 @@ export function registerContractHandlers(): void {
 
   ipcMain.handle('get-offseason-status', () => {
     const season = getCurrentSeason();
-    const { db } = require('../database');
     const champion = db.prepare('SELECT team_id FROM champions WHERE season = ?').get(season);
     const draftGenerated = champion
       ? (db.prepare('SELECT COUNT(*) as count FROM draft_prospects WHERE season = ?').get(season) as any).count > 0
@@ -283,7 +281,6 @@ export function registerContractHandlers(): void {
 
   ipcMain.handle('cpu-fa-signing', () => {
     const userTeamId = settingsRepo.getUserTeamId() ?? -1;
-    const { db } = require('../database');
     const cpuTeams = db.prepare('SELECT id FROM teams WHERE id != ?').all(userTeamId) as any[];
     let totalSigned = 0;
     const signingsByTeam: Record<number, number> = {};
