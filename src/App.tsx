@@ -13,47 +13,47 @@ import DepthChart from './DepthChart';
 import Records from './Records';
 import NewsFeed from './newsCenter/NewsFeed';
 import { T } from './theme';
+import { useGameStore, UserTeam } from './store/gameStore';
 
 declare const window: any;
 
 type Tab = 'home' | 'standings' | 'teams' | 'schedule' | 'stats' | 'playoffs' | 'trades' | 'franchise' | 'draft' | 'depth' | 'records' | 'news';
 type Screen = 'loading' | 'start' | 'team-select' | 'setup' | 'game';
 
-interface UserTeam {
-  id: number; city: string; name: string;
-  abbreviation: string; conference: string; division: string;
-}
-
 interface SetupStep { label: string; done: boolean; }
 
 const BASE_TABS: { id: Tab; label: string }[] = [
-  { id: 'home',      label: 'Home' },
-  { id: 'standings', label: 'Standings' },
-  { id: 'teams',     label: 'Teams' },
-  { id: 'schedule',  label: 'Schedule' },
-  { id: 'stats',     label: 'Stats' },
-  { id: 'records',   label: 'Records' },
-  { id: 'playoffs',  label: 'Playoffs' },
-  { id: 'trades',    label: 'Trades' },
-  { id: 'franchise', label: 'Franchise' },
-  { id: 'depth',     label: 'Depth Chart' },
-  { id: 'news',      label: '📰 News' },
+  { id: 'home',       label: 'Home' },
+  { id: 'standings',  label: 'Standings' },
+  { id: 'teams',      label: 'Teams' },
+  { id: 'schedule',   label: 'Schedule' },
+  { id: 'stats',      label: 'Stats' },
+  { id: 'records',    label: 'Records' },
+  { id: 'playoffs',   label: 'Playoffs' },
+  { id: 'trades',     label: 'Trades' },
+  { id: 'franchise',  label: 'Franchise' },
+  { id: 'depth',      label: 'Depth Chart' },
+  { id: 'news',       label: '📰 News' },
 ];
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('loading');
-  const [activeTab, setActiveTab] = useState<Tab>('home');
-  const [currentSeason, setCurrentSeason] = useState(2025);
-  const [userTeam, setUserTeam] = useState<UserTeam | null>(null);
-  const [playoffsComplete, setPlayoffsComplete] = useState(false);
-  const [playoffData, setPlayoffData] = useState<any>(null);
-  const [setupSteps, setSetupSteps] = useState<SetupStep[]>([]);
+  const [screen, setScreen]           = useState<Screen>('loading');
+  const [activeTab, setActiveTab]     = useState<Tab>('home');
+  const [playoffData, setPlayoffData] = useState<any | null>(null);
+  const [setupSteps, setSetupSteps]   = useState<SetupStep[]>([]);
   const [setupComplete, setSetupComplete] = useState(false);
-  const [hasSave, setHasSave] = useState(false);
-  const [difficulty, setDifficultyState] = useState<'easy' | 'normal' | 'hard'>('normal');
+  const [hasSave, setHasSave]         = useState(false);
+
+  const {
+    currentSeason, setCurrentSeason,
+    userTeam, setUserTeam,
+    playoffsComplete, setPlayoffsComplete,
+    difficulty, setDifficulty,
+    advanceSeason,
+  } = useGameStore();
 
   useEffect(() => {
-    window.api.getDifficulty().then((d: string) => setDifficultyState(d as any));
+    window.api.getDifficulty().then((d: string) => setDifficulty(d as any));
     Promise.all([
       window.api.getCurrentSeason(),
       window.api.getUserTeam(),
@@ -102,7 +102,7 @@ export default function App() {
   };
 
   const handleDifficultyChange = async (level: 'easy' | 'normal' | 'hard') => {
-    setDifficultyState(level);
+    setDifficulty(level);
     await window.api.setDifficulty(level);
   };
 
@@ -116,6 +116,12 @@ export default function App() {
     runSetup();
   };
 
+  function handleSeasonAdvance(nextSeason: number) {
+    advanceSeason(nextSeason);
+    setPlayoffData(null);
+    setActiveTab('home');
+  }
+
   const tabs = playoffsComplete
     ? [...BASE_TABS.filter(t => t.id !== 'news'), { id: 'draft' as Tab, label: '⚡ Draft' }, { id: 'news' as Tab, label: '📰 News' }]
     : BASE_TABS;
@@ -123,15 +129,17 @@ export default function App() {
   // ── Start Screen ──────────────────────────────────────────────────────────
   if (screen === 'start') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: T.bgPage, gap: 32 }}>
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        height: '100vh', background: T.bgPage, fontFamily: 'monospace', gap: 40,
+      }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: T.textDim, fontSize: 10, letterSpacing: 4, marginBottom: 8 }}>PRESENTED BY</div>
-          <div style={{ color: '#4FC3F7', fontSize: 48, fontWeight: 900, letterSpacing: 6, fontFamily: 'monospace' }}>NFL</div>
-          <div style={{ color: T.textPrimary, fontSize: 18, letterSpacing: 8, fontFamily: 'monospace' }}>SIMULATOR</div>
-          <div style={{ color: T.textDim, fontSize: 10, letterSpacing: 3, marginTop: 8 }}>DYNASTY MODE</div>
+          <p style={{ color: T.textDim, fontSize: 10, letterSpacing: 3, margin: '0 0 8px' }}>PRESENTED BY</p>
+          <h1 style={{ color: '#4FC3F7', fontSize: 48, fontWeight: 900, margin: 0, letterSpacing: 4 }}>NFL</h1>
+          <h1 style={{ color: T.textPrimary, fontSize: 32, fontWeight: 700, margin: '4px 0', letterSpacing: 6 }}>SIMULATOR</h1>
+          <p style={{ color: T.textMuted, fontSize: 11, letterSpacing: 4, margin: 0 }}>DYNASTY MODE</p>
         </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <button
             onClick={() => setScreen('team-select')}
             style={{
@@ -168,33 +176,34 @@ export default function App() {
   // ── Setup Screen ──────────────────────────────────────────────────────────
   if (screen === 'setup') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: T.bgPage, gap: 24 }}>
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        height: '100vh', background: T.bgPage, fontFamily: 'monospace', gap: 32,
+      }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: '#4FC3F7', fontSize: 24, fontWeight: 900, letterSpacing: 4, fontFamily: 'monospace' }}>NFL SIMULATOR</div>
+          <h2 style={{ color: '#4FC3F7', fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: 4 }}>NFL SIMULATOR</h2>
           {userTeam && (
-            <div style={{ color: T.textMuted, fontSize: 13, marginTop: 6 }}>
+            <p style={{ color: T.textMuted, fontSize: 13, margin: '6px 0 0', letterSpacing: 2 }}>
               {userTeam.city} {userTeam.name}
-            </div>
+            </p>
           )}
         </div>
-
-        <div style={{ background: T.bgCard, border: `1px solid ${T.borderFaint}`, borderRadius: 8, padding: '24px 32px', minWidth: 340 }}>
-          <div style={{ color: T.textDim, fontSize: 10, letterSpacing: 2, fontWeight: 700, marginBottom: 16 }}>SETTING UP YOUR DYNASTY</div>
+        <div style={{ minWidth: 340 }}>
+          <h3 style={{ color: T.textDim, fontSize: 10, letterSpacing: 2, margin: '0 0 16px', textAlign: 'center' }}>
+            SETTING UP YOUR DYNASTY
+          </h3>
           {setupSteps.map((step, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <span style={{ color: step.done ? '#4caf50' : '#FF8740', fontWeight: 700, fontSize: 14, width: 16 }}>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
+              <span style={{ color: step.done ? '#4caf50' : T.textDim, fontSize: 13, width: 16 }}>
                 {step.done ? '✓' : '…'}
               </span>
-              <span style={{ color: step.done ? T.textMuted : T.textPrimary, fontSize: 12 }}>{step.label}</span>
+              <span style={{ color: step.done ? T.textPrimary : T.textMuted, fontSize: 12 }}>{step.label}</span>
             </div>
           ))}
         </div>
-
-        {setupComplete ? (
-          <div style={{ color: '#4caf50', fontSize: 12, letterSpacing: 2 }}>DYNASTY READY — LOADING...</div>
-        ) : (
-          <div style={{ color: T.textDim, fontSize: 10, letterSpacing: 2 }}>PLEASE WAIT</div>
-        )}
+        {setupComplete
+          ? <p style={{ color: '#4caf50', fontSize: 11, letterSpacing: 2 }}>DYNASTY READY — LOADING...</p>
+          : <p style={{ color: T.textDim, fontSize: 11, letterSpacing: 2 }}>PLEASE WAIT</p>}
       </div>
     );
   }
@@ -202,7 +211,10 @@ export default function App() {
   // ── Loading ───────────────────────────────────────────────────────────────
   if (screen === 'loading' || !userTeam) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: T.bgPage, color: T.textDim, fontSize: 12, letterSpacing: 3 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: '100vh', background: T.bgPage, color: T.textDim, fontFamily: 'monospace', fontSize: 13,
+      }}>
         LOADING...
       </div>
     );
@@ -210,13 +222,13 @@ export default function App() {
 
   // ── Main Game ─────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: T.bgPage, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: T.bgPage, fontFamily: 'monospace', color: T.textPrimary }}>
 
       {/* Top bar */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '8px 16px', borderBottom: `1px solid ${T.borderFaint}`, background: T.bgPanel, flexShrink: 0, gap: 12 }}>
-        <span style={{ color: '#4FC3F7', fontWeight: 900, fontSize: 14, letterSpacing: 3, fontFamily: 'monospace' }}>NFL</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 20px', borderBottom: `1px solid ${T.borderFaint}`, background: T.bgPanel, flexShrink: 0 }}>
+        <span style={{ color: '#4FC3F7', fontWeight: 700, fontSize: 13, letterSpacing: 2 }}>NFL</span>
         <span style={{ color: T.borderFaint }}>|</span>
-        <span style={{ color: T.textMuted, fontSize: 12 }}>{userTeam.city} {userTeam.name}</span>
+        <span style={{ color: T.textPrimary, fontSize: 13 }}>{userTeam.city} {userTeam.name}</span>
         <button
           onClick={async () => {
             if (window.confirm('Start a new dynasty? This will wipe all current progress.')) {
@@ -233,7 +245,7 @@ export default function App() {
           new dynasty
         </button>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: T.textDim, fontSize: 9, letterSpacing: 1 }}>DIFFICULTY</span>
+          <span style={{ fontSize: 9, color: T.textDim, letterSpacing: 1 }}>DIFFICULTY</span>
           {(['easy', 'normal', 'hard'] as const).map(d => (
             <button key={d} onClick={() => handleDifficultyChange(d)} style={{
               padding: '3px 8px', fontSize: 9, fontFamily: 'monospace',
@@ -245,7 +257,7 @@ export default function App() {
               {d}
             </button>
           ))}
-          <span style={{ color: T.textDim, fontSize: 11, marginLeft: 8 }}>{currentSeason}</span>
+          <span style={{ color: T.textMuted, fontSize: 13, marginLeft: 4 }}>{currentSeason}</span>
         </div>
       </div>
 
@@ -265,44 +277,26 @@ export default function App() {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div style={{ flex: 1, overflow: 'hidden' }}>
         {activeTab === 'home' && (
           <Home
-            userTeam={userTeam}
-            currentSeason={currentSeason}
-            onNavigate={(tab) => setActiveTab(tab as Tab)}
+            onNavigate={tab => setActiveTab(tab as Tab)}
             onSeasonAdvance={handleSeasonAdvance}
-            onPlayoffsComplete={() => setPlayoffsComplete(true)}
           />
         )}
-        {activeTab === 'standings' && <Standings currentSeason={currentSeason} />}
-        {activeTab === 'teams'     && <Teams />}
-        {activeTab === 'schedule'  && <Schedule currentSeason={currentSeason} />}
-        {activeTab === 'stats'     && <Stats currentSeason={currentSeason} />}
-        {activeTab === 'records'   && <Records />}
-        {activeTab === 'playoffs'  && (
-        <Playoffs data={playoffData} setData={setPlayoffData} currentSeason={currentSeason} />
-        )}
-        {activeTab === 'trades'    && <Trades userTeam={userTeam} />}
-        {activeTab === 'franchise' && ( <Franchise userTeam={userTeam} currentSeason={currentSeason} playoffsComplete={playoffsComplete} />
-        )}
-        {activeTab === 'depth'     && <DepthChart userTeam={userTeam} />}
-        {activeTab === 'news'      && <NewsFeed />}
-        {activeTab === 'draft'     && (
-          <Draft
-            userTeam={userTeam}
-            currentSeason={currentSeason}
-            onDraftComplete={() => setActiveTab('home')}
-          />
-        )}
+        {activeTab === 'standings'  && <Standings />}
+        {activeTab === 'teams'      && <Teams />}
+        {activeTab === 'schedule'   && <Schedule />}
+        {activeTab === 'stats'      && <Stats />}
+        {activeTab === 'records'    && <Records />}
+        {activeTab === 'playoffs'   && <Playoffs data={playoffData} setData={setPlayoffData} />}
+        {activeTab === 'trades'     && <Trades />}
+        {activeTab === 'franchise'  && <Franchise />}
+        {activeTab === 'depth'      && <DepthChart />}
+        {activeTab === 'news'       && <NewsFeed />}
+        {activeTab === 'draft'      && <Draft onDraftComplete={() => setActiveTab('home')} />}
       </div>
+
     </div>
   );
-
-  function handleSeasonAdvance(nextSeason: number) {
-    setCurrentSeason(nextSeason);
-    setPlayoffsComplete(false);
-    setPlayoffData(null);
-    setActiveTab('home');
-  }
 }
