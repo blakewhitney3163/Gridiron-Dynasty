@@ -43,6 +43,7 @@ export function registerSettingsHandlers(): void {
     db.prepare('DELETE FROM depth_chart').run();
     db.prepare('DELETE FROM draft_prospects').run();
     db.prepare('DELETE FROM career_stats_history').run();
+    db.prepare('DELETE FROM news_events').run();
     importFromMadden(csvPath);
     db.prepare("UPDATE settings SET value = '2025' WHERE key = 'current_season'").run();
     generateContracts();
@@ -72,6 +73,7 @@ export function registerSettingsHandlers(): void {
     db.prepare('DELETE FROM depth_chart').run();
     db.prepare('DELETE FROM draft_prospects').run();
     db.prepare('DELETE FROM career_stats_history').run();
+    db.prepare('DELETE FROM news_events').run();
     importFromMadden(csvPath);
     db.prepare("UPDATE settings SET value = '2025' WHERE key = 'current_season'").run();
     generateContracts();
