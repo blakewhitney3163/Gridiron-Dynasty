@@ -4,6 +4,8 @@ import path from 'path';
 // ─── Open Database ────────────────────────────────────────────────────────────
 
 export const db: Database.Database = new Database(path.join(process.cwd(), 'nfl-simulator.db'));
+db.pragma('journal_mode = WAL');
+db.pragma('busy_timeout = 5000');
 
 // ─── Base Schema ──────────────────────────────────────────────────────────────
 
