@@ -8,6 +8,7 @@ import { settingsRepo, playerRepo, contractRepo, gameRepo } from '../repositorie
 import { rollInjuries, processWaivers, processRosterAdjustments } from '../services/SimulationService';
 import { logNewsEvent } from '../helpers/logNewsEvent';
 import { runCpuTrades } from '../services/TradeService';
+import { checkMilestones } from '../helpers/checkMilestones';
 
 interface GameSummary {
   week: number;
@@ -297,6 +298,8 @@ export function registerSimHandlers(): void {
 
     const newlyInjured = rollInjuries(allStats);
     logInjuryNews(season, newlyInjured, userTeamId);
+    const milestonePlayerIds = [...new Set(allStats.map((s: any) => s.player_id as number))];
+checkMilestones(season, week, milestonePlayerIds);
     runCpuTrades(userTeamId);
 
     const rosterResult = processRosterAdjustments(newlyInjured, userTeamId);
@@ -348,6 +351,8 @@ export function registerSimHandlers(): void {
     const weekComplete = gameRepo.countPendingInWeek(game.season, game.week) === 0;
     const newlyInjured = rollInjuries(allStats);
     logInjuryNews(getCurrentSeason(), newlyInjured, userTeamId);
+    const milestonePlayerIds = [...new Set(allStats.map((s: any) => s.player_id as number))];
+checkMilestones(getCurrentSeason(), game.week ?? 1, milestonePlayerIds);
 
     const rosterResult = processRosterAdjustments(newlyInjured, userTeamId);
     if (weekComplete) { playerRepo.advanceInjuryTimers(); processWaivers(userTeamId, game.week); }
