@@ -5,6 +5,7 @@ import { SALARY_CAP, MAX_ACTIVE_ROSTER, MAX_PRACTICE_SQUAD } from '../constants'
 import { CapSummary, RosterSpots } from '../types';
 import { settingsRepo, playerRepo, contractRepo, gameRepo } from '../repositories';
 import { calcFairMarket, signFreeAgent, resignPlayer, promoteFromPS, cpuFASigning } from '../services/ContractService';
+import { logNewsEvent } from '../helpers/logNewsEvent';
 
 export { calcFairMarket };
 
@@ -23,7 +24,10 @@ export function registerContractHandlers(): void {
 
   ipcMain.handle('get-roster-spots', (_event: any, teamId: number): Promise<RosterSpots> => {
     const { active, ps } = playerRepo.getCountByStatus(teamId);
-    return { active, ps, activeMax: MAX_ACTIVE_ROSTER, psMax: MAX_PRACTICE_SQUAD, activeFree: MAX_ACTIVE_ROSTER - active, psFree: MAX_PRACTICE_SQUAD - ps } as any;
+    return {
+      active, ps, activeMax: MAX_ACTIVE_ROSTER, psMax: MAX_PRACTICE_SQUAD,
+      activeFree: MAX_ACTIVE_ROSTER - active, psFree: MAX_PRACTICE_SQUAD - ps,
+    } as any;
   });
 
   ipcMain.handle('sign-free-agent-to-ps', (_event: any, playerId: number) => {
@@ -53,24 +57,40 @@ export function registerContractHandlers(): void {
     const contract = contractRepo.getByPlayer(playerId);
     if (!contract) return { success: false, reason: 'No contract found.' };
     if (contract.years_remaining < 2) return { success: false, reason: 'Need 2+ years remaining to restructure.' };
-    const convertedAmount = contract.annual_salary * pct;
-    const savings = Math.round(convertedAmount * (1 - 1 / contract.years_remaining) * 10) / 10;
-    const newSalary = Math.round((contract.annual_salary - savings) * 10) / 10;
-    const newGuaranteed = Math.round(((contract.guaranteed_amount ?? 0) + convertedAmount) * 10) / 10;
-    contractRepo.updateSalary(playerId, newSalary, newGuaranteed, Math.min(100, Math.round((newGuaranteed / (newSalary * contract.years_remaining)) * 100)));
+    const convertedAmount  = contract.annual_salary * pct;
+    const savings          = Math.round(convertedAmount * (1 - 1 / contract.years_remaining) * 10) / 10;
+    const newSalary        = Math.round((contract.annual_salary - savings) * 10) / 10;
+    const newGuaranteed    = Math.round(((contract.guaranteed_amount ?? 0) + convertedAmount) * 10) / 10;
+    contractRepo.updateSalary(
+      playerId, newSalary, newGuaranteed,
+      Math.min(100, Math.round((newGuaranteed / (newSalary * contract.years_remaining)) * 100))
+    );
     return { success: true, savings, newSalary };
   });
 
   ipcMain.handle('release-player', (_event: any, playerId: number) => {
     const season = getCurrentSeason();
     const isInSeason = gameRepo.countBySeason(season) > 0;
-    const player = playerRepo.getById(playerId);
+    const player = playerRepo.getById(playerId) as any;
+    const teamId = player?.team_id ?? null;
+
     if (isInSeason) {
-      playerRepo.releaseToWaivers(playerId, player?.team_id ?? null, gameRepo.getCurrentWeek(season) ?? 1);
+      playerRepo.releaseToWaivers(playerId, teamId, gameRepo.getCurrentWeek(season) ?? 1);
     } else {
       contractRepo.delete(playerId);
       playerRepo.releaseToFA(playerId);
     }
+
+    if (player) {
+      const t = teamId ? db.prepare('SELECT city, name FROM teams WHERE id = ?').get(teamId) as any : null;
+      logNewsEvent({
+        eventType: 'release', category: 'transactions',
+        headline: `${t ? `${t.city} ${t.name}` : 'Team'} Release ${player.first_name} ${player.last_name}`,
+        detail: `${player.position} · ${isInSeason ? 'Placed on waivers.' : 'Released to free agency.'}`,
+        teamId, playerId,
+      });
+    }
+
     return { success: true, onWaivers: isInSeason };
   });
 
@@ -110,7 +130,18 @@ export function registerContractHandlers(): void {
   ipcMain.handle('sign-free-agent', (_event: any, { playerId, years, salary }: { playerId: number; years: number; salary: number }) => {
     const teamId = settingsRepo.getUserTeamId();
     if (!teamId) return { success: false, reason: 'No franchise selected.' };
-    return signFreeAgent(playerId, teamId, years, salary);
+    const result = signFreeAgent(playerId, teamId, years, salary);
+    if (result.success) {
+      const p = db.prepare('SELECT first_name, last_name, position FROM players WHERE id = ?').get(playerId) as any;
+      const t = db.prepare('SELECT city, name FROM teams WHERE id = ?').get(teamId) as any;
+      if (p && t) logNewsEvent({
+        eventType: 'signing', category: 'transactions',
+        headline: `${t.city} ${t.name} Sign ${p.first_name} ${p.last_name}`,
+        detail: `${p.position} · ${years}-year deal at $${salary}M/yr.`,
+        teamId, playerId,
+      });
+    }
+    return result;
   });
 
   ipcMain.handle('get-expiring-contracts', () => {
@@ -119,8 +150,20 @@ export function registerContractHandlers(): void {
     return contractRepo.getExpiring(teamId);
   });
 
-  ipcMain.handle('resign-player', (_event: any, { playerId, years, salary }: { playerId: number; years: number; salary: number }) =>
-    resignPlayer(playerId, years, salary));
+  ipcMain.handle('resign-player', (_event: any, { playerId, years, salary }: { playerId: number; years: number; salary: number }) => {
+    const result = resignPlayer(playerId, years, salary);
+    if (result?.success !== false) {
+      const p = db.prepare('SELECT first_name, last_name, position, team_id FROM players WHERE id = ?').get(playerId) as any;
+      const t = p?.team_id ? db.prepare('SELECT city, name FROM teams WHERE id = ?').get(p.team_id) as any : null;
+      if (p && t) logNewsEvent({
+        eventType: 'resign', category: 'transactions',
+        headline: `${t.city} ${t.name} Re-sign ${p.first_name} ${p.last_name}`,
+        detail: `${p.position} · ${years}-year extension at $${salary}M/yr.`,
+        teamId: p.team_id, playerId,
+      });
+    }
+    return result;
+  });
 
   ipcMain.handle('get-offseason-status', () => {
     const season = getCurrentSeason();
@@ -132,7 +175,12 @@ export function registerContractHandlers(): void {
       ? (db.prepare('SELECT COUNT(*) as count FROM draft_prospects WHERE season = ? AND is_drafted = 0').get(season) as any).count === 0
       : false;
     const teamId = settingsRepo.getUserTeamId();
-    return { playoffsComplete: !!champion, pendingResigns: teamId ? contractRepo.countExpiring(teamId) : 0, draftGenerated, draftComplete };
+    return {
+      playoffsComplete: !!champion,
+      pendingResigns: teamId ? contractRepo.countExpiring(teamId) : 0,
+      draftGenerated,
+      draftComplete,
+    };
   });
 
   ipcMain.handle('cpu-fa-signing', () =>
