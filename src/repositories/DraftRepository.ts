@@ -1,4 +1,4 @@
-const { db } = require('../database');
+import { db } from '../database';
 import { DraftProspect } from '../types';
 
 type ProspectInsert = {
