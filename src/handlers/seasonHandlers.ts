@@ -10,8 +10,12 @@ export function registerSeasonHandlers(): void {
 
   ipcMain.handle('get-standings', (_event: any, season?: number) => {
     const s = season ?? getCurrentSeason();
+    const records = gameRepo.getAllRecords(s);
     return (db.prepare('SELECT id, city, name, conference, division FROM teams').all() as any[])
-      .map((team: any) => { const r = gameRepo.getTeamRecord(team.id, s); return { ...team, wins: r.wins, losses: r.losses, ties: r.ties }; });
+      .map((team: any) => {
+        const { wins = 0, losses = 0, ties = 0 } = records[team.id] ?? {};
+        return { ...team, wins, losses, ties };
+      });
   });
 
   ipcMain.handle('get-teams', () =>
@@ -22,12 +26,46 @@ export function registerSeasonHandlers(): void {
 
   ipcMain.handle('get-player-stats', (_event: any, playerId: number) => {
     const season = getCurrentSeason();
-    return db.prepare(`SELECT COUNT(DISTINCT s.game_id) as games, SUM(s.pass_attempts) as pass_attempts, SUM(s.completions) as completions, SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds, SUM(s.interceptions) as interceptions, SUM(s.rush_attempts) as rush_attempts, SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds, SUM(s.targets) as targets, SUM(s.receptions) as receptions, SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds, SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles, SUM(s.sacks) as sacks, SUM(s.tfl) as tfl, SUM(s.def_interceptions) as def_interceptions, SUM(s.pass_deflections) as pass_deflections FROM stats s JOIN games g ON s.game_id = g.id WHERE s.player_id = ? AND g.season = ?`).get(playerId, season);
+    return db.prepare(`
+      SELECT COUNT(DISTINCT s.game_id) as games,
+        SUM(s.pass_attempts) as pass_attempts, SUM(s.completions) as completions,
+        SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
+        SUM(s.interceptions) as interceptions, SUM(s.rush_attempts) as rush_attempts,
+        SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds,
+        SUM(s.targets) as targets, SUM(s.receptions) as receptions,
+        SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
+        SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
+        SUM(s.sacks) as sacks, SUM(s.tfl) as tfl,
+        SUM(s.def_interceptions) as def_interceptions,
+        SUM(s.pass_deflections) as pass_deflections
+      FROM stats s
+      WHERE s.player_id = ? AND s.season = ?
+    `).get(playerId, season);
   });
 
   ipcMain.handle('get-player-career-stats', (_event: any, playerId: number) => {
-    const live = db.prepare(`SELECT g.season, COUNT(DISTINCT s.game_id) as games, SUM(s.completions) as completions, SUM(s.pass_attempts) as pass_attempts, SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds, SUM(s.interceptions) as interceptions, SUM(s.rush_attempts) as rush_attempts, SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds, SUM(s.targets) as targets, SUM(s.receptions) as receptions, SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds, SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles, SUM(s.sacks) as sacks, SUM(s.tfl) as tfl, SUM(s.def_interceptions) as def_interceptions, SUM(s.pass_deflections) as pass_deflections FROM stats s JOIN games g ON s.game_id = g.id WHERE s.player_id = ? GROUP BY g.season`).all(playerId) as any[];
-    const history = db.prepare(`SELECT season, games, completions, pass_attempts, pass_yards, pass_tds, interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds, tackles, assisted_tackles, sacks, tfl, def_interceptions, pass_deflections FROM career_stats_history WHERE player_id = ?`).all(playerId) as any[];
+    const live = db.prepare(`
+      SELECT s.season, COUNT(DISTINCT s.game_id) as games,
+        SUM(s.completions) as completions, SUM(s.pass_attempts) as pass_attempts,
+        SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
+        SUM(s.interceptions) as interceptions, SUM(s.rush_attempts) as rush_attempts,
+        SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds,
+        SUM(s.targets) as targets, SUM(s.receptions) as receptions,
+        SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
+        SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
+        SUM(s.sacks) as sacks, SUM(s.tfl) as tfl,
+        SUM(s.def_interceptions) as def_interceptions,
+        SUM(s.pass_deflections) as pass_deflections
+      FROM stats s
+      WHERE s.player_id = ?
+      GROUP BY s.season
+    `).all(playerId) as any[];
+    const history = db.prepare(`
+      SELECT season, games, completions, pass_attempts, pass_yards, pass_tds, interceptions,
+        rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds,
+        tackles, assisted_tackles, sacks, tfl, def_interceptions, pass_deflections
+      FROM career_stats_history WHERE player_id = ?
+    `).all(playerId) as any[];
     const liveSeasons = new Set(live.map((r: any) => r.season));
     return [...live, ...history.filter((r: any) => !liveSeasons.has(r.season))].sort((a: any, b: any) => b.season - a.season);
   });
@@ -46,22 +84,22 @@ export function registerSeasonHandlers(): void {
   });
 
   ipcMain.handle('get-stats', (_event: any, season?: number) => {
-  const s = season ?? getCurrentSeason();
-  return getLeagueStats(s);
-});
+    const s = season ?? getCurrentSeason();
+    return getLeagueStats(s);
+  });
 
   ipcMain.handle('get-hall-of-fame', () =>
     db.prepare('SELECT * FROM hall_of_fame ORDER BY inducted_season DESC, name ASC').all());
 
   ipcMain.handle('get-team-season-stats', (_event: any, season?: number) => {
-  const s = season ?? getCurrentSeason();
-  return getTeamSeasonStats(s);
-});
+    const s = season ?? getCurrentSeason();
+    return getTeamSeasonStats(s);
+  });
 
   ipcMain.handle('get-team-stats', (_event: any, teamId: number, season?: number) => {
-  const s = season ?? getCurrentSeason();
-  return getTeamPlayerStats(teamId, s);
-});
+    const s = season ?? getCurrentSeason();
+    return getTeamPlayerStats(teamId, s);
+  });
 
   ipcMain.handle('get-playoffs', (_event: any, season?: number) => {
     const s = season ?? getCurrentSeason();
