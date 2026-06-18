@@ -2,10 +2,9 @@ import { db } from '../database';
 import { playerRepo, contractRepo, settingsRepo } from '../repositories';
 import { HOF_MIN_GAMES, HOF_THRESHOLDS } from '../constants';
 import { AdvanceSeasonResult } from '../types';
-import { calcFairMarket } from './ContractService';
+import { calcFairMarket, cpuRosterCuts, cpuResignAttempts } from './ContractService';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { logNewsEvent } from '../helpers/logNewsEvent';
-import { calcFairMarket, cpuRosterCuts, cpuResignAttempts } from './ContractService';
 
 function isHOFEligible(position: string, career: any): boolean {
   if ((career.games ?? 0) < HOF_MIN_GAMES) return false;
