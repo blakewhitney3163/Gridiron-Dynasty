@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron';
+import { db } from '../database';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { SALARY_CAP, MAX_ACTIVE_ROSTER, MAX_PRACTICE_SQUAD, MIN_CPU_ROSTER } from '../constants';
 import { CapSummary, RosterSpots, SuccessResult } from '../types';
