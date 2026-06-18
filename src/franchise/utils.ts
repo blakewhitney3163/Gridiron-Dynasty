@@ -1,10 +1,10 @@
 export const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K'];
 
-export const TRAIT_META: Record<string, { color: string; short: string }> = {
-  Normal:    { color: '#444',    short: '' },
-  Star:      { color: '#4FC3F7', short: 'S' },
-  Superstar: { color: '#FF8740', short: 'SS' },
-  'X-Factor': { color: '#FFD700', short: 'XF' },
+export const TRAIT_META: Record<string, { color: string; short: string; bg: string }> = {
+  Normal: { color: '#444', short: '', bg: 'transparent' },
+  Star: { color: '#4FC3F7', short: 'S', bg: '#2d3f5a' },
+  Superstar: { color: '#FF8740', short: 'SS', bg: '#4a3020' },
+  'X-Factor': { color: '#FFD700', short: 'XF', bg: '#4a4020' },
 };
 
 export const MARKET_RATES: Record<string, [number, number][]> = {
