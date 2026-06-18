@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-const { db } = require('../database');
+import { db } from '../database';
 import { simulateGame } from '../simulateGame';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { getDifficultyFactor } from './settingsHandlers';
