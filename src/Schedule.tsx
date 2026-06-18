@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { T } from './theme';
 import { Game } from './schedule/types';
 import BoxScoreModal from './schedule/BoxScoreModal';
+import { useGameStore } from './store/gameStore';
 
 declare const window: any;
 
-interface Props { currentSeason: number; }
-
-export default function Schedule({ currentSeason }: Props) {
-  const [games, setGames] = useState<Game[]>([]);
+export default function Schedule() {
+  const { currentSeason } = useGameStore();
+  const [games, setGames]               = useState<Game[]>([]);
   const [selectedWeek, setSelectedWeek] = useState(1);
   const [selectedGameId, setSelectedGameId] = useState<number | null>(null);
 
@@ -16,12 +16,11 @@ export default function Schedule({ currentSeason }: Props) {
     window.api.getSchedule(currentSeason).then((data: Game[]) => setGames(data));
   }, [currentSeason]);
 
-  const weeks = Array.from({ length: 17 }, (_, i) => i + 1);
+  const weeks     = Array.from({ length: 17 }, (_, i) => i + 1);
   const weekGames = games.filter(g => g.week === selectedWeek);
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-
       {selectedGameId && (
         <BoxScoreModal gameId={selectedGameId} onClose={() => setSelectedGameId(null)} />
       )}
@@ -66,9 +65,9 @@ export default function Schedule({ currentSeason }: Props) {
                 key={game.id}
                 onClick={() => setSelectedGameId(game.id)}
                 style={{
-                  background: T.bgPanel, border: `1px solid ${T.borderFaint}`, borderRadius: '8px',
-                  padding: '14px 18px', marginBottom: '10px', display: 'flex', alignItems: 'center',
-                  gap: '16px', cursor: 'pointer', transition: 'border-color 0.15s',
+                  background: T.bgPanel, border: `1px solid ${T.borderFaint}`, borderRadius: 8,
+                  padding: '14px 18px', marginBottom: 10, display: 'flex', alignItems: 'center',
+                  gap: 16, cursor: 'pointer',
                 }}
                 onMouseEnter={e => (e.currentTarget.style.borderColor = T.borderMid)}
                 onMouseLeave={e => (e.currentTarget.style.borderColor = T.borderFaint)}
