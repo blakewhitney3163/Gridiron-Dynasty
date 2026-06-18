@@ -202,6 +202,7 @@ export default function Stats({ currentSeason }: Props) {
           sortKey={teamSortKey}
           sortDir={teamSortDir}
           onSort={handleTeamSort}
+          category={category}
         />
       )}
 
