@@ -129,6 +129,12 @@ acceptCpuTradeOffer: (payload: { myPlayerId: number; theirPlayerId: number; thei
   restructurePlayer: (payload: { playerId: number; pct: number }) =>
   ipcRenderer.invoke('restructure-player', payload),
 
+getNewsFeed: (opts?: { season?: number; category?: string; limit?: number }) =>
+  ipcRenderer.invoke('get-news-feed', opts),
+
+getNewsSeasons: () =>
+  ipcRenderer.invoke('get-news-seasons'),
+  
   releasePlayer: (playerId: number) =>
     ipcRenderer.invoke('release-player', playerId),
 
