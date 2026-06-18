@@ -11,6 +11,9 @@ export const mainConfig: Configuration = {
   output: {
     filename: '[name].js',
   },
+  externals: {
+    'better-sqlite3': 'commonjs better-sqlite3',
+  },
   module: {
     rules,
   },
