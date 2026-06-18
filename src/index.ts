@@ -10,6 +10,7 @@ import { registerContractHandlers } from './handlers/contractHandlers';
 import { registerDraftHandlers } from './handlers/draftHandlers';
 import { registerStatsHandlers } from './handlers/statsHandlers';
 import { registerSeasonHandlers } from './handlers/seasonHandlers';
+import { registerNewsHandlers } from './handlers/newsHandlers';
 
 // Auto-seed teams if fresh DB
 const teamCount = (db.prepare('SELECT COUNT(*) as cnt FROM teams').get() as any).cnt;
@@ -266,6 +267,7 @@ registerContractHandlers();
 registerDraftHandlers();
 registerStatsHandlers();
 registerSeasonHandlers();
+registerNewsHandlers();
 
 app.on('ready', createWindow);
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
