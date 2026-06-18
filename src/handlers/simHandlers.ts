@@ -29,11 +29,11 @@ function getTeamName(teamId: number): string {
 function logGameNews(season: number, game: GameSummary, userTeamId: number): void {
   const homeTeamName = getTeamName(game.homeTeamId);
   const awayTeamName = getTeamName(game.awayTeamId);
-  const margin       = Math.abs(game.homeScore - game.awayScore);
-  const winnerName   = game.homeScore > game.awayScore ? homeTeamName : awayTeamName;
-  const loserName    = game.homeScore > game.awayScore ? awayTeamName : homeTeamName;
-  const winnerScore  = Math.max(game.homeScore, game.awayScore);
-  const loserScore   = Math.min(game.homeScore, game.awayScore);
+  const margin = Math.abs(game.homeScore - game.awayScore);
+  const winnerName = game.homeScore > game.awayScore ? homeTeamName : awayTeamName;
+  const loserName  = game.homeScore > game.awayScore ? awayTeamName : homeTeamName;
+  const winnerScore = Math.max(game.homeScore, game.awayScore);
+  const loserScore  = Math.min(game.homeScore, game.awayScore);
   const involvesUser = game.homeTeamId === userTeamId || game.awayTeamId === userTeamId;
 
   if (involvesUser) {
@@ -42,8 +42,7 @@ function logGameNews(season: number, game: GameSummary, userTeamId: number): voi
     const oppScore  = isHome ? game.awayScore : game.homeScore;
     const oppName   = isHome ? awayTeamName : homeTeamName;
     logNewsEvent({
-      season,
-      category: 'game',
+      season, category: 'game',
       title: `Week ${game.week}: ${winnerName} ${winnerScore}, ${loserName} ${loserScore}`,
       body: userScore > oppScore
         ? `Your team defeated ${oppName} ${userScore}–${oppScore}`
@@ -51,14 +50,12 @@ function logGameNews(season: number, game: GameSummary, userTeamId: number): voi
     });
   } else if (margin >= 21) {
     logNewsEvent({
-      season,
-      category: 'game',
+      season, category: 'game',
       title: `Blowout — ${winnerName} ${winnerScore}, ${loserName} ${loserScore}`,
       body: `Week ${game.week} | ${winnerName} win by ${margin}`,
     });
   }
 
-  // Notable individual stat lines — only look up player name for qualifying stats
   for (const stat of game.stats) {
     const isQBStar = stat.pass_yards >= 300 || stat.pass_tds >= 4;
     const isRBStar = stat.rush_yards >= 150;
@@ -74,29 +71,17 @@ function logGameNews(season: number, game: GameSummary, userTeamId: number): voi
       if (stat.pass_yards)    parts.push(`${stat.pass_yards} pass yds`);
       if (stat.pass_tds)      parts.push(`${stat.pass_tds} TD`);
       if (stat.interceptions) parts.push(`${stat.interceptions} INT`);
-      logNewsEvent({
-        season, category: 'game',
-        title: `${p.first_name} ${p.last_name} — standout QB performance`,
-        body: `Week ${game.week} | ${parts.join(', ')} | ${teamName}`,
-      });
+      logNewsEvent({ season, category: 'game', title: `${p.first_name} ${p.last_name} — standout QB performance`, body: `Week ${game.week} | ${parts.join(', ')} | ${teamName}` });
     } else if (isRBStar) {
       const parts = [`${stat.rush_yards} rush yds`];
       if (stat.rush_tds) parts.push(`${stat.rush_tds} TD`);
-      logNewsEvent({
-        season, category: 'game',
-        title: `${p.first_name} ${p.last_name} — standout rushing performance`,
-        body: `Week ${game.week} | ${parts.join(', ')} | ${teamName}`,
-      });
+      logNewsEvent({ season, category: 'game', title: `${p.first_name} ${p.last_name} — standout rushing performance`, body: `Week ${game.week} | ${parts.join(', ')} | ${teamName}` });
     } else if (isWRStar) {
       const parts: string[] = [];
       if (stat.receptions) parts.push(`${stat.receptions} rec`);
       if (stat.rec_yards)  parts.push(`${stat.rec_yards} yds`);
       if (stat.rec_tds)    parts.push(`${stat.rec_tds} TD`);
-      logNewsEvent({
-        season, category: 'game',
-        title: `${p.first_name} ${p.last_name} — standout receiving performance`,
-        body: `Week ${game.week} | ${parts.join(', ')} | ${teamName}`,
-      });
+      logNewsEvent({ season, category: 'game', title: `${p.first_name} ${p.last_name} — standout receiving performance`, body: `Week ${game.week} | ${parts.join(', ')} | ${teamName}` });
     }
   }
 }
@@ -104,10 +89,11 @@ function logGameNews(season: number, game: GameSummary, userTeamId: number): voi
 function logInjuryNews(season: number, newlyInjured: any[], userTeamId: number): void {
   for (const p of newlyInjured) {
     if (p.team_id !== userTeamId) continue;
-    const weeksOut = p.weeks_out ? `Out ${p.weeks_out} week${p.weeks_out > 1 ? 's' : ''}` : (p.injury_status?.toUpperCase() ?? 'Injured');
+    const weeksOut = p.weeks_out
+      ? `Out ${p.weeks_out} week${p.weeks_out > 1 ? 's' : ''}`
+      : (p.injury_status?.toUpperCase() ?? 'Injured');
     logNewsEvent({
-      season,
-      category: 'injury',
+      season, category: 'injury',
       title: `Injury: ${p.first_name} ${p.last_name} (${p.position})`,
       body: `${p.injury_type ?? 'Injury'} | ${weeksOut} | OVR ${p.overall_rating}`,
     });
@@ -168,9 +154,9 @@ export function registerSimHandlers(): void {
 
     const insertGame = db.prepare(`
       INSERT INTO games
-        (season, week, home_team_id, away_team_id, home_score, away_score,
-         home_q1, home_q2, home_q3, home_q4, away_q1, away_q2, away_q3, away_q4,
-         weather, is_playoff, is_simulated)
+      (season, week, home_team_id, away_team_id, home_score, away_score,
+       home_q1, home_q2, home_q3, home_q4, away_q1, away_q2, away_q3, away_q4,
+       weather, is_playoff, is_simulated)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
     `);
 
@@ -187,8 +173,7 @@ export function registerSimHandlers(): void {
       const winnerScore = Math.max(r.homeScore, r.awayScore);
       const loserScore  = Math.min(r.homeScore, r.awayScore);
       logNewsEvent({
-        season: s,
-        category: 'game',
+        season: s, category: 'game',
         title: `${roundLabel}: ${winner.city} ${winner.name} ${winnerScore}, ${loser.city} ${loser.name} ${loserScore}`,
         body: `${winner.city} ${winner.name} advance`,
       });
@@ -198,24 +183,22 @@ export function registerSimHandlers(): void {
     const afcTeams = seedTeams('AFC');
     const nfcTeams = seedTeams('NFC');
 
-    const afcWC  = [simGame(afcTeams[1], afcTeams[6], 18, 'AFC Wild Card'), simGame(afcTeams[2], afcTeams[5], 18, 'AFC Wild Card'), simGame(afcTeams[3], afcTeams[4], 18, 'AFC Wild Card')];
-    const nfcWC  = [simGame(nfcTeams[1], nfcTeams[6], 18, 'NFC Wild Card'), simGame(nfcTeams[2], nfcTeams[5], 18, 'NFC Wild Card'), simGame(nfcTeams[3], nfcTeams[4], 18, 'NFC Wild Card')];
-    const afcDiv = [simGame(afcTeams[0], afcWC[2].winner, 19, 'AFC Divisional'), simGame(afcWC[0].winner, afcWC[1].winner, 19, 'AFC Divisional')];
-    const nfcDiv = [simGame(nfcTeams[0], nfcWC[2].winner, 19, 'NFC Divisional'), simGame(nfcWC[0].winner, nfcWC[1].winner, 19, 'NFC Divisional')];
-    const afcChamp = simGame(afcDiv[0].winner, afcDiv[1].winner, 20, 'AFC Championship');
-    const nfcChamp = simGame(nfcDiv[0].winner, nfcDiv[1].winner, 20, 'NFC Championship');
+    const afcWC   = [simGame(afcTeams[1], afcTeams[6], 18, 'AFC Wild Card'), simGame(afcTeams[2], afcTeams[5], 18, 'AFC Wild Card'), simGame(afcTeams[3], afcTeams[4], 18, 'AFC Wild Card')];
+    const nfcWC   = [simGame(nfcTeams[1], nfcTeams[6], 18, 'NFC Wild Card'), simGame(nfcTeams[2], nfcTeams[5], 18, 'NFC Wild Card'), simGame(nfcTeams[3], nfcTeams[4], 18, 'NFC Wild Card')];
+    const afcDiv  = [simGame(afcTeams[0], afcWC[2].winner, 19, 'AFC Divisional'), simGame(afcWC[0].winner, afcWC[1].winner, 19, 'AFC Divisional')];
+    const nfcDiv  = [simGame(nfcTeams[0], nfcWC[2].winner, 19, 'NFC Divisional'), simGame(nfcWC[0].winner, nfcWC[1].winner, 19, 'NFC Divisional')];
+    const afcChamp  = simGame(afcDiv[0].winner,  afcDiv[1].winner,  20, 'AFC Championship');
+    const nfcChamp  = simGame(nfcDiv[0].winner,  nfcDiv[1].winner,  20, 'NFC Championship');
     const superBowl = simGame(afcChamp.winner, nfcChamp.winner, 21, 'Super Bowl');
 
     db.prepare('INSERT OR REPLACE INTO champions (season, team_id) VALUES (?, ?)').run(s, superBowl.winner.id);
 
-    // Super Bowl champion gets its own headline
-    const champ = superBowl.winner;
+    const champ    = superBowl.winner;
     const runnerUp = superBowl.winner.id === afcChamp.winner.id ? nfcChamp.winner : afcChamp.winner;
     const champScore = superBowl.homeScore > superBowl.awayScore ? superBowl.homeScore : superBowl.awayScore;
     const ruScore    = superBowl.homeScore > superBowl.awayScore ? superBowl.awayScore : superBowl.homeScore;
     logNewsEvent({
-      season: s,
-      category: 'game',
+      season: s, category: 'game',
       title: `🏆 ${champ.city} ${champ.name} are Super Bowl Champions!`,
       body: `Defeated ${runnerUp.city} ${runnerUp.name} ${champScore}–${ruScore} in Super Bowl ${s}`,
     });
@@ -265,39 +248,40 @@ export function registerSimHandlers(): void {
   });
 
   ipcMain.handle('simulate-week', async (_event: any, week: number) => {
-  const season = getCurrentSeason();
-  const games = gameRepo.getPendingByWeek(season, week);
-  if (games.length === 0) return { week, season, gamesSimulated: 0 };
+    const season = getCurrentSeason();
+    const games = gameRepo.getPendingByWeek(season, week);
+    if (games.length === 0) return { week, season, gamesSimulated: 0 };
 
-  return runSimWorker({
-    type: 'simulate-week',
-    week,
-    season,
-    games,
-    userTeamId:       settingsRepo.getUserTeamId() ?? -1,
-    difficultyFactor: getDifficultyFactor(),
+    return runSimWorker({
+      type: 'simulate-week',
+      week,
+      season,
+      games,
+      userTeamId:       settingsRepo.getUserTeamId() ?? -1,
+      difficultyFactor: getDifficultyFactor(),
+    });
   });
-    
+
   ipcMain.handle('simulate-game', (_event: any, gameId: number) => {
     const game = db.prepare(`SELECT * FROM games WHERE id = ?`).get(gameId) as any;
     if (!game) return { success: false, reason: 'Game not found.' };
     if (game.is_simulated) return { success: false, reason: 'Game already simulated.' };
 
-      const insertStat = db.prepare(`
-    INSERT INTO stats
-    (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
-    interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards,
-    rec_tds, tackles, assisted_tackles, sacks, tfl, forced_fumbles, fumble_recoveries,
-    def_interceptions, pass_deflections, def_tds, fg_made, fg_att, xp_made, xp_att)
-    VALUES
-    (@game_id, @player_id, @team_id, @pass_attempts, @completions, @pass_yards, @pass_tds,
-    @interceptions, @rush_attempts, @rush_yards, @rush_tds, @targets, @receptions, @rec_yards,
-    @rec_tds, @tackles, @assisted_tackles, @sacks, @tfl, @forced_fumbles, @fumble_recoveries,
-    @def_interceptions, @pass_deflections, @def_tds, @fg_made, @fg_att, @xp_made, @xp_att)
-  `);
+    const insertStat = db.prepare(`
+      INSERT INTO stats
+      (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
+       interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards,
+       rec_tds, tackles, assisted_tackles, sacks, tfl, forced_fumbles, fumble_recoveries,
+       def_interceptions, pass_deflections, def_tds, fg_made, fg_att, xp_made, xp_att)
+      VALUES
+      (@game_id, @player_id, @team_id, @pass_attempts, @completions, @pass_yards, @pass_tds,
+       @interceptions, @rush_attempts, @rush_yards, @rush_tds, @targets, @receptions, @rec_yards,
+       @rec_tds, @tackles, @assisted_tackles, @sacks, @tfl, @forced_fumbles, @fumble_recoveries,
+       @def_interceptions, @pass_deflections, @def_tds, @fg_made, @fg_att, @xp_made, @xp_att)
+    `);
 
     let gameResult: any;
-    const allStats: any[] = [];
+    const allStats: any[]  = [];
     const userTeamId = settingsRepo.getUserTeamId() ?? -1;
 
     db.transaction(() => {
@@ -309,21 +293,20 @@ export function registerSimHandlers(): void {
       }
     })();
 
-    // Log news events outside the transaction
     logGameNews(getCurrentSeason(), {
       week: game.week ?? 1,
       homeTeamId: game.home_team_id,
       awayTeamId: game.away_team_id,
-      homeScore: gameResult.homeScore,
-      awayScore: gameResult.awayScore,
-      stats: allStats,
+      homeScore:  gameResult.homeScore,
+      awayScore:  gameResult.awayScore,
+      stats:      allStats,
     }, userTeamId);
 
     const weekComplete = gameRepo.countPendingInWeek(game.season, game.week) === 0;
     const newlyInjured = rollInjuries(allStats);
     logInjuryNews(getCurrentSeason(), newlyInjured, userTeamId);
     const milestonePlayerIds = [...new Set(allStats.map((s: any) => s.player_id as number))];
-checkMilestones(getCurrentSeason(), game.week ?? 1, milestonePlayerIds);
+    checkMilestones(getCurrentSeason(), game.week ?? 1, milestonePlayerIds);
 
     const rosterResult = processRosterAdjustments(newlyInjured, userTeamId);
     if (weekComplete) { playerRepo.advanceInjuryTimers(); processWaivers(userTeamId, game.week); }
@@ -356,20 +339,20 @@ checkMilestones(getCurrentSeason(), game.week ?? 1, milestonePlayerIds);
       WHERE g.id = ?
     `).get(gameId) as any;
     if (!game) return null;
-      const players = db.prepare(`
-    SELECT p.first_name || ' ' || p.last_name as player_name, p.position, s.team_id,
-    s.pass_attempts, s.completions, s.pass_yards, s.pass_tds, s.interceptions,
-    s.rush_attempts, s.rush_yards, s.rush_tds, s.targets, s.receptions,
-    s.rec_yards, s.rec_tds, s.tackles, s.assisted_tackles, s.sacks, s.tfl,
-    s.def_interceptions, s.pass_deflections, s.def_tds,
-    s.fg_made, s.fg_att, s.xp_made, s.xp_att
-    FROM stats s
-    JOIN players p ON s.player_id = p.id
-    WHERE s.game_id = ?
-    AND (s.pass_yards > 0 OR s.rush_yards > 0 OR s.rec_yards > 0
-      OR s.tackles > 2 OR s.sacks > 0 OR s.def_tds > 0 OR s.fg_att > 0)
-    ORDER BY s.team_id, s.pass_yards DESC, s.rush_yards DESC, s.rec_yards DESC
-  `).all(gameId);
+    const players = db.prepare(`
+      SELECT p.first_name || ' ' || p.last_name as player_name, p.position, s.team_id,
+             s.pass_attempts, s.completions, s.pass_yards, s.pass_tds, s.interceptions,
+             s.rush_attempts, s.rush_yards, s.rush_tds, s.targets, s.receptions,
+             s.rec_yards, s.rec_tds, s.tackles, s.assisted_tackles, s.sacks, s.tfl,
+             s.def_interceptions, s.pass_deflections, s.def_tds,
+             s.fg_made, s.fg_att, s.xp_made, s.xp_att
+      FROM stats s
+      JOIN players p ON s.player_id = p.id
+      WHERE s.game_id = ?
+        AND (s.pass_yards > 0 OR s.rush_yards > 0 OR s.rec_yards > 0
+          OR s.tackles > 2 OR s.sacks > 0 OR s.def_tds > 0 OR s.fg_att > 0)
+      ORDER BY s.team_id, s.pass_yards DESC, s.rush_yards DESC, s.rec_yards DESC
+    `).all(gameId);
     return { game, players };
   });
 
