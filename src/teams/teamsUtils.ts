@@ -30,7 +30,7 @@ export function getRatingCols(pos: string): RatingCol[] {
   if (['CB', 'FS', 'SS', 'S'].includes(pos))
     return [{ label: 'SPD', key: 'speed' }, { label: 'COV', key: 'coverage' }, { label: 'TKL', key: 'tackle_rating' }, { label: 'AWR', key: 'awareness' }];
   if (pos === 'K')
-    return [{ label: 'KPW', key: 'kick_power' }, { label: 'KAC', key: 'kick_accuracy' }, { label: 'AWR', key: 'awareness' }];
+    return [{ label: 'KPW', key: 'kickpower' }, { label: 'KAC', key: 'kickaccuracy' }, { label: 'AWR', key: 'awareness' }];
   return [{ label: 'SPD', key: 'speed' }, { label: 'STR', key: 'strength' }, { label: 'AWR', key: 'awareness' }];
 }
 
