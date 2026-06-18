@@ -228,6 +228,17 @@ db.exec(`
   );
 `);
 
+// ─── Indexes ─────────────────────────────────────────────────────────────────
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_stats_game_id    ON stats(game_id);
+  CREATE INDEX IF NOT EXISTS idx_stats_player_id  ON stats(player_id);
+  CREATE INDEX IF NOT EXISTS idx_stats_team_id    ON stats(team_id);
+  CREATE INDEX IF NOT EXISTS idx_stats_team_game  ON stats(team_id, game_id);
+  CREATE INDEX IF NOT EXISTS idx_games_season     ON games(season);
+  CREATE INDEX IF NOT EXISTS idx_games_season_sim ON games(season, is_simulated);
+`);
+
 // ─── Player Column Migrations ─────────────────────────────────────────────────
 
 const playerCols: any[] = db.prepare('PRAGMA table_info(players)').all() as any[];
