@@ -22,32 +22,32 @@ interface Props {
 export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const { userTeam, currentSeason, setPlayoffsComplete } = useGameStore();
 
-  const [loading, setLoading]                       = useState(true);
-  const [hasSchedule, setHasSchedule]               = useState(false);
-  const [currentWeek, setCurrentWeek]               = useState<number | null>(null);
-  const [viewWeek, setViewWeek]                     = useState(1);
-  const [matchups, setMatchups]                     = useState<Matchup[]>([]);
-  const [simulating, setSimulating]                 = useState(false);
-  const [simulatingGameId, setSimulatingGameId]     = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [hasSchedule, setHasSchedule] = useState(false);
+  const [currentWeek, setCurrentWeek] = useState<number | null>(null);
+  const [viewWeek, setViewWeek] = useState(1);
+  const [matchups, setMatchups] = useState<Matchup[]>([]);
+  const [simulating, setSimulating] = useState(false);
+  const [simulatingGameId, setSimulatingGameId] = useState<number | null>(null);
   const [generatingSchedule, setGeneratingSchedule] = useState(false);
-  const [boxScore, setBoxScore]                     = useState<BoxScoreData | null>(null);
-  const [boxScoreLoading, setBoxScoreLoading]       = useState(false);
-  const [topAFC, setTopAFC]                         = useState<StandingEntry[]>([]);
-  const [topNFC, setTopNFC]                         = useState<StandingEntry[]>([]);
-  const [champions, setChampions]                   = useState<Champion[]>([]);
-  const [confirming, setConfirming]                 = useState(false);
-  const [advancing, setAdvancing]                   = useState(false);
-  const [playoffSeeds, setPlayoffSeeds]             = useState<{ afc: SeedEntry[]; nfc: SeedEntry[] } | null>(null);
-  const [playoffResults, setPlayoffResults]         = useState<PlayoffGame[] | null>(null);
+  const [boxScore, setBoxScore] = useState<BoxScoreData | null>(null);
+  const [boxScoreLoading, setBoxScoreLoading] = useState(false);
+  const [topAFC, setTopAFC] = useState<StandingEntry[]>([]);
+  const [topNFC, setTopNFC] = useState<StandingEntry[]>([]);
+  const [champions, setChampions] = useState<Champion[]>([]);
+  const [confirming, setConfirming] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
+  const [playoffSeeds, setPlayoffSeeds] = useState<{ afc: SeedEntry[]; nfc: SeedEntry[] } | null>(null);
+  const [playoffResults, setPlayoffResults] = useState<PlayoffGame[] | null>(null);
   const [simulatingPlayoffs, setSimulatingPlayoffs] = useState(false);
-  const [userRecord, setUserRecord]                 = useState<{ wins: number; losses: number } | null>(null);
-  const [pendingResigns, setPendingResigns]         = useState(0);
-  const [draftComplete, setDraftComplete]           = useState(false);
-  const [draftGenerated, setDraftGenerated]         = useState(false);
-  const [injuryReport, setInjuryReport]             = useState<InjuredPlayer[]>([]);
-  const [retiredPlayers, setRetiredPlayers]         = useState<{ name: string; position: string; age: number; ovr: number }[]>([]);
-  const [statLeaders, setStatLeaders]               = useState<any | null>(null);
-  const [psAlert, setPSAlert]                       = useState<string | null>(null);
+  const [userRecord, setUserRecord] = useState<{ wins: number; losses: number } | null>(null);
+  const [pendingResigns, setPendingResigns] = useState(0);
+  const [draftComplete, setDraftComplete] = useState(false);
+  const [draftGenerated, setDraftGenerated] = useState(false);
+  const [injuryReport, setInjuryReport] = useState<InjuredPlayer[]>([]);
+  const [retiredPlayers, setRetiredPlayers] = useState<{ name: string; position: string; age: number; ovr: number }[]>([]);
+  const [statLeaders, setStatLeaders] = useState<any>(null);
+  const [psAlert, setPSAlert] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userTeam) return;
@@ -201,33 +201,39 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     onSeasonAdvance(result.nextSeason);
   };
 
-  const allWeeksDone      = hasSchedule && currentWeek === null;
-  const currentChampion   = champions.find(c => c.season === currentSeason);
+  const allWeeksDone = hasSchedule && currentWeek === null;
+  const currentChampion = champions.find(c => c.season === currentSeason);
   const isPlayoffsComplete = !!currentChampion;
 
-  if (loading || !userTeam) return <div style={{ color: '#555', padding: 40 }}>Loading...</div>;
+  if (loading || !userTeam) return <div style={{ padding: 24, color: T.textDim }}>Loading...</div>;
 
   return (
-    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, padding: '20px 24px', maxWidth: 1400, margin: '0 auto' }}>
+      <div>
         <SeasonHeader
           currentSeason={currentSeason}
-          hasSchedule={hasSchedule}
-          currentWeek={currentWeek}
-          onGenerateSchedule={handleGenerateSchedule}
-          generatingSchedule={generatingSchedule}
-          onSimulateWeek={handleSimulateWeek}
-          simulating={simulating}
+          userTeam={userTeam}
           userRecord={userRecord}
-          confirming={confirming}
-          onConfirmAdvance={() => setConfirming(true)}
-          onCancelAdvance={() => setConfirming(false)}
-          onAdvance={handleAdvance}
+          hasSchedule={hasSchedule}
+          allWeeksDone={allWeeksDone}
+          playoffsComplete={isPlayoffsComplete}
+          currentWeek={currentWeek}
+          matchups={matchups}
+          simulating={simulating}
+          simulatingGameId={simulatingGameId}
+          generatingSchedule={generatingSchedule}
+          simulatingPlayoffs={simulatingPlayoffs}
+          pendingResigns={pendingResigns}
           advancing={advancing}
+          confirming={confirming}
+          setConfirming={setConfirming}
           retiredPlayers={retiredPlayers}
-          psAlert={psAlert}
-          onDismissPSAlert={() => setPSAlert(null)}
+          setRetiredPlayers={setRetiredPlayers}
+          handleGenerateSchedule={handleGenerateSchedule}
+          handleSimulateWeek={handleSimulateWeek}
+          handleSimulateGame={handleSimulateGame}
+          handleSimulatePlayoffs={handleSimulatePlayoffs}
+          handleAdvance={handleAdvance}
         />
 
         {allWeeksDone && isPlayoffsComplete && (
@@ -235,41 +241,38 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
             pendingResigns={pendingResigns}
             draftComplete={draftComplete}
             draftGenerated={draftGenerated}
+            refreshOffseasonStatus={refreshOffseasonStatus}
             onNavigate={onNavigate}
-            onRefresh={refreshOffseasonStatus}
           />
         )}
 
         {!hasSchedule ? (
-          <div style={{ textAlign: 'center', color: T.textMuted, padding: '60px 20px' }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🏈</div>
-            <div style={{ fontSize: 16, marginBottom: 6 }}>No schedule for {currentSeason} yet.</div>
-            <div style={{ fontSize: 13, color: T.textDim }}>Click "Start {currentSeason} Season" to generate all 18 weeks.</div>
+          <div style={{ textAlign: 'center', padding: '60px 0', color: T.textDim }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>🏈</div>
+            <div style={{ fontSize: 16, marginBottom: 4 }}>No schedule for {currentSeason} yet.</div>
+            <div style={{ fontSize: 12 }}>Click "Start {currentSeason} Season" to generate all 18 weeks.</div>
           </div>
         ) : allWeeksDone && isPlayoffsComplete ? (
           <PlayoffResultsView
             results={playoffResults}
-            champions={champions}
-            currentSeason={currentSeason}
+            champion={currentChampion}
           />
         ) : allWeeksDone && !isPlayoffsComplete ? (
-          <PlayoffSeedingsView
-            seeds={playoffSeeds}
-            simulatingPlayoffs={simulatingPlayoffs}
-            onSimulatePlayoffs={handleSimulatePlayoffs}
-          />
+          <PlayoffSeedingsView seeds={playoffSeeds} />
         ) : (
           <WeeklySchedule
-            matchups={matchups}
             viewWeek={viewWeek}
-            currentWeek={currentWeek}
-            onViewWeek={handleViewWeek}
-            onSimulateGame={handleSimulateGame}
-            simulatingGameId={simulatingGameId}
+            matchups={matchups}
             boxScore={boxScore}
             boxScoreLoading={boxScoreLoading}
-            onBoxScore={handleBoxScore}
-            userTeamId={userTeam.id}
+            simulating={simulating}
+            simulatingGameId={simulatingGameId}
+            userTeam={userTeam}
+            psAlert={psAlert}
+            setPSAlert={setPSAlert}
+            handleViewWeek={handleViewWeek}
+            handleSimulateGame={handleSimulateGame}
+            handleBoxScore={handleBoxScore}
           />
         )}
       </div>
@@ -280,8 +283,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         champions={champions}
         injuryReport={injuryReport}
         statLeaders={statLeaders}
-        currentSeason={currentSeason}
-        userTeamId={userTeam.id}
       />
     </div>
   );
