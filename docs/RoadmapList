@@ -4,3 +4,34 @@ Player editor
 Team editor
 Schemes
 playoff UI update
+Tier 1 — Makes the sim feel alive (highest impact)
+
+CPU GM Intelligence — CPU teams should autonomously sign free agents, re-sign their own players, and make trades in the offseason. Right now the CPU is passive. This is the single biggest gap vs OOTP.
+
+Player Progression & Regression — Each offseason, players should develop (young players improve, older ones decline). Dev trait should influence the curve. Without this, rosters feel static after year 2.
+
+News Feed / Game Narrative — A live ticker of events: "Patrick Mahomes signed a 4-year extension", "Josh Allen injured, out 3 weeks", "rookie breaks reception record". OOTP's news feed makes it feel like a living league.
+
+Free Agency Bidding — Multiple CPU teams competing for the same free agent with real offers. Right now free agency is one-sided.
+
+Tier 2 — Adds strategic depth
+
+Contract Negotiation — Multi-year offers, restructures, dead cap. Right now contracts are too simple.
+
+Coaching Staff System — OC/DC coordinators with ratings that affect team performance. Hiring/firing adds another management layer.
+
+Draft Combine / Deeper Scouting — Measurables (40 time, bench press) that hint at potential. Ties into the existing scouting system.
+
+Practice Squad Development — PS players developing into roster contributors over time.
+
+Tier 3 — Polish & replayability
+
+Multiple Save Files — Essential for a long franchise game.
+
+Historical Mode — Load real NFL rosters from a specific year and simulate forward.
+
+League Customization — Expansion teams, relocation, custom team names.
+
+Milestone Notifications — Pop-ups when a player hits 10,000 career yards, breaks a franchise record, etc.
+
+What I'd start with: CPU GM intelligence + player progression. Those two together make year 3, 4, 5 of a franchise feel meaningfully different from year 1 — which is the core of what makes OOTP addictive. Want to dig into either of those?
