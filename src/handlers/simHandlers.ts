@@ -139,18 +139,11 @@ export function registerSimHandlers(): void {
     db.prepare(`DELETE FROM stats WHERE game_id IN (SELECT id FROM games WHERE season = ? AND is_playoff = 1)`).run(s);
     db.prepare(`DELETE FROM games WHERE season = ? AND is_playoff = 1`).run(s);
 
-    const seedTeams = (conf: string) =>
-      (db.prepare(`SELECT id, city, name FROM teams WHERE conference = ?`).all(conf) as any[])
-        .map((t: any) => ({
-          ...t,
-          wins: (db.prepare(`
-            SELECT COUNT(*) as count FROM games
-            WHERE season = ? AND is_simulated = 1 AND is_playoff = 0
-            AND ((home_team_id = ? AND home_score > away_score)
-              OR (away_team_id = ? AND away_score > home_score))
-          `).get(s, t.id, t.id) as any).count,
-        }))
-        .sort((a: any, b: any) => b.wins - a.wins).slice(0, 7);
+    const allRecords = gameRepo.getAllRecords(s);
+const seedTeams = (conf: string) =>
+  (db.prepare(`SELECT id, city, name FROM teams WHERE conference = ?`).all(conf) as any[])
+  .map((t: any) => ({ ...t, wins: allRecords[t.id]?.wins ?? 0 }))
+  .sort((a: any, b: any) => b.wins - a.wins).slice(0, 7);
 
     const insertGame = db.prepare(`
       INSERT INTO games
