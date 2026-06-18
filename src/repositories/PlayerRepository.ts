@@ -1,4 +1,4 @@
-const { db } = require('../database');
+import { db } from '../database';
 import { Player, RosterStatus } from '../types';
 import { PS_MINIMUM_SALARY } from '../constants';
 
