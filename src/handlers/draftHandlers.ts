@@ -3,12 +3,13 @@ const { db } = require('../database');
 const fs = require('fs');
 const pathModule = require('path');
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
+import { playerRepo, contractRepo, pickRepo, draftRepo } from '../repositories';
 
 export function registerDraftHandlers(): void {
 
   ipcMain.handle('generate-draft-class', () => {
     const season = getCurrentSeason();
-    const existing = (db.prepare('SELECT COUNT(*) as count FROM draft_prospects WHERE season = ?').get(season) as any).count;
+    const existing = draftRepo.countBySeason(season);
     if (existing > 0) return { already: true, count: existing };
 
     const FIRST = ['James','John','Robert','Michael','David','William','Joseph','Thomas','Charles','Christopher','Daniel','Matthew','Anthony','Mark','Steven','Paul','Andrew','Joshua','Kenneth','Kevin','Brian','Timothy','Jason','Jeffrey','Ryan','Jacob','Gary','Nicholas','Eric','Jonathan','Justin','Scott','Brandon','Benjamin','Samuel','Nathan','Zachary','Peter','Kyle','Noah','Ethan','Jeremy','Austin','Sean','Dylan','Jordan','Jesse','Bryan','Gabriel','Logan','Marcus','Malik','Darius','Terrell','Jamal','Xavier','Darnell','Lamar','Kendall','Jaylen','Jalen','Devonte','Trey','Kameron','Zion','Isaiah','Damien','Dominic','Julian','Elijah','Tyrese','DeAndre','Rashad','Corey','Marquise','Deon','Alonzo','Deshawn','Marquez','Keanu','Trevon','Devin','Javon','Treylon','Brock','Bryce','Drake','Garrett','Caleb','Quinton','Jaylon','Dontae','Tariq','Amon','Romeo','Tyjae'];
@@ -46,15 +47,12 @@ export function registerDraftHandlers(): void {
       });
     }
 
-    const ins = db.prepare(`INSERT INTO draft_prospects (season,first_name,last_name,position,overall_rating,dev_trait,age) VALUES (@season,@first_name,@last_name,@position,@overall_rating,@dev_trait,@age)`);
-    const run = db.transaction(() => { for (const p of prospects) ins.run(p); });
-    run();
+    draftRepo.insertClass(prospects);
     return { generated: prospects.length };
   });
 
   ipcMain.handle('get-draft-class', () => {
-    const season = getCurrentSeason();
-    return db.prepare('SELECT * FROM draft_prospects WHERE season = ? ORDER BY overall_rating DESC').all(season);
+    return draftRepo.getClass(getCurrentSeason());
   });
 
   ipcMain.handle('get-draft-order', () => {
@@ -65,7 +63,7 @@ export function registerDraftHandlers(): void {
           SELECT COUNT(*) FROM games g
           WHERE g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
           AND ((g.home_team_id = t.id AND g.home_score > g.away_score)
-            OR (g.away_team_id = t.id AND g.away_score > g.home_score))
+          OR (g.away_team_id = t.id AND g.away_score > g.home_score))
         ), 0) as wins,
         COALESCE((
           SELECT COUNT(*) FROM games g
@@ -113,15 +111,14 @@ export function registerDraftHandlers(): void {
   ipcMain.handle('make-draft-pick', (_event: any, { prospectId, teamId, round, pick }: {
     prospectId: number; teamId: number; round: number; pick: number;
   }) => {
-    const prospect = db.prepare('SELECT * FROM draft_prospects WHERE id = ?').get(prospectId) as any;
+    const prospect = draftRepo.getById(prospectId);
     if (!prospect || prospect.is_drafted) return { success: false, reason: 'Not available.' };
 
-    db.prepare('UPDATE draft_prospects SET is_drafted=1, draft_round=?, draft_pick=?, drafted_by_team_id=? WHERE id=?')
-      .run(round, pick, teamId, prospectId);
+    draftRepo.markDrafted(prospectId, round, pick, teamId);
 
     const rookie = db.prepare(`
-      INSERT INTO players (first_name,last_name,position,age,overall_rating,speed,strength,awareness,team_id,is_free_agent,dev_trait,roster_status)
-      VALUES (?,?,?,?,?,?,?,?,?,0,?,'active')
+      INSERT INTO players (first_name, last_name, position, age, overall_rating, speed, strength, awareness, team_id, is_free_agent, dev_trait, roster_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'active')
     `).run(
       prospect.first_name, prospect.last_name, prospect.position, prospect.age, prospect.overall_rating,
       Math.floor(60 + Math.random() * 30), Math.floor(50 + Math.random() * 30), Math.floor(40 + Math.random() * 30),
@@ -129,25 +126,23 @@ export function registerDraftHandlers(): void {
     ) as any;
 
     const sal = Math.round((0.9 + (prospect.overall_rating - 60) * 0.05) * 10) / 10;
-    db.prepare(`INSERT INTO contracts (player_id,team_id,years_total,years_remaining,annual_salary,guaranteed_amount,guaranteed_pct) VALUES (?,?,4,4,?,?,50)`)
-      .run(rookie.lastInsertRowid, teamId, sal, sal * 4 * 0.5);
-    const usedPick = db.prepare('SELECT id FROM pick_assets WHERE owner_team_id = ? AND round = ? AND season = ? AND is_used = 0 LIMIT 1').get(teamId, round, getCurrentSeason()) as any;
-    if (usedPick) db.prepare('UPDATE pick_assets SET is_used = 1 WHERE id = ?').run(usedPick.id);
+    contractRepo.create(rookie.lastInsertRowid, teamId, 4, sal, sal * 4 * 0.5, 50);
+
+    const usedPick = pickRepo.findUnusedForRound(teamId, round, getCurrentSeason());
+    if (usedPick) pickRepo.markUsed(usedPick.id);
 
     return { success: true };
   });
 
   ipcMain.handle('scout-prospect', (_event: any, prospectId: number) => {
     const season = getCurrentSeason();
-    const used = (db.prepare('SELECT COUNT(*) as c FROM draft_prospects WHERE season = ? AND scouted = 1').get(season) as any).c;
-    if (used >= 25) return { success: false, reason: 'No scouts remaining.' };
-    db.prepare('UPDATE draft_prospects SET scouted = 1 WHERE id = ?').run(prospectId);
+    if (draftRepo.countScouted(season) >= 25) return { success: false, reason: 'No scouts remaining.' };
+    draftRepo.markScouted(prospectId);
     return { success: true };
   });
 
   ipcMain.handle('get-scout-count', () => {
-    const season = getCurrentSeason();
-    return (db.prepare('SELECT COUNT(*) as c FROM draft_prospects WHERE season = ? AND scouted = 1').get(season) as any).c;
+    return draftRepo.countScouted(getCurrentSeason());
   });
 
   ipcMain.handle('run-cpu-round', (_event: any, { round, userTeamId }: { round: number; userTeamId: number }) => {
@@ -167,7 +162,7 @@ export function registerDraftHandlers(): void {
       WHERE pa.season = ? AND pa.round = ? AND pa.is_used = 0
     `).all(season, round) as any[];
 
-    const THRESHOLDS: Record<string, number> = { QB:2, RB:3, WR:5, TE:2, OL:5, DL:4, LB:4, CB:4, S:2, K:1 };
+    const THRESHOLDS: Record<string, number> = { QB: 2, RB: 3, WR: 5, TE: 2, OL: 5, DL: 4, LB: 4, CB: 4, S: 2, K: 1 };
     const results: any[] = [];
 
     const runPicks = db.transaction(() => {
@@ -179,7 +174,7 @@ export function registerDraftHandlers(): void {
         if (ownerTeamId === userTeamId) continue;
         if (pickAsset?.is_used) continue;
 
-        const counts = db.prepare(`SELECT position, COUNT(*) as cnt FROM players WHERE team_id=? GROUP BY position`).all(ownerTeamId) as any[];
+        const counts = db.prepare(`SELECT position, COUNT(*) as cnt FROM players WHERE team_id = ? GROUP BY position`).all(ownerTeamId) as any[];
         const byPos: Record<string, number> = {};
         for (const r of counts) byPos[r.position] = r.cnt;
         const needs = Object.keys(THRESHOLDS).filter(pos => (byPos[pos] ?? 0) < THRESHOLDS[pos]);
@@ -187,24 +182,24 @@ export function registerDraftHandlers(): void {
         let prospect: any = null;
         if (needs.length > 0) {
           const ph = needs.map(() => '?').join(',');
-          prospect = db.prepare(`SELECT * FROM draft_prospects WHERE season=? AND is_drafted=0 AND position IN (${ph}) ORDER BY overall_rating DESC LIMIT 1`).get(season, ...needs);
+          prospect = db.prepare(`SELECT * FROM draft_prospects WHERE season = ? AND is_drafted = 0 AND position IN (${ph}) ORDER BY overall_rating DESC LIMIT 1`).get(season, ...needs);
         }
-        if (!prospect) prospect = db.prepare('SELECT * FROM draft_prospects WHERE season=? AND is_drafted=0 ORDER BY overall_rating DESC LIMIT 1').get(season);
+        if (!prospect) prospect = db.prepare('SELECT * FROM draft_prospects WHERE season = ? AND is_drafted = 0 ORDER BY overall_rating DESC LIMIT 1').get(season);
         if (!prospect) continue;
 
         const overallPick = (round - 1) * 32 + (i + 1);
-        db.prepare('UPDATE draft_prospects SET is_drafted=1, draft_round=?, draft_pick=?, drafted_by_team_id=? WHERE id=?')
-          .run(round, overallPick, ownerTeamId, prospect.id);
+        draftRepo.markDrafted(prospect.id, round, overallPick, ownerTeamId);
 
-        const r = db.prepare(`INSERT INTO players (first_name,last_name,position,age,overall_rating,speed,strength,awareness,team_id,is_free_agent,dev_trait,roster_status) VALUES (?,?,?,?,?,?,?,?,?,0,?,'active')`).run(
+        const r = db.prepare(`INSERT INTO players (first_name, last_name, position, age, overall_rating, speed, strength, awareness, team_id, is_free_agent, dev_trait, roster_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'active')`).run(
           prospect.first_name, prospect.last_name, prospect.position, prospect.age, prospect.overall_rating,
           Math.floor(60 + Math.random() * 30), Math.floor(50 + Math.random() * 30), Math.floor(40 + Math.random() * 30),
           ownerTeamId, prospect.dev_trait
         ) as any;
-        const sal = Math.round((0.9 + (prospect.overall_rating - 60) * 0.05) * 10) / 10;
-        db.prepare(`INSERT INTO contracts (player_id,team_id,years_total,years_remaining,annual_salary,guaranteed_amount,guaranteed_pct) VALUES (?,?,4,4,?,?,50)`).run(r.lastInsertRowid, ownerTeamId, sal, sal * 4 * 0.5);
 
-        if (pickAsset) db.prepare('UPDATE pick_assets SET is_used = 1 WHERE id = ?').run(pickAsset.id);
+        const sal = Math.round((0.9 + (prospect.overall_rating - 60) * 0.05) * 10) / 10;
+        contractRepo.create(r.lastInsertRowid, ownerTeamId, 4, sal, sal * 4 * 0.5, 50);
+
+        if (pickAsset) pickRepo.markUsed(pickAsset.id);
         results.push({ round, pickInRound: i + 1, teamId: ownerTeamId, prospect });
       }
     });
@@ -214,15 +209,15 @@ export function registerDraftHandlers(): void {
 
   ipcMain.handle('complete-draft', () => {
     const season = getCurrentSeason();
-    const undrafted = db.prepare('SELECT * FROM draft_prospects WHERE season=? AND is_drafted=0').all(season) as any[];
+    const undrafted = draftRepo.getUndrafted(season);
     const run = db.transaction(() => {
       for (const p of undrafted) {
-        db.prepare(`INSERT INTO players (first_name,last_name,position,age,overall_rating,speed,strength,awareness,team_id,is_free_agent,dev_trait,roster_status) VALUES (?,?,?,?,?,?,?,?,NULL,1,?,'free_agent')`).run(
+        db.prepare(`INSERT INTO players (first_name, last_name, position, age, overall_rating, speed, strength, awareness, team_id, is_free_agent, dev_trait, roster_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, 'free_agent')`).run(
           p.first_name, p.last_name, p.position, p.age, p.overall_rating,
           Math.floor(60 + Math.random() * 30), Math.floor(50 + Math.random() * 30), Math.floor(40 + Math.random() * 30),
           p.dev_trait
         );
-        db.prepare('UPDATE draft_prospects SET is_drafted=1 WHERE id=?').run(p.id);
+        db.prepare('UPDATE draft_prospects SET is_drafted = 1 WHERE id = ?').run(p.id);
       }
     });
     run();
@@ -252,35 +247,27 @@ export function registerDraftHandlers(): void {
     if (isHtml) {
       const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
       const cellRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
-      const stripTags = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').trim();
+      const stripTags = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').trim();
       let rowMatch: RegExpExecArray | null;
       while ((rowMatch = rowRe.exec(content)) !== null) {
         const cells: string[] = [];
         let cellMatch: RegExpExecArray | null;
         const cellReCopy = new RegExp(cellRe.source, 'gi');
-        while ((cellMatch = cellReCopy.exec(rowMatch[1])) !== null) {
-          cells.push(stripTags(cellMatch[1]));
-        }
+        while ((cellMatch = cellReCopy.exec(rowMatch[1])) !== null) cells.push(stripTags(cellMatch[1]));
         if (cells.length < 5) continue;
         const cell2AsYears = parseInt(cells[2]);
         const isFormatA = cell2AsYears >= 1 && cell2AsYears <= 15 && parseMoney(cells[3]) > 0;
         let name: string, position: string, aav: number, years: number, gtd: number;
-        name = cells[0];
-        position = cells[1] ?? '';
+        name = cells[0]; position = cells[1] ?? '';
         if (isFormatA) {
-          years = cell2AsYears;
-          aav = parseMoney(cells[3]);
-          gtd = parseMoney(cells[4]);
+          years = cell2AsYears; aav = parseMoney(cells[3]); gtd = parseMoney(cells[4]);
         } else {
           const totalValue = parseMoney(cells[3]);
-          aav = parseMoney(cells[4]);
-          gtd = parseMoney(cells[5] ?? '0');
+          aav = parseMoney(cells[4]); gtd = parseMoney(cells[5] ?? '0');
           years = aav > 0 ? Math.round(totalValue / aav) : 0;
           if (years < 1 || years > 15) years = 0;
         }
-        if (aav > 0 && years > 0) {
-          rows.push({ name, position, aav: aav / 1_000_000, years, guaranteed: gtd / 1_000_000 });
-        }
+        if (aav > 0 && years > 0) rows.push({ name, position, aav: aav / 1_000_000, years, guaranteed: gtd / 1_000_000 });
       }
     } else {
       for (const line of content.split('\n')) {
@@ -288,17 +275,13 @@ export function registerDraftHandlers(): void {
         if (parts.length >= 4) {
           const aav = parseMoney(parts[3]);
           const years = parseInt(parts[2]) || 0;
-          if (aav > 0 && years > 0) {
-            rows.push({ name: parts[0].trim(), position: parts[1]?.trim() ?? '', aav: aav / 1_000_000, years, guaranteed: parseMoney(parts[4] ?? '0') / 1_000_000 });
-          }
+          if (aav > 0 && years > 0) rows.push({ name: parts[0].trim(), position: parts[1]?.trim() ?? '', aav: aav / 1_000_000, years, guaranteed: parseMoney(parts[4] ?? '0') / 1_000_000 });
         }
       }
     }
 
     let matched = 0;
-    const normalize = (s: string) => s.toLowerCase()
-      .replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '')
-      .replace(/[^a-z]/g, '');
+    const normalize = (s: string) => s.toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
 
     const updateContract = db.transaction(() => {
       for (const row of rows) {
@@ -313,15 +296,10 @@ export function registerDraftHandlers(): void {
           WHERE p.is_free_agent = 0 AND p.roster_status = 'active'
         `).all() as any[];
 
-        let player = players.find((p: any) =>
-          normalize(p.first_name) === first && normalize(p.last_name) === last
-        );
+        let player = players.find((p: any) => normalize(p.first_name) === first && normalize(p.last_name) === last);
         if (!player) {
           const firstInitial = first.charAt(0);
-          player = players.find((p: any) =>
-            normalize(p.last_name) === last &&
-            normalize(p.first_name).charAt(0) === firstInitial
-          );
+          player = players.find((p: any) => normalize(p.last_name) === last && normalize(p.first_name).charAt(0) === firstInitial);
         }
         if (!player) continue;
 
@@ -329,11 +307,7 @@ export function registerDraftHandlers(): void {
           ? Math.min(100, Math.round((row.guaranteed / (row.aav * row.years)) * 100))
           : 30;
 
-        db.prepare(`
-          UPDATE contracts SET annual_salary = ?, years_remaining = ?, years_total = ?,
-            guaranteed_amount = ?, guaranteed_pct = ?
-          WHERE player_id = ?
-        `).run(row.aav, row.years, row.years, row.guaranteed || Math.round(row.aav * row.years * 0.3 * 10) / 10, gtdPct, player.id);
+        contractRepo.update(player.id, row.years, row.aav, row.guaranteed || Math.round(row.aav * row.years * 0.3 * 10) / 10, gtdPct);
         matched++;
       }
     });
