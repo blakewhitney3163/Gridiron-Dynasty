@@ -41,3 +41,86 @@ Historical Mode — load real NFL rosters from a specific year and simulate
   forward from that point.
 
 League Customization — expansion teams, relocation, custom team names.
+
+
+================================================================================
+COMMERCIAL / SCALABILITY TRACK
+================================================================================
+Items required before the game could be sold or distributed publicly.
+Ordered by priority.
+
+BLOCKING — Must fix before distribution
+────────────────────────────────────────────────────────────────────────────────
+DB Indexes — Add indexes on stats(game_id), stats(player_id), stats(team_id),
+  and stats(team_id, game_id). Currently absent. After 10+ seasons (~270,000+
+  stat rows) queries in Stats, Records, and season advance will visibly slow.
+  One migration, immediate protection.
+
+Migration Versioning — The current ALTER TABLE ADD COLUMN pattern works but
+  is fragile. A schema change on a 5-season save can break it with no recovery
+  path. Add a schema_version key to the settings table and a numbered migration
+  runner so existing saves upgrade cleanly on launch.
+
+Multiple Save Files — The DB path (nfl-simulator.db) is hardcoded in
+  database.ts. Customers expect multiple dynasties. Needs a save picker at
+  launch that swaps the active DB file path before the database module loads.
+
+Background Simulation — simulateGame runs synchronously on the Electron main
+  thread. Simulating a full season or multiple seasons freezes the UI. Needs
+  a worker thread or queue so sim runs in the background and the UI stays
+  responsive — table stakes for a "sim to end of season" feature.
+
+Code Signing + Auto-Update — Electron apps without code signing trigger OS
+  security warnings (macOS Gatekeeper, Windows SmartScreen) that will tank
+  reviews. Needs electron-builder code signing and electron-updater wired up
+  before any public distribution.
+
+Windows Build Verification — The app is developed on macOS. better-sqlite3
+  is a native module that must be built per platform. Windows path separators,
+  file dialogs, and native module binaries all need explicit testing. Most
+  desktop gaming customers are on Windows.
+
+IMPORTANT — Fix before growing the codebase further
+────────────────────────────────────────────────────────────────────────────────
+Fat IPC Handlers — Business logic is scattered across contractHandlers.ts,
+  simHandlers.ts, and seasonHandlers.ts. The service layer (ContractService,
+  SeasonService, TradeService) is the right pattern — more logic should move
+  there so handlers are thin IPC bridges only.
+
+JS → TS Conversion — generatePlayers.js, getStandings.js, seedTeams.js, and
+  simulatePlayoffs.js are still plain JavaScript. No type safety, no IDE
+  completion. Must be converted before bringing in contributors or the
+  codebase becomes inconsistent.
+
+Automated Tests — Zero test coverage. The simulation engine, CPU GM logic,
+  and trade evaluator are exactly the kind of business logic that needs
+  regression tests. One bad season advance bug can corrupt a long-running
+  save silently.
+
+Reduce `any` in IPC Handlers — Most handler callbacks use `any` extensively,
+  effectively turning off TypeScript for the data layer. Needs typed request/
+  response interfaces as the feature set grows.
+
+FUTURE DEPTH — Required to compete with OOTP-tier games
+────────────────────────────────────────────────────────────────────────────────
+Sim Speed Control — Fast / slow / pause controls while simulation runs in
+  background. Standard expectation in the genre.
+
+Multi-Season Batch Simulation — "Sim 5 seasons" with a progress bar. Requires
+  background simulation to be implemented first.
+
+Realistic Schedule Generation — Current schedule is random matchups. Needs
+  division-based scheduling (home/away splits, divisional games weighted).
+
+Per-Team Franchise History — Records, retired numbers, dynasty timeline per
+  team. Partial today (champions only).
+
+Player Morale / Personality — Affects re-sign decisions, locker room culture,
+  performance variance. A core OOTP mechanic.
+
+In-Game Narrative / Play-by-Play — Text play-by-play during simulation.
+  Stats-only output today limits immersion significantly.
+
+Franchise Tag + Tender System — Standard NFL roster mechanic missing today.
+
+League Expansion / Relocation — Add teams, move teams, custom identities.
