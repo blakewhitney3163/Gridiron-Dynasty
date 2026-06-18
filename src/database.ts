@@ -514,6 +514,8 @@ if (!db.prepare("SELECT value FROM settings WHERE key = 'current_season'").get()
   db.prepare("INSERT INTO settings (key, value) VALUES ('current_season', '2025')").run();
 }
 
+const CURRENT_SCHEMA_VERSION = 2; // was 1
+
 // ─── Migration Versioning ─────────────────────────────────────────────────────
 //
 // All schema changes going forward must be added as a numbered migration here.
@@ -523,6 +525,12 @@ if (!db.prepare("SELECT value FROM settings WHERE key = 'current_season'").get()
 // with pre-versioning saves. They are all idempotent (no-ops on current saves).
 // The version runner stamps new and existing DBs at CURRENT_SCHEMA_VERSION
 // so future migrations only run once per DB file.
+
+interface Migration {
+  version: number;
+  description: string;
+  up: () => void;
+}
 
 const CURRENT_SCHEMA_VERSION = 2; // was 1
 
