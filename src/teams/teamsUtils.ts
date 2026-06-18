@@ -21,8 +21,8 @@ export function getRatingCols(pos: string): RatingCol[] {
     return [{ label: 'SPD', key: 'speed' }, { label: 'STR', key: 'strength' }, { label: 'CAT', key: 'catching' }, { label: 'AWR', key: 'awareness' }];
   if (['WR', 'TE'].includes(pos))
     return [{ label: 'SPD', key: 'speed' }, { label: 'CAT', key: 'catching' }, { label: 'RTE', key: 'route_running' }, { label: 'AWR', key: 'awareness' }];
-  if (['LT', 'LG', 'C', 'RG', 'RT'].includes(pos))
-    return [{ label: 'SPD', key: 'speed' }, { label: 'STR', key: 'strength' }, { label: 'AWR', key: 'awareness' }];
+   if (['LT', 'LG', 'C', 'RG', 'RT'].includes(pos))
+   return [{ label: 'PBK', key: 'passblocking' }, { label: 'RBK', key: 'runblocking' }, { label: 'STR', key: 'strength' }, { label: 'AWR', key: 'awareness' }];
   if (['LE', 'RE', 'DT', 'IDL', 'DE'].includes(pos))
     return [{ label: 'SPD', key: 'speed' }, { label: 'STR', key: 'strength' }, { label: 'PRSH', key: 'pass_rush' }, { label: 'AWR', key: 'awareness' }];
   if (['MLB', 'OLB', 'LB', 'LOLB', 'ROLB', 'WILL', 'MIKE', 'ILB'].includes(pos))
