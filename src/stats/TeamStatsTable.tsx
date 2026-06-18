@@ -7,24 +7,69 @@ interface Props {
   sortKey: string;
   sortDir: 'asc' | 'desc';
   onSort: (k: string) => void;
+  category: string;
 }
 
-export default function TeamStatsTable({ rows, sortKey, sortDir, onSort }: Props) {
+type ColDef = { key: string; label: string };
+
+const COL_SETS: Record<string, ColDef[]> = {
+  passing: [
+    { key: 'pass_ypg', label: 'PASS YPG' },
+    { key: 'pass_tds', label: 'PASS TDs' },
+    { key: 'cmp_pct',  label: 'CMP%' },
+    { key: 'to_given', label: 'INTs' },
+  ],
+  rushing: [
+    { key: 'rush_ypg',    label: 'RUSH YPG' },
+    { key: 'rush_tds',    label: 'RUSH TDs' },
+    { key: 'rush_att_pg', label: 'ATT/G' },
+  ],
+  defense: [
+    { key: 'papg',     label: 'PA/G' },
+    { key: 'sacks',    label: 'SACKS' },
+    { key: 'def_ints', label: 'DEF INTs' },
+    { key: 'to_taken', label: 'TAKEAWAYS' },
+  ],
+  default: [
+    { key: 'ppg',      label: 'PPG' },
+    { key: 'papg',     label: 'PAPG' },
+    { key: 'ypg',      label: 'YPG' },
+    { key: 'to_diff',  label: 'TO DIFF' },
+    { key: 'to_given', label: 'GIVEAWAYS' },
+    { key: 'to_taken', label: 'TAKEAWAYS' },
+  ],
+};
+
+const DEFAULT_SORT: Record<string, string> = {
+  passing:  'pass_ypg',
+  rushing:  'rush_ypg',
+  defense:  'papg',
+};
+
+export default function TeamStatsTable({ rows, sortKey, sortDir, onSort, category }: Props) {
+  const cols = COL_SETS[category] ?? COL_SETS.default;
+
+  const effectiveSortKey = cols.some(c => c.key === sortKey)
+    ? sortKey
+    : (DEFAULT_SORT[category] ?? 'ppg');
+
   const sorted = [...rows].sort((a, b) => {
-    const av = a[sortKey] ?? 0;
-    const bv = b[sortKey] ?? 0;
-    return sortDir === 'desc' ? bv - av : av - bv;
+    const av = a[effectiveSortKey] ?? 0;
+    const bv = b[effectiveSortKey] ?? 0;
+    const defenseAsc = category === 'defense' && effectiveSortKey === 'papg';
+    const dir = defenseAsc ? 'asc' : sortDir;
+    return dir === 'desc' ? bv - av : av - bv;
   });
 
   const SortHdr = ({ k, label }: { k: string; label: string }) => (
     <th
       onClick={() => onSort(k)}
       style={{
-        ...thStyle, textAlign: 'right', cursor: 'pointer',
-        color: sortKey === k ? '#FF8740' : T.textDim, userSelect: 'none',
+        ...thStyle, textAlign: 'right', cursor: 'pointer', userSelect: 'none',
+        color: effectiveSortKey === k ? '#FF8740' : T.textDim,
       }}
     >
-      {label}{sortKey === k ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+      {label}{effectiveSortKey === k ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ''}
     </th>
   );
 
@@ -44,31 +89,29 @@ export default function TeamStatsTable({ rows, sortKey, sortDir, onSort }: Props
             <th style={{ ...thStyle, textAlign: 'left', width: 32 }}>#</th>
             <th style={{ ...thStyle, textAlign: 'left' }}>TEAM</th>
             <th style={{ ...thStyle, textAlign: 'right' }}>W-L</th>
-            <SortHdr k="ppg"      label="PPG" />
-            <SortHdr k="papg"     label="PAPG" />
-            <SortHdr k="ypg"      label="YPG" />
-            <SortHdr k="to_diff"  label="TO DIFF" />
-            <SortHdr k="to_given" label="GIVEAWAYS" />
-            <SortHdr k="to_taken" label="TAKEAWAYS" />
+            {cols.map(c => <SortHdr key={c.key} k={c.key} label={c.label} />)}
           </tr>
         </thead>
         <tbody>
-          {sorted.map((t, i) => {
-            const diffColor = t.to_diff > 0 ? '#4caf50' : t.to_diff < 0 ? '#e57373' : T.textMuted;
-            return (
-              <tr key={t.id ?? i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
-                <td style={{ ...tdBase, color: T.textDim }}>{i + 1}</td>
-                <td style={{ ...tdBase, color: T.textPrimary, fontWeight: 600 }}>{t.city} {t.name}</td>
-                <td style={{ ...tdBase, textAlign: 'right', color: T.textMuted }}>{t.wins}–{t.losses}</td>
-                <td style={{ ...tdBase, textAlign: 'right', color: T.textPrimary }}>{t.ppg}</td>
-                <td style={{ ...tdBase, textAlign: 'right', color: T.textMuted }}>{t.papg}</td>
-                <td style={{ ...tdBase, textAlign: 'right', color: T.textMuted }}>{(t.ypg ?? 0).toLocaleString()}</td>
-                <td style={{ ...tdBase, textAlign: 'right', color: diffColor, fontWeight: 600 }}>{t.to_diff > 0 ? '+' : ''}{t.to_diff}</td>
-                <td style={{ ...tdBase, textAlign: 'right', color: T.textMuted }}>{t.to_given}</td>
-                <td style={{ ...tdBase, textAlign: 'right', color: T.textMuted }}>{t.to_taken}</td>
-              </tr>
-            );
-          })}
+          {sorted.map((t, i) => (
+            <tr key={t.id ?? i} style={{ borderBottom: `1px solid ${T.borderFaint}` }}>
+              <td style={{ ...tdBase, color: T.textDim }}>{i + 1}</td>
+              <td style={{ ...tdBase, color: T.textPrimary, fontWeight: 600 }}>{t.city} {t.name}</td>
+              <td style={{ ...tdBase, textAlign: 'right', color: T.textMuted }}>{t.wins}–{t.losses}</td>
+              {cols.map(c => {
+                const val = t[c.key] ?? 0;
+                const isToDiv = c.key === 'to_diff';
+                const color = isToDiv
+                  ? (val > 0 ? '#4caf50' : val < 0 ? '#e57373' : T.textMuted)
+                  : T.textPrimary;
+                return (
+                  <td key={c.key} style={{ ...tdBase, textAlign: 'right', color, fontWeight: isToDiv ? 600 : 400 }}>
+                    {isToDiv && val > 0 ? '+' : ''}{c.key === 'cmp_pct' ? `${val}%` : val}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
