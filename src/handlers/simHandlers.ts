@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 const { db } = require('../database');
-const { simulateGame } = require('../simulateGame');
+import { simulateGame, type SimResult } from '../simulateGame';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { getDifficultyFactor } from './settingsHandlers';
 import { POSITION_TO_GROUP, WAIVER_POS_MAX, SOFT_CAP_M, MAX_ACTIVE_ROSTER, MAX_PRACTICE_SQUAD, PS_MINIMUM_SALARY } from '../constants';
