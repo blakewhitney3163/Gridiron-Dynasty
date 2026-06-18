@@ -22,13 +22,16 @@ function StatRow({ label, away, home }: { label: string; away: React.ReactNode; 
   );
 }
 
-function topPasser(pl: BoxScorePlayer[])  { return pl.filter(p => (p.pass_attempts ?? 0) > 0).sort((a, b) => b.pass_yards - a.pass_yards)[0]; }
-function topRusher(pl: BoxScorePlayer[])  { return pl.filter(p => (p.rush_attempts ?? 0) > 0).sort((a, b) => b.rush_yards - a.rush_yards)[0]; }
+function topPasser(pl: BoxScorePlayer[])   { return pl.filter(p => (p.pass_attempts ?? 0) > 0).sort((a, b) => b.pass_yards - a.pass_yards)[0]; }
+function topRusher(pl: BoxScorePlayer[])   { return pl.filter(p => (p.rush_attempts ?? 0) > 0).sort((a, b) => b.rush_yards - a.rush_yards)[0]; }
 function topReceiver(pl: BoxScorePlayer[]) { return pl.filter(p => (p.receptions ?? 0) > 0).sort((a, b) => b.rec_yards - a.rec_yards)[0]; }
 function topDefender(pl: BoxScorePlayer[]) {
   return pl
     .filter(p => ((p.tackles ?? 0) + (p.assisted_tackles ?? 0)) > 0 || (p.sacks ?? 0) > 0)
     .sort((a, b) => ((b.tackles ?? 0) + (b.assisted_tackles ?? 0)) - ((a.tackles ?? 0) + (a.assisted_tackles ?? 0)))[0];
+}
+function topKicker(pl: BoxScorePlayer[]) {
+  return pl.filter(p => (p.fg_att ?? 0) > 0).sort((a, b) => (b.fg_made ?? 0) - (a.fg_made ?? 0))[0];
 }
 
 function lastName(p: BoxScorePlayer) { return p.player_name.split(' ')[1] ?? p.player_name; }
@@ -38,9 +41,6 @@ function rusherLine(p: BoxScorePlayer | undefined)   { return p ? `${lastName(p)
 function receiverLine(p: BoxScorePlayer | undefined) { return p ? `${lastName(p)} ${p.receptions} rec ${p.rec_yards} yds` : '—'; }
 function defenderLine(p: BoxScorePlayer | undefined) {
   return p ? `${lastName(p)} ${(p.tackles ?? 0) + (p.assisted_tackles ?? 0)} tkl${p.sacks > 0 ? ` ${p.sacks} sck` : ''}` : '—';
-}
-function topKicker(pl: BoxScorePlayer[]) {
-  return pl.filter(p => (p.fg_att ?? 0) > 0).sort((a, b) => (b.fg_made ?? 0) - (a.fg_made ?? 0))[0];
 }
 function kickerLine(p: BoxScorePlayer | undefined) {
   if (!p) return '—';
@@ -67,8 +67,8 @@ export default function BoxScoreModal({ gameId, onClose }: Props) {
   const homePlayers = players.filter(p => p.team_id === game.home_team_id);
   const awayPlayers = players.filter(p => p.team_id === game.away_team_id);
   const homeWon = game.home_score > game.away_score;
-
-  const quarters: (keyof BoxScoreGame)[] = ['home_q1', 'home_q2', 'home_q3', 'home_q4'];
+  const homeDefTDs = homePlayers.reduce((s, p) => s + (p.def_tds ?? 0), 0);
+  const awayDefTDs = awayPlayers.reduce((s, p) => s + (p.def_tds ?? 0), 0);
 
   return (
     <div
@@ -117,4 +117,23 @@ export default function BoxScoreModal({ gameId, onClose }: Props) {
             <span style={{ color: T.textMuted, fontSize: 11, fontWeight: 700, textAlign: 'right' }}>{game.home_team}</span>
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            
+            <tbody>
+              <StatRow label="PASSING"  away={passerLine(topPasser(awayPlayers))}     home={passerLine(topPasser(homePlayers))} />
+              <StatRow label="RUSHING"  away={rusherLine(topRusher(awayPlayers))}     home={rusherLine(topRusher(homePlayers))} />
+              <StatRow label="RECEIVING" away={receiverLine(topReceiver(awayPlayers))} home={receiverLine(topReceiver(homePlayers))} />
+              <StatRow label="DEFENSE"  away={defenderLine(topDefender(awayPlayers))} home={defenderLine(topDefender(homePlayers))} />
+              <StatRow label="KICKER"   away={kickerLine(topKicker(awayPlayers))}     home={kickerLine(topKicker(homePlayers))} />
+              {(homeDefTDs + awayDefTDs) > 0 && (
+                <StatRow
+                  label="DEF TDS"
+                  away={awayDefTDs > 0 ? awayDefTDs : '—'}
+                  home={homeDefTDs > 0 ? homeDefTDs : '—'}
+                />
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
