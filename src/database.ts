@@ -289,12 +289,24 @@ if (!playerCols.find(c => c.name === 'waiver_placed_week')) {
 }
 
 // ─── Player Attribute Column Migrations ───────────────────────────────────────
-
-const attrCols: string[] = ['throw_accuracy', 'throw_power', 'catching', 'route_running',
-  'tackle_rating', 'coverage', 'pass_rush', 'kick_power', 'kick_accuracy'];
-for (const col of attrCols) {
-  if (!playerCols.find(c => c.name === col)) {
-    db.prepare(`ALTER TABLE players ADD COLUMN ${col} INTEGER DEFAULT 70`).run();
+// Raw Madden CSV columns + derived UI columns — all auto-migrated
+const maddenCols = [
+  // Raw Madden attributes (exact CSV column names)
+  'agility', 'acceleration', 'stamina', 'toughness', 'injury', 'jumping', 'trucking',
+  'changeofdirection', 'playrecognition', 'throwpower', 'throwaccuracyshort',
+  'throwaccuracymid', 'throwaccuracydeep', 'playaction', 'throwonrun', 'carrying',
+  'ballcarriervision', 'stiffarm', 'spinmove', 'jukemove', 'catching',
+  'shortrouterunning', 'midrouterunning', 'deeprouterunning', 'spectacularcatch',
+  'catchintraffic', 'release', 'runblocking', 'passblocking', 'impactblocking',
+  'mancoverage', 'zonecoverage', 'tackle', 'hitpower', 'press', 'pursuit',
+  'kickaccuracy', 'kickpower', 'kick_return', 'jerseynumber', 'yearspro',
+  // Derived / UI-facing columns
+  'throw_accuracy', 'throw_power', 'route_running', 'tackle_rating',
+  'coverage', 'pass_rush', 'kick_power', 'kick_accuracy',
+];
+for (const col of maddenCols) {
+  if (!playerCols.find((c: any) => c.name === col)) {
+    db.prepare(`ALTER TABLE players ADD COLUMN ${col} INTEGER DEFAULT 0`).run();
     console.log(`Players: added ${col}`);
   }
 }
