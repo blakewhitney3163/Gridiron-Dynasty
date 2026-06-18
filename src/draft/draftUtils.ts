@@ -6,11 +6,11 @@ export const ROUND_LABELS: Record<number, string> = {
   1:'1st', 2:'2nd', 3:'3rd', 4:'4th', 5:'5th', 6:'6th', 7:'7th',
 };
 
-export const TRAIT_META: Record<string, { color: string; short: string }> = {
-  Normal:     { color: T.textDim,  short: '' },
-  Star:       { color: '#4FC3F7', short: 'S' },
-  Superstar:  { color: '#FF8740', short: 'SS' },
-  'X-Factor': { color: '#FFD700', short: 'XF' },
+export const TRAIT_META: Record<string, { color: string; short: string; bg: string }> = {
+  Normal: { color: T.textDim, short: '', bg: 'transparent' },
+  Star: { color: '#4FC3F7', short: 'S', bg: '#2d3f5a' },
+  Superstar: { color: '#FF8740', short: 'SS', bg: '#4a3020' },
+  'X-Factor': { color: '#FFD700', short: 'XF', bg: '#4a4020' },
 };
 
 export const MAX_SCOUTS = 25;
