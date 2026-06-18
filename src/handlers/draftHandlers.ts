@@ -4,6 +4,18 @@ import fs from 'fs';
 import pathModule from 'path';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { playerRepo, contractRepo, pickRepo, draftRepo } from '../repositories';
+import { logNewsEvent } from '../helpers/logNewsEvent';
+
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function getTeamName(teamId: number): string {
+  const t = db.prepare('SELECT city, name FROM teams WHERE id = ?').get(teamId) as any;
+  return t ? `${t.city} ${t.name}` : 'Unknown Team';
+}
 
 export function registerDraftHandlers(): void {
 
@@ -27,20 +39,20 @@ export function registerDraftHandlers(): void {
     const prospects: any[] = [];
     for (let i = 0; i < 280; i++) {
       let ovr: number;
-      if (i < 10) ovr = Math.floor(Math.random() * 7) + 76;
-      else if (i < 32) ovr = Math.floor(Math.random() * 7) + 71;
-      else if (i < 64) ovr = Math.floor(Math.random() * 6) + 67;
-      else if (i < 96) ovr = Math.floor(Math.random() * 6) + 64;
-      else if (i < 128) ovr = Math.floor(Math.random() * 5) + 61;
-      else if (i < 160) ovr = Math.floor(Math.random() * 5) + 59;
-      else if (i < 224) ovr = Math.floor(Math.random() * 5) + 57;
-      else ovr = Math.floor(Math.random() * 6) + 52;
+      if (i < 10)        ovr = Math.floor(Math.random() * 7) + 76;
+      else if (i < 32)   ovr = Math.floor(Math.random() * 7) + 71;
+      else if (i < 64)   ovr = Math.floor(Math.random() * 6) + 67;
+      else if (i < 96)   ovr = Math.floor(Math.random() * 6) + 64;
+      else if (i < 128)  ovr = Math.floor(Math.random() * 5) + 61;
+      else if (i < 160)  ovr = Math.floor(Math.random() * 5) + 59;
+      else if (i < 224)  ovr = Math.floor(Math.random() * 5) + 57;
+      else               ovr = Math.floor(Math.random() * 6) + 52;
 
       prospects.push({
         season,
         first_name: FIRST[Math.floor(Math.random() * FIRST.length)],
-        last_name: LAST[Math.floor(Math.random() * LAST.length)],
-        position: POS_POOL[Math.floor(Math.random() * POS_POOL.length)],
+        last_name:  LAST[Math.floor(Math.random() * LAST.length)],
+        position:   POS_POOL[Math.floor(Math.random() * POS_POOL.length)],
         overall_rating: ovr,
         dev_trait: getDevTrait(ovr),
         age: Math.random() < 0.6 ? 21 : Math.random() < 0.6 ? 22 : 23,
@@ -63,7 +75,7 @@ export function registerDraftHandlers(): void {
           SELECT COUNT(*) FROM games g
           WHERE g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
           AND ((g.home_team_id = t.id AND g.home_score > g.away_score)
-          OR (g.away_team_id = t.id AND g.away_score > g.home_score))
+            OR (g.away_team_id = t.id AND g.away_score > g.home_score))
         ), 0) as wins,
         COALESCE((
           SELECT COUNT(*) FROM games g
@@ -87,7 +99,7 @@ export function registerDraftHandlers(): void {
 
     const picks = db.prepare(`
       SELECT pa.id, pa.owner_team_id, pa.original_team_id, pa.is_used,
-        ow.city as owner_city, ow.name as owner_name
+             ow.city as owner_city, ow.name as owner_name
       FROM pick_assets pa
       JOIN teams ow ON ow.id = pa.owner_team_id
       WHERE pa.season = ? AND pa.round = ?
@@ -99,11 +111,11 @@ export function registerDraftHandlers(): void {
         slot: idx + 1,
         originalTeamId: ts.team_id,
         ownerTeamId: pick?.owner_team_id ?? ts.team_id,
-        ownerCity: pick?.owner_city ?? '',
-        ownerName: pick?.owner_name ?? '',
-        pickAssetId: pick?.id ?? null,
-        isUsed: pick?.is_used === 1,
-        isTraded: pick ? pick.owner_team_id !== pick.original_team_id : false,
+        ownerCity:   pick?.owner_city  ?? '',
+        ownerName:   pick?.owner_name  ?? '',
+        pickAssetId: pick?.id          ?? null,
+        isUsed:      pick?.is_used === 1,
+        isTraded:    pick ? pick.owner_team_id !== pick.original_team_id : false,
       };
     });
   });
@@ -130,6 +142,16 @@ export function registerDraftHandlers(): void {
 
     const usedPick = pickRepo.findUnusedForRound(teamId, round, getCurrentSeason());
     if (usedPick) pickRepo.markUsed(usedPick.id);
+
+    // News: log every user pick
+    const teamName  = getTeamName(teamId);
+    const devBadge  = prospect.dev_trait !== 'Normal' ? ` [${prospect.dev_trait}]` : '';
+    logNewsEvent({
+      season: getCurrentSeason(),
+      category: 'draft',
+      title: `${teamName} select ${prospect.first_name} ${prospect.last_name} — ${ordinal(pick)} overall`,
+      body: `${prospect.position} | OVR ${prospect.overall_rating}${devBadge} | Round ${round}, Pick ${pick} | 4-year rookie deal ($${sal}M/yr)`,
+    });
 
     return { success: true };
   });
@@ -167,14 +189,14 @@ export function registerDraftHandlers(): void {
 
     const runPicks = db.transaction(() => {
       for (let i = 0; i < teamSlots.length; i++) {
-        const original = teamSlots[i];
+        const original  = teamSlots[i];
         const pickAsset = roundPicks.find((p: any) => p.original_team_id === original.team_id);
         const ownerTeamId = pickAsset?.owner_team_id ?? original.team_id;
 
         if (ownerTeamId === userTeamId) continue;
-        if (pickAsset?.is_used) continue;
+        if (pickAsset?.is_used)          continue;
 
-        const counts = db.prepare(`SELECT position, COUNT(*) as cnt FROM players WHERE team_id = ? GROUP BY position`).all(ownerTeamId) as any[];
+        const counts  = db.prepare(`SELECT position, COUNT(*) as cnt FROM players WHERE team_id = ? GROUP BY position`).all(ownerTeamId) as any[];
         const byPos: Record<string, number> = {};
         for (const r of counts) byPos[r.position] = r.cnt;
         const needs = Object.keys(THRESHOLDS).filter(pos => (byPos[pos] ?? 0) < THRESHOLDS[pos]);
@@ -190,7 +212,10 @@ export function registerDraftHandlers(): void {
         const overallPick = (round - 1) * 32 + (i + 1);
         draftRepo.markDrafted(prospect.id, round, overallPick, ownerTeamId);
 
-        const r = db.prepare(`INSERT INTO players (first_name, last_name, position, age, overall_rating, speed, strength, awareness, team_id, is_free_agent, dev_trait, roster_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'active')`).run(
+        const r = db.prepare(`
+          INSERT INTO players (first_name, last_name, position, age, overall_rating, speed, strength, awareness, team_id, is_free_agent, dev_trait, roster_status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'active')
+        `).run(
           prospect.first_name, prospect.last_name, prospect.position, prospect.age, prospect.overall_rating,
           Math.floor(60 + Math.random() * 30), Math.floor(50 + Math.random() * 30), Math.floor(40 + Math.random() * 30),
           ownerTeamId, prospect.dev_trait
@@ -198,8 +223,21 @@ export function registerDraftHandlers(): void {
 
         const sal = Math.round((0.9 + (prospect.overall_rating - 60) * 0.05) * 10) / 10;
         contractRepo.create(r.lastInsertRowid, ownerTeamId, 4, sal, sal * 4 * 0.5, 50);
-
         if (pickAsset) pickRepo.markUsed(pickAsset.id);
+
+        // News: log Round 1 picks + any Star/Superstar/X-Factor in later rounds
+        const isNotable = round === 1 || ['Star', 'Superstar', 'X-Factor'].includes(prospect.dev_trait);
+        if (isNotable) {
+          const teamName = getTeamName(ownerTeamId);
+          const devBadge = prospect.dev_trait !== 'Normal' ? ` [${prospect.dev_trait}]` : '';
+          logNewsEvent({
+            season,
+            category: 'draft',
+            title: `${teamName} select ${prospect.first_name} ${prospect.last_name} — ${ordinal(overallPick)} overall`,
+            body: `${prospect.position} | OVR ${prospect.overall_rating}${devBadge} | Round ${round}, Pick ${i + 1} | 4-year rookie deal ($${sal}M/yr)`,
+          });
+        }
+
         results.push({ round, pickInRound: i + 1, teamId: ownerTeamId, prospect });
       }
     });
@@ -212,7 +250,10 @@ export function registerDraftHandlers(): void {
     const undrafted = draftRepo.getUndrafted(season);
     const run = db.transaction(() => {
       for (const p of undrafted) {
-        db.prepare(`INSERT INTO players (first_name, last_name, position, age, overall_rating, speed, strength, awareness, team_id, is_free_agent, dev_trait, roster_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, 'free_agent')`).run(
+        db.prepare(`
+          INSERT INTO players (first_name, last_name, position, age, overall_rating, speed, strength, awareness, team_id, is_free_agent, dev_trait, roster_status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, 'free_agent')
+        `).run(
           p.first_name, p.last_name, p.position, p.age, p.overall_rating,
           Math.floor(60 + Math.random() * 30), Math.floor(50 + Math.random() * 30), Math.floor(40 + Math.random() * 30),
           p.dev_trait
@@ -221,6 +262,14 @@ export function registerDraftHandlers(): void {
       }
     });
     run();
+
+    logNewsEvent({
+      season,
+      category: 'draft',
+      title: `${season} NFL Draft complete`,
+      body: `${undrafted.length} undrafted prospects have entered free agency.`,
+    });
+
     return { undrafted: undrafted.length };
   });
 
@@ -245,8 +294,8 @@ export function registerDraftHandlers(): void {
     const rows: OtcRow[] = [];
 
     if (isHtml) {
-      const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-      const cellRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+      const rowRe   = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+      const cellRe  = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
       const stripTags = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').trim();
       let rowMatch: RegExpExecArray | null;
       while ((rowMatch = rowRe.exec(content)) !== null) {
@@ -273,7 +322,7 @@ export function registerDraftHandlers(): void {
       for (const line of content.split('\n')) {
         const parts = line.split(',');
         if (parts.length >= 4) {
-          const aav = parseMoney(parts[3]);
+          const aav   = parseMoney(parts[3]);
           const years = parseInt(parts[2]) || 0;
           if (aav > 0 && years > 0) rows.push({ name: parts[0].trim(), position: parts[1]?.trim() ?? '', aav: aav / 1_000_000, years, guaranteed: parseMoney(parts[4] ?? '0') / 1_000_000 });
         }
@@ -288,7 +337,7 @@ export function registerDraftHandlers(): void {
         const nameParts = row.name.trim().split(/\s+/);
         if (nameParts.length < 2) continue;
         const first = normalize(nameParts[0]);
-        const last = normalize(nameParts[nameParts.length - 1]);
+        const last  = normalize(nameParts[nameParts.length - 1]);
 
         const players = db.prepare(`
           SELECT p.id, p.first_name, p.last_name FROM players p
