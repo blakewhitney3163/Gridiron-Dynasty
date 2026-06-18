@@ -9,16 +9,18 @@ import PassingTable from './stats/PassingTable';
 import RushingTable from './stats/RushingTable';
 import ReceivingTable from './stats/ReceivingTable';
 import DefenseTable from './stats/DefenseTable';
+import SpecialTeamsTable from './stats/SpecialTeamsTable';
 
 declare const window: any;
 
 interface Props { currentSeason: number; }
 
 const CATEGORIES: { id: StatCategory; label: string }[] = [
-  { id: 'passing',   label: 'Passing' },
-  { id: 'rushing',   label: 'Rushing' },
+  { id: 'passing', label: 'Passing' },
+  { id: 'rushing', label: 'Rushing' },
   { id: 'receiving', label: 'Receiving' },
-  { id: 'defense',   label: 'Defense' },
+  { id: 'defense', label: 'Defense' },
+  { id: 'special_teams', label: 'Special Teams' },
 ];
 
 export default function Stats({ currentSeason }: Props) {
@@ -98,6 +100,7 @@ export default function Stats({ currentSeason }: Props) {
   const tackles          = filterSearch(teamTackles      ?? (stats.tackles ?? []));
   const sacks            = filterSearch(teamSacks        ?? (stats.sacks ?? []));
   const defInterceptions = filterSearch(teamDefInts      ?? (stats.defInterceptions ?? []));
+  const kickers = filterSearch(teamKickers ?? (stats.kickers ?? []));
 
   return (
     <div style={{ padding: '20px 24px', maxWidth: 960, margin: '0 auto' }}>
@@ -239,6 +242,14 @@ export default function Stats({ currentSeason }: Props) {
               searchQuery={searchQuery}
             />
           )}
+                  {category === 'special_teams' && (
+          <SpecialTeamsTable
+            kickers={kickers}
+            selectedPlayer={selectedPlayer}
+            onSelectPlayer={setSelectedPlayer}
+            searchQuery={searchQuery}
+          />
+        )}
         </>
       )}
 
