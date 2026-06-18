@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import { db } from '../database';
-const fs = require('fs');
-const pathModule = require('path');
+import fs from 'fs';
+import pathModule from 'path';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { playerRepo, contractRepo, pickRepo, draftRepo } from '../repositories';
 
