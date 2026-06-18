@@ -550,11 +550,6 @@ const MIGRATIONS: Migration[] = [
   },
 ];
 
-const MIGRATIONS: Migration[] = [
-  // Version 1 = baseline: all existing PRAGMA migrations above + indexes + player_milestones
-  // Add future migrations below as { version: 2, description: '...', up: () => { ... } }
-];
-
 function getSchemaVersion(): number {
   try {
     const row = db.prepare("SELECT value FROM settings WHERE key = 'schema_version'").get() as any;
