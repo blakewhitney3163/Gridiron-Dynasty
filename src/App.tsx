@@ -270,7 +270,7 @@ export default function App() {
           <Home
             userTeam={userTeam}
             currentSeason={currentSeason}
-            onTabChange={(tab) => setActiveTab(tab as Tab)}
+            onNavigate={(tab) => setActiveTab(tab as Tab)}
             onSeasonAdvance={handleSeasonAdvance}
             onPlayoffsComplete={() => setPlayoffsComplete(true)}
           />
@@ -281,11 +281,10 @@ export default function App() {
         {activeTab === 'stats'     && <Stats currentSeason={currentSeason} />}
         {activeTab === 'records'   && <Records />}
         {activeTab === 'playoffs'  && (
-          <Playoffs currentSeason={currentSeason} onChampionCrowned={() => setPlayoffsComplete(true)} />
+        <Playoffs data={playoffData} setData={setPlayoffData} currentSeason={currentSeason} />
         )}
-        {activeTab === 'trades'    && <Trades userTeam={userTeam} currentSeason={currentSeason} />}
-        {activeTab === 'franchise' && (
-          <Franchise userTeam={userTeam} currentSeason={currentSeason} onNavigate={(tab) => setActiveTab(tab as Tab)} />
+        {activeTab === 'trades'    && <Trades userTeam={userTeam} />}
+        {activeTab === 'franchise' && ( <Franchise userTeam={userTeam} currentSeason={currentSeason} playoffsComplete={playoffsComplete} />
         )}
         {activeTab === 'depth'     && <DepthChart userTeam={userTeam} />}
         {activeTab === 'news'      && <NewsFeed />}
