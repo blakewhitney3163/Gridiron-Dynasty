@@ -1,7 +1,11 @@
-const Database = require('better-sqlite3');
-const path = require('path');
+import Database from 'better-sqlite3';
+import path from 'path';
 
-const db = new Database(path.join(process.cwd(), 'nfl-simulator.db'));
+// ─── Open Database ────────────────────────────────────────────────────────────
+
+export const db: Database.Database = new Database(path.join(process.cwd(), 'nfl-simulator.db'));
+
+// ─── Base Schema ──────────────────────────────────────────────────────────────
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS teams (
@@ -111,11 +115,109 @@ db.exec(`
     FOREIGN KEY (team_id) REFERENCES teams(id),
     FOREIGN KEY (player_id) REFERENCES players(id)
   );
+
+  CREATE TABLE IF NOT EXISTS career_stats_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_id INTEGER NOT NULL,
+    season INTEGER NOT NULL,
+    games INTEGER DEFAULT 0,
+    completions INTEGER DEFAULT 0,
+    pass_attempts INTEGER DEFAULT 0,
+    pass_yards INTEGER DEFAULT 0,
+    pass_tds INTEGER DEFAULT 0,
+    interceptions INTEGER DEFAULT 0,
+    rush_attempts INTEGER DEFAULT 0,
+    rush_yards INTEGER DEFAULT 0,
+    rush_tds INTEGER DEFAULT 0,
+    targets INTEGER DEFAULT 0,
+    receptions INTEGER DEFAULT 0,
+    rec_yards INTEGER DEFAULT 0,
+    rec_tds INTEGER DEFAULT 0,
+    tackles REAL DEFAULT 0,
+    assisted_tackles REAL DEFAULT 0,
+    sacks REAL DEFAULT 0,
+    tfl REAL DEFAULT 0,
+    forced_fumbles REAL DEFAULT 0,
+    fumble_recoveries REAL DEFAULT 0,
+    def_interceptions REAL DEFAULT 0,
+    pass_deflections REAL DEFAULT 0,
+    def_tds REAL DEFAULT 0,
+    UNIQUE(player_id, season),
+    FOREIGN KEY (player_id) REFERENCES players(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS hall_of_fame (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_id INTEGER,
+    name TEXT NOT NULL,
+    position TEXT NOT NULL,
+    inducted_season INTEGER NOT NULL,
+    dev_trait TEXT DEFAULT 'Normal',
+    peak_ovr INTEGER DEFAULT 0,
+    career_games INTEGER DEFAULT 0,
+    career_pass_yards INTEGER DEFAULT 0,
+    career_pass_tds INTEGER DEFAULT 0,
+    career_rush_yards INTEGER DEFAULT 0,
+    career_rush_tds INTEGER DEFAULT 0,
+    career_rec_yards INTEGER DEFAULT 0,
+    career_rec_tds INTEGER DEFAULT 0,
+    career_receptions INTEGER DEFAULT 0,
+    career_tackles REAL DEFAULT 0,
+    career_sacks REAL DEFAULT 0,
+    career_def_ints REAL DEFAULT 0,
+    career_pass_deflections REAL DEFAULT 0,
+    FOREIGN KEY (player_id) REFERENCES players(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS pick_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    season INTEGER NOT NULL,
+    round INTEGER NOT NULL,
+    original_team_id INTEGER NOT NULL,
+    owner_team_id INTEGER NOT NULL,
+    is_used INTEGER DEFAULT 0,
+    FOREIGN KEY (original_team_id) REFERENCES teams(id),
+    FOREIGN KEY (owner_team_id) REFERENCES teams(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS team_trade_overrides (
+    team_id INTEGER PRIMARY KEY,
+    status TEXT NOT NULL,
+    FOREIGN KEY (team_id) REFERENCES teams(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS historical_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    record_type TEXT NOT NULL,
+    category TEXT NOT NULL,
+    player_name TEXT NOT NULL,
+    team_display TEXT,
+    position TEXT,
+    season INTEGER,
+    games_played INTEGER DEFAULT 0,
+    pass_yards INTEGER DEFAULT 0,
+    pass_tds INTEGER DEFAULT 0,
+    interceptions INTEGER DEFAULT 0,
+    completions INTEGER DEFAULT 0,
+    pass_attempts INTEGER DEFAULT 0,
+    rush_yards INTEGER DEFAULT 0,
+    rush_tds INTEGER DEFAULT 0,
+    rush_attempts INTEGER DEFAULT 0,
+    rec_yards INTEGER DEFAULT 0,
+    rec_tds INTEGER DEFAULT 0,
+    receptions INTEGER DEFAULT 0,
+    tackles REAL DEFAULT 0,
+    assisted_tackles REAL DEFAULT 0,
+    sacks REAL DEFAULT 0,
+    def_interceptions REAL DEFAULT 0,
+    pass_deflections REAL DEFAULT 0,
+    forced_fumbles REAL DEFAULT 0
+  );
 `);
 
 // ─── Player Column Migrations ─────────────────────────────────────────────────
 
-const playerCols = db.prepare("PRAGMA table_info(players)").all();
+const playerCols: any[] = db.prepare('PRAGMA table_info(players)').all() as any[];
 
 if (!playerCols.find(c => c.name === 'position_label')) {
   db.prepare('ALTER TABLE players ADD COLUMN position_label TEXT').run();
@@ -123,15 +225,13 @@ if (!playerCols.find(c => c.name === 'position_label')) {
 
 if (!playerCols.find(c => c.name === 'dev_trait')) {
   db.prepare("ALTER TABLE players ADD COLUMN dev_trait TEXT DEFAULT 'Normal'").run();
-
-  const allPlayers = db.prepare('SELECT id, overall_rating FROM players').all();
-  const assignTrait = db.prepare("UPDATE players SET dev_trait = ? WHERE id = ?");
-
+  const allPlayers = db.prepare('SELECT id, overall_rating FROM players').all() as any[];
+  const assignTrait = db.prepare('UPDATE players SET dev_trait = ? WHERE id = ?');
   const assignTraits = db.transaction(() => {
     for (const player of allPlayers) {
-      const ovr = player.overall_rating;
+      const ovr: number = player.overall_rating;
       const rand = Math.random();
-      let trait;
+      let trait: string;
       if (ovr >= 90) {
         trait = rand < 0.40 ? 'X-Factor' : rand < 0.80 ? 'Superstar' : rand < 0.98 ? 'Star' : 'Normal';
       } else if (ovr >= 80) {
@@ -157,61 +257,96 @@ if (!playerCols.find(c => c.name === 'roster_status')) {
 
 if (!playerCols.find(c => c.name === 'injury_status')) {
   db.prepare("ALTER TABLE players ADD COLUMN injury_status TEXT DEFAULT 'healthy'").run();
-  console.log('Players: added injury_status column');
 }
 
 if (!playerCols.find(c => c.name === 'weeks_out')) {
   db.prepare('ALTER TABLE players ADD COLUMN weeks_out INTEGER DEFAULT 0').run();
-  console.log('Players: added weeks_out column');
 }
 
 if (!playerCols.find(c => c.name === 'injury_type')) {
   db.prepare('ALTER TABLE players ADD COLUMN injury_type TEXT').run();
-  console.log('Players: added injury_type column');
 }
 
-// ─── Attribute Column Migrations ──────────────────────────────────────────────
-const attrCols = ['throw_accuracy', 'throw_power', 'catching', 'route_running',
-                  'tackle_rating', 'coverage', 'pass_rush'];
+if (!playerCols.find(c => c.name === 'waived_by_team_id')) {
+  db.prepare('ALTER TABLE players ADD COLUMN waived_by_team_id INTEGER').run();
+}
+
+if (!playerCols.find(c => c.name === 'waiver_placed_week')) {
+  db.prepare('ALTER TABLE players ADD COLUMN waiver_placed_week INTEGER').run();
+}
+
+// ─── Player Attribute Column Migrations ───────────────────────────────────────
+
+const attrCols: string[] = ['throw_accuracy', 'throw_power', 'catching', 'route_running',
+  'tackle_rating', 'coverage', 'pass_rush'];
 for (const col of attrCols) {
   if (!playerCols.find(c => c.name === col)) {
     db.prepare(`ALTER TABLE players ADD COLUMN ${col} INTEGER DEFAULT 70`).run();
-    console.log(`Players: added ${col} column`);
+    console.log(`Players: added ${col}`);
   }
 }
 
-// ─── Stat Column Migrations ───────────────────────────────────────────────────
+// ─── Stats Column Migrations ──────────────────────────────────────────────────
 
-const statCols = db.prepare("PRAGMA table_info(stats)").all();
-const statMigrations = [
-  ['tackles',           'INTEGER DEFAULT 0'],
-  ['assisted_tackles',  'INTEGER DEFAULT 0'],
-  ['sacks',             'REAL DEFAULT 0'],
-  ['tfl',               'INTEGER DEFAULT 0'],
-  ['forced_fumbles',    'INTEGER DEFAULT 0'],
+const statCols: any[] = db.prepare('PRAGMA table_info(stats)').all() as any[];
+const statMigrations: [string, string][] = [
+  ['tackles', 'INTEGER DEFAULT 0'],
+  ['assisted_tackles', 'INTEGER DEFAULT 0'],
+  ['sacks', 'REAL DEFAULT 0'],
+  ['tfl', 'INTEGER DEFAULT 0'],
+  ['forced_fumbles', 'INTEGER DEFAULT 0'],
   ['fumble_recoveries', 'INTEGER DEFAULT 0'],
   ['def_interceptions', 'INTEGER DEFAULT 0'],
-  ['pass_deflections',  'INTEGER DEFAULT 0'],
-  ['def_tds',           'INTEGER DEFAULT 0'],
+  ['pass_deflections', 'INTEGER DEFAULT 0'],
+  ['def_tds', 'INTEGER DEFAULT 0'],
 ];
 for (const [col, type] of statMigrations) {
   if (!statCols.find(c => c.name === col)) {
     db.prepare(`ALTER TABLE stats ADD COLUMN ${col} ${type}`).run();
-    console.log(`Stats: added ${col} column`);
+    console.log(`Stats: added ${col}`);
+  }
+}
+
+// ─── Games Column Migrations ──────────────────────────────────────────────────
+
+const gameCols: any[] = db.prepare('PRAGMA table_info(games)').all() as any[];
+const gameColMigrations: [string, string][] = [
+  ['home_q1', 'INTEGER DEFAULT 0'],
+  ['home_q2', 'INTEGER DEFAULT 0'],
+  ['home_q3', 'INTEGER DEFAULT 0'],
+  ['home_q4', 'INTEGER DEFAULT 0'],
+  ['away_q1', 'INTEGER DEFAULT 0'],
+  ['away_q2', 'INTEGER DEFAULT 0'],
+  ['away_q3', 'INTEGER DEFAULT 0'],
+  ['away_q4', 'INTEGER DEFAULT 0'],
+  ['weather', 'TEXT'],
+];
+for (const [col, type] of gameColMigrations) {
+  if (!gameCols.find(c => c.name === col)) {
+    db.prepare(`ALTER TABLE games ADD COLUMN ${col} ${type}`).run();
+    console.log(`Games: added ${col}`);
   }
 }
 
 // ─── Contract Column Migrations ───────────────────────────────────────────────
 
-const contractCols = db.prepare("PRAGMA table_info(contracts)").all();
+const contractCols: any[] = db.prepare('PRAGMA table_info(contracts)').all() as any[];
 
 if (!contractCols.find(c => c.name === 'guaranteed_amount')) {
   db.prepare('ALTER TABLE contracts ADD COLUMN guaranteed_amount REAL DEFAULT 0').run();
-  console.log('Contracts: added guaranteed_amount column');
+  console.log('Contracts: added guaranteed_amount');
 }
 if (!contractCols.find(c => c.name === 'guaranteed_pct')) {
   db.prepare('ALTER TABLE contracts ADD COLUMN guaranteed_pct REAL DEFAULT 0').run();
-  console.log('Contracts: added guaranteed_pct column');
+  console.log('Contracts: added guaranteed_pct');
+}
+
+// ─── Draft Prospects Column Migrations ────────────────────────────────────────
+
+const prospectCols: any[] = db.prepare('PRAGMA table_info(draft_prospects)').all() as any[];
+if (!prospectCols.find(c => c.name === 'scouted')) {
+  db.prepare('ALTER TABLE draft_prospects ADD COLUMN scouted INTEGER DEFAULT 0').run();
+  console.log('Draft prospects: added scouted');
 }
 
 // ─── Roster Trimming ──────────────────────────────────────────────────────────
@@ -219,57 +354,60 @@ if (!contractCols.find(c => c.name === 'guaranteed_pct')) {
 const ACTIVE_LIMIT = 53;
 const PS_LIMIT = 16;
 
-const teamsForTrim = db.prepare('SELECT id FROM teams').all();
-const trimRosters = db.transaction(() => {
-  for (const team of teamsForTrim) {
-    const activePlayers = db.prepare(
-      "SELECT id FROM players WHERE team_id = ? AND roster_status = 'active' ORDER BY overall_rating DESC"
-    ).all(team.id);
+const oversizedTeams = db.prepare(
+  "SELECT team_id, COUNT(*) as cnt FROM players WHERE roster_status = 'active' AND team_id IS NOT NULL GROUP BY team_id HAVING cnt > 53"
+).all() as any[];
 
-    if (activePlayers.length > ACTIVE_LIMIT) {
-      const excess = activePlayers.slice(ACTIVE_LIMIT);
-      const psSlots = Math.min(excess.length, PS_LIMIT);
-
-      for (let i = 0; i < excess.length; i++) {
-        if (i < psSlots) {
-          db.prepare("UPDATE players SET roster_status = 'practice_squad' WHERE id = ?").run(excess[i].id);
-        } else {
-          db.prepare("UPDATE players SET roster_status = 'free_agent', team_id = NULL, is_free_agent = 1 WHERE id = ?").run(excess[i].id);
+if (oversizedTeams.length > 0) {
+  const teamsForTrim = db.prepare('SELECT id FROM teams').all() as any[];
+  const trimRosters = db.transaction(() => {
+    for (const team of teamsForTrim) {
+      const activePlayers = db.prepare(
+        "SELECT id FROM players WHERE team_id = ? AND roster_status = 'active' ORDER BY overall_rating DESC"
+      ).all(team.id) as any[];
+      if (activePlayers.length > ACTIVE_LIMIT) {
+        const excess = activePlayers.slice(ACTIVE_LIMIT);
+        const psSlots = Math.min(excess.length, PS_LIMIT);
+        for (let i = 0; i < excess.length; i++) {
+          if (i < psSlots) {
+            db.prepare("UPDATE players SET roster_status = 'practice_squad' WHERE id = ?").run(excess[i].id);
+          } else {
+            db.prepare("UPDATE players SET roster_status = 'free_agent', team_id = NULL, is_free_agent = 1 WHERE id = ?").run(excess[i].id);
+          }
         }
       }
     }
-  }
-});
-
-const oversizedTeams = db.prepare(
-  "SELECT team_id, COUNT(*) as cnt FROM players WHERE roster_status = 'active' AND team_id IS NOT NULL GROUP BY team_id HAVING cnt > 53"
-).all();
-if (oversizedTeams.length > 0) {
+  });
   trimRosters();
   console.log(`Rosters trimmed for ${oversizedTeams.length} teams`);
 }
 
 // ─── Contract Generation ──────────────────────────────────────────────────────
 
-const SAL_RANGES = {
+const SAL_RANGES: Record<string, [number, number]> = {
   QB: [1.0, 42], WR: [1.0, 28], DL: [1.0, 32], LB: [1.0, 18],
   CB: [1.0, 22], TE: [1.0, 16], OL: [1.0, 22], S: [1.0, 18],
-  RB: [1.0, 16], K:  [1.0, 4],
+  RB: [1.0, 16], K: [1.0, 4],
 };
 
-const TRAIT_PREMIUM   = { Normal: 1.0, Star: 1.15, Superstar: 1.3, 'X-Factor': 1.5 };
-const TRAIT_GUARANTEE = { Normal: [10, 35], Star: [25, 50], Superstar: [40, 65], 'X-Factor': [55, 85] };
+const TRAIT_PREMIUM: Record<string, number> = {
+  Normal: 1.0, Star: 1.15, Superstar: 1.3, 'X-Factor': 1.5,
+};
 
-function generateContracts() {
+const TRAIT_GUARANTEE: Record<string, [number, number]> = {
+  Normal: [10, 35], Star: [25, 50], Superstar: [40, 65], 'X-Factor': [55, 85],
+};
+
+export function generateContracts(): void {
   db.prepare('DELETE FROM contracts').run();
 
   const activePlayers = db.prepare(
     "SELECT id, overall_rating, age, position, dev_trait, team_id FROM players WHERE team_id IS NOT NULL AND roster_status = 'active'"
-  ).all();
+  ).all() as any[];
 
   const psPlayers = db.prepare(
     "SELECT id, team_id FROM players WHERE team_id IS NOT NULL AND roster_status = 'practice_squad'"
-  ).all();
+  ).all() as any[];
 
   const insertContract = db.prepare(`
     INSERT INTO contracts (player_id, team_id, years_total, years_remaining, annual_salary, guaranteed_amount, guaranteed_pct)
@@ -298,24 +436,22 @@ function generateContracts() {
 
       insertContract.run(p.id, p.team_id, yearsTotal, yearsRemaining, salary, guaranteedAmount, guaranteedPct);
     }
-
     for (const p of psPlayers) {
       insertContract.run(p.id, p.team_id, 1, 1, 1.165, 0, 0);
     }
   });
 
   gen();
-  console.log(`Contracts: ${activePlayers.length} active + ${psPlayers.length} PS`);
+  console.log(`Contracts generated: ${activePlayers.length} active + ${psPlayers.length} PS`);
 }
 
-const contractCount = db.prepare('SELECT COUNT(*) as count FROM contracts').get().count;
-if (contractCount === 0) generateContracts();
+// ─── Bootstrap Defaults ───────────────────────────────────────────────────────
 
-// ─── Settings Defaults ────────────────────────────────────────────────────────
+const contractCount = (db.prepare('SELECT COUNT(*) as count FROM contracts').get() as any).count;
+if (contractCount === 0) generateContracts();
 
 if (!db.prepare("SELECT value FROM settings WHERE key = 'current_season'").get()) {
   db.prepare("INSERT INTO settings (key, value) VALUES ('current_season', '2025')").run();
 }
 
 console.log('Database ready');
-module.exports = { db, generateContracts };
