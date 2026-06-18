@@ -457,7 +457,7 @@ function generateDefensiveStats(
     const ffs     = pFFs[p.id]     || 0;
     if (tackles === 0 && sacks === 0 && ints === 0 && pds === 0 && ffs === 0) continue;
 
-    stats.push({
+        stats.push({
       player_id: p.id, team_id: teamId,
       pass_attempts: 0, completions: 0, pass_yards: 0, pass_tds: 0, interceptions: 0,
       rush_attempts: 0, rush_yards: 0, rush_tds: 0,
@@ -470,6 +470,7 @@ function generateDefensiveStats(
       def_interceptions: ints,
       pass_deflections:  pds,
       def_tds: pDTDs[p.id] || 0,
+      fg_made: 0, fg_att: 0, xp_made: 0, xp_att: 0,
     });
   }
 
