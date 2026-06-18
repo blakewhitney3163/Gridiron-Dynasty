@@ -267,14 +267,16 @@ export function registerSimHandlers(): void {
     if (!game) return { success: false, reason: 'Game not found.' };
     if (game.is_simulated) return { success: false, reason: 'Game already simulated.' };
 
-    const insertStat = db.prepare(`
+        const insertStat = db.prepare(`
       INSERT INTO stats
-      (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
+      (game_id, season, week, is_playoff, player_id, team_id,
+       pass_attempts, completions, pass_yards, pass_tds,
        interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards,
        rec_tds, tackles, assisted_tackles, sacks, tfl, forced_fumbles, fumble_recoveries,
        def_interceptions, pass_deflections, def_tds, fg_made, fg_att, xp_made, xp_att)
       VALUES
-      (@game_id, @player_id, @team_id, @pass_attempts, @completions, @pass_yards, @pass_tds,
+      (@game_id, @season, @week, @is_playoff, @player_id, @team_id,
+       @pass_attempts, @completions, @pass_yards, @pass_tds,
        @interceptions, @rush_attempts, @rush_yards, @rush_tds, @targets, @receptions, @rec_yards,
        @rec_tds, @tackles, @assisted_tackles, @sacks, @tfl, @forced_fumbles, @fumble_recoveries,
        @def_interceptions, @pass_deflections, @def_tds, @fg_made, @fg_att, @xp_made, @xp_att)
@@ -288,7 +290,7 @@ export function registerSimHandlers(): void {
       gameResult = simulateGame(game.home_team_id, game.away_team_id, game.week ?? 1, userTeamId, getDifficultyFactor());
       gameRepo.updateResult(game.id, gameResult.homeScore, gameResult.awayScore, gameResult.homeQuarters, gameResult.awayQuarters, gameResult.weather ?? 'clear');
       for (const stat of [...gameResult.homePlayerStats, ...gameResult.awayPlayerStats]) {
-        insertStat.run({ game_id: game.id, ...stat });
+        insertStat.run({ game_id: game.id, season: game.season, week: game.week ?? 1, is_playoff: game.is_playoff ?? 0, ...stat });
         allStats.push(stat);
       }
     })();
