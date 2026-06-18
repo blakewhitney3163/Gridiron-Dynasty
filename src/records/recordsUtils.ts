@@ -1,4 +1,4 @@
-import { RecordMode, RecordRow, StatCategory } from './types';
+import { RecordMode, RecordRow, StatCategory, HofEntry } from './types';
 
 export const TRAIT_META: Record<string, { color: string; short: string }> = {
   Normal:     { color: '#444',    short: '' },
