@@ -104,6 +104,11 @@ export interface PlayerStats {
   def_interceptions: number;
   pass_deflections: number;
   def_tds: number;
+  fg_made: number;
+  fg_att: number;
+  xp_made: number;
+  xp_att: number;
+}
 }
 
 export interface CareerStats {
