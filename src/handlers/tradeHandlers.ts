@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-const { db } = require('../database');
+import { db } from '../database';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { TRADE_DEADLINE_WEEK } from '../constants';
 import { TradeResult } from '../types';
