@@ -3,6 +3,7 @@ const { db } = require('../database');
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { TRADE_DEADLINE_WEEK } from '../constants';
 import { TradeResult } from '../types';
+import { settingsRepo, playerRepo, contractRepo, gameRepo, pickRepo } from '../repositories';
 
 // ─── Trade Value Helpers ──────────────────────────────────────────────────────
 
@@ -31,9 +32,9 @@ export function getTeamNeedsInternal(teamId: number): string[] {
     WR: { min: 4, ideal: 5, topN: 3, minOvr: 70 }, TE: { min: 2, ideal: 3, topN: 1, minOvr: 68 },
     OL: { min: 6, ideal: 8, topN: 5, minOvr: 68 }, DL: { min: 4, ideal: 6, topN: 4, minOvr: 68 },
     LB: { min: 3, ideal: 5, topN: 3, minOvr: 68 }, CB: { min: 3, ideal: 5, topN: 2, minOvr: 68 },
-    S:  { min: 2, ideal: 3, topN: 2, minOvr: 68 }, K:  { min: 1, ideal: 1, topN: 1, minOvr: 60 },
+    S: { min: 2, ideal: 3, topN: 2, minOvr: 68 }, K: { min: 1, ideal: 1, topN: 1, minOvr: 60 },
   };
-  const roster = db.prepare(`SELECT position, overall_rating FROM players WHERE team_id = ? AND roster_status = 'active' ORDER BY overall_rating DESC`).all(teamId) as any[];
+  const roster = playerRepo.getByTeam(teamId, 'active');
   const needs: string[] = [];
   for (const [pos, t] of Object.entries(TARGETS)) {
     const posPlayers = roster.filter((p: any) => p.position === pos);
@@ -58,10 +59,10 @@ function getPlayerAvailabilityPremium(player: { age: number; position: string; d
 }
 
 const STATUS_META_BACKEND: Record<string, { description: string; acceptanceThreshold: number }> = {
-  Contender:  { description: 'Competing for a title — demands full value in any deal.', acceptanceThreshold: -3 },
-  Buyer:      { description: 'Looking to add a piece for a playoff push.', acceptanceThreshold: -8 },
-  Neutral:    { description: 'No strong inclination to buy or sell right now.', acceptanceThreshold: -8 },
-  Seller:     { description: 'Moving veterans for future assets — open to dealing.', acceptanceThreshold: -18 },
+  Contender: { description: 'Competing for a title — demands full value in any deal.', acceptanceThreshold: -3 },
+  Buyer: { description: 'Looking to add a piece for a playoff push.', acceptanceThreshold: -8 },
+  Neutral: { description: 'No strong inclination to buy or sell right now.', acceptanceThreshold: -8 },
+  Seller: { description: 'Moving veterans for future assets — open to dealing.', acceptanceThreshold: -18 },
   Rebuilding: { description: 'Tearing it down. Will move anyone for the right offer.', acceptanceThreshold: -22 },
 };
 
@@ -70,25 +71,13 @@ export function getTeamTradeProfile(teamId: number): {
   wins: number; losses: number; avgOverall: number; isOverridden: boolean;
 } {
   const season = getCurrentSeason();
-  const record = db.prepare(`
-    SELECT
-      SUM(CASE WHEN (home_team_id = ? AND home_score > away_score) OR (away_team_id = ? AND away_score > home_score) THEN 1 ELSE 0 END) as wins,
-      SUM(CASE WHEN (home_team_id = ? AND home_score < away_score) OR (away_team_id = ? AND away_score < home_score) THEN 1 ELSE 0 END) as losses,
-      COUNT(*) as games_played
-    FROM games
-    WHERE (home_team_id = ? OR away_team_id = ?) AND season = ? AND is_simulated = 1 AND is_playoff = 0
-  `).get(teamId, teamId, teamId, teamId, teamId, teamId, season) as any;
-
-  const wins = record?.wins ?? 0;
-  const losses = record?.losses ?? 0;
-  const gamesPlayed = record?.games_played ?? 0;
+  const record = gameRepo.getTeamRecord(teamId, season);
+  const wins = record.wins;
+  const losses = record.losses;
+  const gamesPlayed = wins + losses + record.ties;
   const winPct = gamesPlayed >= 4 ? wins / gamesPlayed : 0.5;
 
-  const roster = db.prepare(`
-    SELECT overall_rating, age, dev_trait, position FROM players
-    WHERE team_id = ? AND roster_status = 'active' ORDER BY overall_rating DESC
-  `).all(teamId) as any[];
-
+  const roster = playerRepo.getByTeam(teamId, 'active');
   const avgOverall = roster.length ? Math.round(roster.reduce((s: number, p: any) => s + p.overall_rating, 0) / roster.length) : 75;
   const avgAge = roster.length ? roster.reduce((s: number, p: any) => s + p.age, 0) / roster.length : 26;
   const eliteCount = roster.filter((p: any) => p.overall_rating >= 85).length;
@@ -124,7 +113,7 @@ export function registerTradeHandlers(): void {
     return getTeamTradeProfile(teamId);
   });
 
-  ipcMain.handle('set-team-trade-status', (_event, { teamId, status }: { teamId: number; status: string | null }) => {
+  ipcMain.handle('set-team-trade-status', (_event: any, { teamId, status }: { teamId: number; status: string | null }) => {
     if (!status || status === 'auto') {
       db.prepare('DELETE FROM team_trade_overrides WHERE team_id = ?').run(teamId);
     } else {
@@ -134,44 +123,41 @@ export function registerTradeHandlers(): void {
   });
 
   ipcMain.handle('propose-trade', (_event: any, { myPlayerIds, theirPlayerIds, theirTeamId, myPickIds = [], theirPickIds = [] }: {
-  myPlayerIds: number[]; theirPlayerIds: number[]; theirTeamId: number;
-  myPickIds?: number[]; theirPickIds?: number[];
-}): Promise<TradeResult> => {
+    myPlayerIds: number[]; theirPlayerIds: number[]; theirTeamId: number;
+    myPickIds?: number[]; theirPickIds?: number[];
+  }): Promise<TradeResult> => {
     const _season = getCurrentSeason();
-    const _totalGames = (db.prepare('SELECT COUNT(*) as count FROM games WHERE season = ? AND is_playoff = 0').get(_season) as any).count;
-    if (_totalGames > 0) {
-      const _weekRow = db.prepare('SELECT MIN(week) as week FROM games WHERE season = ? AND is_simulated = 0 AND is_playoff = 0').get(_season) as any;
-      const _currentWeek = _weekRow?.week;
+    if (gameRepo.countBySeason(_season) > 0) {
+      const _currentWeek = gameRepo.getCurrentWeek(_season);
       if (!_currentWeek || _currentWeek > TRADE_DEADLINE_WEEK) {
-        return { accepted: false, reason: 'The trade deadline has passed (after Week 8). Trades reopen in the offseason.' };
+        return { accepted: false, reason: 'The trade deadline has passed (after Week 8). Trades reopen in the offseason.' } as any;
       }
     }
 
-    const myTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
-    if (!myTeamRow) return { accepted: false, reason: 'No franchise selected.' };
-    const myTeamId = parseInt(myTeamRow.value);
+    const myTeamId = settingsRepo.getUserTeamId();
+    if (!myTeamId) return { accepted: false, reason: 'No franchise selected.' } as any;
 
-    const myPlayers = myPlayerIds.map(id =>
-      db.prepare('SELECT id, first_name, last_name, overall_rating, age, position, dev_trait FROM players WHERE id = ? AND team_id = ?').get(id, myTeamId)
-    ).filter(Boolean) as any[];
+    const myPlayers = myPlayerIds
+      .map(id => playerRepo.getById(id))
+      .filter((p): p is NonNullable<typeof p> => p !== null && p.team_id === myTeamId);
 
-    const theirPlayers = theirPlayerIds.map(id =>
-      db.prepare('SELECT id, first_name, last_name, overall_rating, age, position, dev_trait FROM players WHERE id = ? AND team_id = ?').get(id, theirTeamId)
-    ).filter(Boolean) as any[];
+    const theirPlayers = theirPlayerIds
+      .map(id => playerRepo.getById(id))
+      .filter((p): p is NonNullable<typeof p> => p !== null && p.team_id === theirTeamId);
 
-    if (myPlayers.length === 0 && myPickIds.length === 0) return { accepted: false, reason: 'You must include at least one player or pick.' };
-    if (theirPlayers.length === 0 && theirPickIds.length === 0) return { accepted: false, reason: 'Select at least one player or pick to receive.' };
+    if (myPlayers.length === 0 && myPickIds.length === 0) return { accepted: false, reason: 'You must include at least one player or pick.' } as any;
+    if (theirPlayers.length === 0 && theirPickIds.length === 0) return { accepted: false, reason: 'Select at least one player or pick to receive.' } as any;
 
     const myPlayerValue = myPlayers.reduce((sum: number, p: any) => sum + calcPlayerTradeValue(p.overall_rating, p.age, p.position, p.dev_trait), 0);
     const theirPlayerValue = theirPlayers.reduce((sum: number, p: any) => sum + calcPlayerTradeValue(p.overall_rating, p.age, p.position, p.dev_trait), 0);
 
     const myPickValue = myPickIds.reduce((sum: number, id: number) => {
-      const pick = db.prepare('SELECT round, season FROM pick_assets WHERE id = ? AND owner_team_id = ? AND is_used = 0').get(id, myTeamId) as any;
+      const pick = pickRepo.getById(id, myTeamId);
       return sum + (pick ? calcPickTradeValue(pick.round, pick.season) : 0);
     }, 0);
 
     const theirPickValue = theirPickIds.reduce((sum: number, id: number) => {
-      const pick = db.prepare('SELECT round, season FROM pick_assets WHERE id = ? AND owner_team_id = ? AND is_used = 0').get(id, theirTeamId) as any;
+      const pick = pickRepo.getById(id, theirTeamId);
       return sum + (pick ? calcPickTradeValue(pick.round, pick.season) : 0);
     }, 0);
 
@@ -189,49 +175,40 @@ export function registerTradeHandlers(): void {
     if (accepted) {
       const executeTrade = db.transaction(() => {
         for (const p of myPlayers) {
-          db.prepare('UPDATE players SET team_id = ? WHERE id = ?').run(theirTeamId, p.id);
-          db.prepare('UPDATE contracts SET team_id = ? WHERE player_id = ?').run(theirTeamId, p.id);
+          playerRepo.updateTeam(p.id, theirTeamId);
+          contractRepo.updateTeam(p.id, theirTeamId);
         }
         for (const p of theirPlayers) {
-          db.prepare('UPDATE players SET team_id = ? WHERE id = ?').run(myTeamId, p.id);
-          db.prepare('UPDATE contracts SET team_id = ? WHERE player_id = ?').run(myTeamId, p.id);
+          playerRepo.updateTeam(p.id, myTeamId);
+          contractRepo.updateTeam(p.id, myTeamId);
         }
-        for (const pickId of myPickIds) db.prepare('UPDATE pick_assets SET owner_team_id = ? WHERE id = ?').run(theirTeamId, pickId);
-        for (const pickId of theirPickIds) db.prepare('UPDATE pick_assets SET owner_team_id = ? WHERE id = ?').run(myTeamId, pickId);
+        for (const pickId of myPickIds) pickRepo.transfer(pickId, theirTeamId);
+        for (const pickId of theirPickIds) pickRepo.transfer(pickId, myTeamId);
       });
       executeTrade();
-      return { accepted: true };
+      return { accepted: true } as any;
     }
 
     const gap = Math.max(0, Math.ceil((effectiveThreshold - valueDiff - randomFactor) / 5) * 5);
     const reason =
       availabilityPremium > 40 ? 'That player is a cornerstone of our franchise — not available at any price.' :
-      availabilityPremium > 0  ? `We're very protective of that player. Sweeten the offer significantly.` :
-      gap > 0                  ? `Not enough value — add ~${gap} more trade value to make this work.` :
-                                 `We're not interested at this time.`;
-    return { accepted: false, reason };
+      availabilityPremium > 0 ? `We're very protective of that player. Sweeten the offer significantly.` :
+      gap > 0 ? `Not enough value — add ~${gap} more trade value to make this work.` :
+      `We're not interested at this time.`;
+    return { accepted: false, reason } as any;
   });
 
   ipcMain.handle('get-tradeable-picks', (_event: any, teamId: number) => {
     const season = getCurrentSeason();
-    return db.prepare(`
-      SELECT pa.id, pa.owner_team_id, pa.original_team_id, pa.season, pa.round,
-             t.city AS original_team_city
-      FROM pick_assets pa
-      JOIN teams t ON t.id = pa.original_team_id
-      WHERE pa.owner_team_id = ? AND pa.is_used = 0 AND pa.season >= ?
-      ORDER BY pa.season, pa.round
-    `).all(teamId, season);
+    return pickRepo.getByTeam(teamId, season);
   });
 
   ipcMain.handle('get-cpu-trade-offer', () => {
-    const userTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
-    if (!userTeamRow) return null;
-    const userTeamId = parseInt(userTeamRow.value);
+    const userTeamId = settingsRepo.getUserTeamId();
+    if (!userTeamId) return null;
 
     const season = getCurrentSeason();
-    const weekRow = db.prepare('SELECT MIN(week) as week FROM games WHERE season = ? AND is_simulated = 0 AND is_playoff = 0').get(season) as any;
-    const currentWeek = weekRow?.week;
+    const currentWeek = gameRepo.getCurrentWeek(season);
     if (!currentWeek || currentWeek > 8) return null;
 
     const cpuTeams = db.prepare(`SELECT id, city, name FROM teams WHERE id != ? ORDER BY RANDOM()`).all(userTeamId) as any[];
@@ -270,10 +247,7 @@ export function registerTradeHandlers(): void {
         const gap = requestedValue - offerValue;
         let offeredPick: any = null;
         if (gap > 10) {
-          const picks = db.prepare(`
-            SELECT id, round, season FROM pick_assets
-            WHERE owner_team_id = ? AND is_used = 0 AND season >= ? ORDER BY season, round
-          `).all(cpuTeam.id, season) as any[];
+          const picks = pickRepo.getByTeam(cpuTeam.id, season);
           offeredPick = picks.find((pk: any) => {
             const pv = calcPickTradeValue(pk.round, pk.season);
             return pv >= gap * 0.6 && pv <= gap * 1.6;
@@ -292,8 +266,8 @@ export function registerTradeHandlers(): void {
         const veterans = db.prepare(`
           SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
           FROM players WHERE team_id = ? AND roster_status = 'active'
-            AND overall_rating >= 76 AND dev_trait != 'X-Factor'
-            AND (age >= 28 OR dev_trait IN ('Star','Superstar'))
+          AND overall_rating >= 76 AND dev_trait != 'X-Factor'
+          AND (age >= 28 OR dev_trait IN ('Star','Superstar'))
           ORDER BY overall_rating DESC
         `).all(cpuTeam.id) as any[];
         if (veterans.length === 0) continue;
@@ -304,7 +278,7 @@ export function registerTradeHandlers(): void {
         const userPlayers = db.prepare(`
           SELECT id, first_name, last_name, position, overall_rating, age, dev_trait
           FROM players WHERE team_id = ? AND roster_status = 'active'
-            AND age <= 26 AND overall_rating >= 68
+          AND age <= 26 AND overall_rating >= 68
           ORDER BY CASE dev_trait WHEN 'X-Factor' THEN 4 WHEN 'Superstar' THEN 3 WHEN 'Star' THEN 2 ELSE 1 END DESC, overall_rating DESC
         `).all(userTeamId) as any[];
 
@@ -315,10 +289,7 @@ export function registerTradeHandlers(): void {
         if (!target) continue;
 
         const requestedValue = calcPlayerTradeValue(target.overall_rating, target.age, target.position, target.dev_trait);
-        const picks = db.prepare(`
-          SELECT id, round, season FROM pick_assets
-          WHERE owner_team_id = ? AND is_used = 0 AND season >= ? ORDER BY season, round
-        `).all(cpuTeam.id, season) as any[];
+        const picks = pickRepo.getByTeam(cpuTeam.id, season);
         const bonusPick = picks.find((pk: any) => pk.round <= 4) ?? null;
 
         return {
@@ -335,16 +306,15 @@ export function registerTradeHandlers(): void {
   ipcMain.handle('accept-cpu-trade-offer', (_event: any, { myPlayerId, theirPlayerId, theirTeamId, theirPickId }: {
     myPlayerId: number; theirPlayerId: number; theirTeamId: number; theirPickId: number | null;
   }) => {
-    const userTeamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
-    if (!userTeamRow) return { success: false };
-    const myTeamId = parseInt(userTeamRow.value);
+    const myTeamId = settingsRepo.getUserTeamId();
+    if (!myTeamId) return { success: false };
 
     const execute = db.transaction(() => {
-      db.prepare('UPDATE players SET team_id = ? WHERE id = ?').run(theirTeamId, myPlayerId);
-      db.prepare('UPDATE contracts SET team_id = ? WHERE player_id = ?').run(theirTeamId, myPlayerId);
-      db.prepare('UPDATE players SET team_id = ? WHERE id = ?').run(myTeamId, theirPlayerId);
-      db.prepare('UPDATE contracts SET team_id = ? WHERE player_id = ?').run(myTeamId, theirPlayerId);
-      if (theirPickId) db.prepare('UPDATE pick_assets SET owner_team_id = ? WHERE id = ?').run(myTeamId, theirPickId);
+      playerRepo.updateTeam(myPlayerId, theirTeamId);
+      contractRepo.updateTeam(myPlayerId, theirTeamId);
+      playerRepo.updateTeam(theirPlayerId, myTeamId);
+      contractRepo.updateTeam(theirPlayerId, myTeamId);
+      if (theirPickId) pickRepo.transfer(theirPickId, myTeamId);
     });
     execute();
     return { success: true };
@@ -356,13 +326,9 @@ export function registerTradeHandlers(): void {
       WR: { min: 4, ideal: 5, topN: 3, minOvr: 70 }, TE: { min: 2, ideal: 3, topN: 1, minOvr: 68 },
       OL: { min: 6, ideal: 8, topN: 5, minOvr: 68 }, DL: { min: 4, ideal: 6, topN: 4, minOvr: 68 },
       LB: { min: 3, ideal: 5, topN: 3, minOvr: 68 }, CB: { min: 3, ideal: 5, topN: 2, minOvr: 68 },
-      S:  { min: 2, ideal: 3, topN: 2, minOvr: 68 }, K:  { min: 1, ideal: 1, topN: 1, minOvr: 60 },
+      S: { min: 2, ideal: 3, topN: 2, minOvr: 68 }, K: { min: 1, ideal: 1, topN: 1, minOvr: 60 },
     };
-    const roster = db.prepare(`
-      SELECT position, overall_rating FROM players
-      WHERE team_id = ? AND is_free_agent = 0 AND roster_status = 'active'
-      ORDER BY overall_rating DESC
-    `).all(teamId) as { position: string; overall_rating: number }[];
+    const roster = playerRepo.getByTeam(teamId, 'active');
     const needs: { position: string; severity: 'critical' | 'depth' }[] = [];
     for (const [pos, targets] of Object.entries(TARGETS)) {
       const posPlayers = roster.filter((p: any) => p.position === pos);
