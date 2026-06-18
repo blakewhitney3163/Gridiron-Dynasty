@@ -277,61 +277,7 @@ export function registerSimHandlers(): void {
     userTeamId:       settingsRepo.getUserTeamId() ?? -1,
     difficultyFactor: getDifficultyFactor(),
   });
-});
-
-      const insertStat = db.prepare(`
-    INSERT INTO stats
-    (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
-    interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards,
-    rec_tds, tackles, assisted_tackles, sacks, tfl, forced_fumbles, fumble_recoveries,
-    def_interceptions, pass_deflections, def_tds, fg_made, fg_att, xp_made, xp_att)
-    VALUES
-    (@game_id, @player_id, @team_id, @pass_attempts, @completions, @pass_yards, @pass_tds,
-    @interceptions, @rush_attempts, @rush_yards, @rush_tds, @targets, @receptions, @rec_yards,
-    @rec_tds, @tackles, @assisted_tackles, @sacks, @tfl, @forced_fumbles, @fumble_recoveries,
-    @def_interceptions, @pass_deflections, @def_tds, @fg_made, @fg_att, @xp_made, @xp_att)
-  `);
-
-    const userTeamId = settingsRepo.getUserTeamId() ?? -1;
-    const allStats: any[] = [];
-    const gameSummaries: GameSummary[] = [];
-
-    db.transaction(() => {
-      for (const game of games) {
-        const result = simulateGame(game.home_team_id, game.away_team_id, game.week ?? 1, userTeamId, getDifficultyFactor());
-        gameRepo.updateResult(game.id, result.homeScore, result.awayScore, result.homeQuarters, result.awayQuarters, result.weather ?? 'clear');
-        const gameStats = [...result.homePlayerStats, ...result.awayPlayerStats];
-        for (const stat of gameStats) {
-          insertStat.run({ game_id: game.id, ...stat });
-          allStats.push(stat);
-        }
-        gameSummaries.push({
-          week: game.week ?? week,
-          homeTeamId: game.home_team_id,
-          awayTeamId: game.away_team_id,
-          homeScore: result.homeScore,
-          awayScore: result.awayScore,
-          stats: gameStats,
-        });
-      }
-    })();
-
-    // Log news events outside the transaction to avoid nested write conflicts
-    for (const summary of gameSummaries) {
-      logGameNews(season, summary, userTeamId);
-    }
-
-    const newlyInjured = rollInjuries(allStats);
-    logInjuryNews(season, newlyInjured, userTeamId);
-    const milestonePlayerIds = [...new Set(allStats.map((s: any) => s.player_id as number))];
-checkMilestones(season, week, milestonePlayerIds);
-    runCpuTrades(userTeamId);
-
-    const rosterResult = processRosterAdjustments(newlyInjured, userTeamId);
-    processWaivers(userTeamId, week);
-    return { week, season, gamesSimulated: games.length, callups: rosterResult.callups, userPSOpenSpots: rosterResult.userPSOpenSpots };
-  });
-
+    
   ipcMain.handle('simulate-game', (_event: any, gameId: number) => {
     const game = db.prepare(`SELECT * FROM games WHERE id = ?`).get(gameId) as any;
     if (!game) return { success: false, reason: 'Game not found.' };
