@@ -76,17 +76,15 @@ export async function advanceSeason(): Promise<AdvanceSeasonResult> {
   })();
 
   // Breakouts
-  const breakoutIds = new Set<number>();
-  for (const row of db.prepare(`
+    for (const row of db.prepare(`
     SELECT s.player_id, p.age, p.position,
-           SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
-           SUM(s.rush_yards) as rush_yards, SUM(s.rec_yards) as rec_yards,
-           SUM(s.sacks) as sacks, SUM(s.def_interceptions) as def_int,
-           SUM(s.tackles) + SUM(s.assisted_tackles) as total_tkl
+      SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
+      SUM(s.rush_yards) as rush_yards, SUM(s.rec_yards) as rec_yards,
+      SUM(s.sacks) as sacks, SUM(s.def_interceptions) as def_int,
+      SUM(s.tackles) + SUM(s.assisted_tackles) as total_tkl
     FROM stats s
-    JOIN games g ON s.game_id = g.id
     JOIN players p ON s.player_id = p.id
-    WHERE g.season = ? AND g.is_simulated = 1
+    WHERE s.season = ? AND s.is_playoff = 0
     GROUP BY s.player_id
   `).all(current) as any[]) {
     const isBreakout =
@@ -173,15 +171,15 @@ const { resigned: cpuResigns } = cpuResignAttempts(userTeamId);
       tackles, assisted_tackles, sacks, tfl, forced_fumbles, fumble_recoveries,
       def_interceptions, pass_deflections, def_tds
     )
-    SELECT s.player_id, g.season,
+    SELECT s.player_id, s.season,
       COUNT(DISTINCT s.game_id), SUM(s.completions), SUM(s.pass_attempts), SUM(s.pass_yards),
       SUM(s.pass_tds), SUM(s.interceptions), SUM(s.rush_attempts), SUM(s.rush_yards),
       SUM(s.rush_tds), SUM(s.targets), SUM(s.receptions), SUM(s.rec_yards), SUM(s.rec_tds),
       SUM(s.tackles), SUM(s.assisted_tackles), SUM(s.sacks), SUM(s.tfl), SUM(s.forced_fumbles),
       SUM(s.fumble_recoveries), SUM(s.def_interceptions), SUM(s.pass_deflections), SUM(s.def_tds)
-    FROM stats s JOIN games g ON s.game_id = g.id
-    WHERE g.season = ? AND g.is_simulated = 1
-    GROUP BY s.player_id, g.season
+        FROM stats s
+    WHERE s.season = ? AND s.is_playoff = 0
+    GROUP BY s.player_id, s.season
     ON CONFLICT(player_id, season) DO UPDATE SET
       games = excluded.games, completions = excluded.completions,
       pass_attempts = excluded.pass_attempts, pass_yards = excluded.pass_yards,
