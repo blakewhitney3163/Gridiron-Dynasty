@@ -216,6 +216,11 @@ export interface InjuredPlayer {
   team_id: number;
   position: string;
   injury_status: string;
+  first_name: string;       
+  last_name: string;        
+  overall_rating: number;   
+  injury_type: string;      
+  weeks_out: number;        
 }
 
 export interface Callup {
