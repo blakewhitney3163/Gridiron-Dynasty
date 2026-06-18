@@ -2,7 +2,7 @@ import { db } from '../database';
 import { playerRepo, contractRepo, settingsRepo } from '../repositories';
 import { HOF_MIN_GAMES, HOF_THRESHOLDS } from '../constants';
 import { AdvanceSeasonResult } from '../types';
-import { calcFairMarket, cpuRosterCuts, cpuResignAttempts } from './ContractService';
+import { cpuRosterCuts, cpuResignAttempts } from './ContractService';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { logNewsEvent } from '../helpers/logNewsEvent';
 
@@ -16,6 +16,7 @@ function isHOFEligible(position: string, career: any): boolean {
 export async function advanceSeason(): Promise<AdvanceSeasonResult> {
   const current = getCurrentSeason();
   const next = current + 1;
+  const userTeamId = settingsRepo.getUserTeamId() ?? -1;
 
   db.prepare("UPDATE players SET age = age + 1 WHERE roster_status != 'retired'").run();
 
