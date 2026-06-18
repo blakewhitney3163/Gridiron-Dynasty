@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 const { db } = require('../database');
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { SALARY_CAP, MAX_ACTIVE_ROSTER, MAX_PRACTICE_SQUAD, PS_MINIMUM_SALARY, MIN_CPU_ROSTER } from '../constants';
+import { CapSummary, RosterSpots, SuccessResult } from '../types';
 
 // ─── Market Rate Helper ───────────────────────────────────────────────────────
 
@@ -64,7 +65,7 @@ export function registerContractHandlers(): void {
     `).all(teamId);
   });
 
-  ipcMain.handle('get-cap-summary', (_event: any, teamId: number) => {
+  ipcMain.handle('get-cap-summary', (_event: any, teamId: number): Promise<CapSummary> => {
     const result = db.prepare(`
       SELECT COALESCE(SUM(c.annual_salary), 0) as used_cap
       FROM contracts c
@@ -76,10 +77,10 @@ export function registerContractHandlers(): void {
       total_cap: SALARY_CAP,
       used_cap: usedCap,
       available_cap: Math.round((SALARY_CAP - usedCap) * 10) / 10,
-    };
+    } as any;
   });
 
-  ipcMain.handle('get-roster-spots', (_event: any, teamId: number) => {
+  ipcMain.handle('get-roster-spots', (_event: any, teamId: number): Promise<RosterSpots> => {
     const counts = db.prepare(`
       SELECT roster_status, COUNT(*) as count
       FROM players WHERE team_id = ? GROUP BY roster_status
@@ -92,23 +93,23 @@ export function registerContractHandlers(): void {
       psMax: MAX_PRACTICE_SQUAD,
       activeFree: MAX_ACTIVE_ROSTER - active,
       psFree: MAX_PRACTICE_SQUAD - ps,
-    };
+    } as any;
   });
 
-  ipcMain.handle('sign-free-agent-to-ps', (_event: any, playerId: number) => {
+  ipcMain.handle('sign-free-agent-to-ps', (_event: any, playerId: number): Promise<SuccessResult> => {
     const teamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
-    if (!teamRow) return { success: false, reason: 'No franchise selected.' };
+    if (!teamRow) return { success: false, reason: 'No franchise selected.' } as any;
     const teamId = parseInt(teamRow.value);
 
     const psCount = (db.prepare(
       "SELECT COUNT(*) as count FROM players WHERE team_id = ? AND roster_status = 'practice_squad'"
     ).get(teamId) as any).count;
-    if (psCount >= MAX_PRACTICE_SQUAD) return { success: false, reason: `Practice squad is full (${MAX_PRACTICE_SQUAD}/${MAX_PRACTICE_SQUAD}).` };
+    if (psCount >= MAX_PRACTICE_SQUAD) return { success: false, reason: `Practice squad is full (${MAX_PRACTICE_SQUAD}/${MAX_PRACTICE_SQUAD}).` } as any;
 
     const player = db.prepare(
       'SELECT id, first_name, last_name, position FROM players WHERE id = ? AND team_id IS NULL'
     ).get(playerId) as any;
-    if (!player) return { success: false, reason: 'Player not available.' };
+    if (!player) return { success: false, reason: 'Player not available.' } as any;
 
     db.prepare("UPDATE players SET team_id = ?, roster_status = 'practice_squad', is_free_agent = 0 WHERE id = ?")
       .run(teamId, playerId);
@@ -124,7 +125,7 @@ export function registerContractHandlers(): void {
       ).run(playerId, teamId, PS_MINIMUM_SALARY);
     }
 
-    return { success: true, name: `${player.first_name} ${player.last_name}` };
+    return { success: true } as any;
   });
 
   ipcMain.handle('get-free-agents', (_event: any, position?: string) => {
@@ -138,20 +139,22 @@ export function registerContractHandlers(): void {
 
   ipcMain.handle('extend-player', (_event: any, { playerId, years, salary }: {
     playerId: number; years: number; salary: number;
-  }) => {
+  }): Promise<SuccessResult> => {
     const contract = db.prepare('SELECT * FROM contracts WHERE player_id = ?').get(playerId) as any;
-    if (!contract) return { success: false, reason: 'No contract found.' };
+    if (!contract) return { success: false, reason: 'No contract found.' } as any;
     const guaranteedPct = Math.round(40 + Math.random() * 20);
     const guaranteedAmount = Math.round(salary * years * (guaranteedPct / 100) * 10) / 10;
     db.prepare('UPDATE contracts SET years_total = ?, years_remaining = ?, annual_salary = ?, guaranteed_amount = ?, guaranteed_pct = ? WHERE player_id = ?')
       .run(years, years, salary, guaranteedAmount, guaranteedPct, playerId);
-    return { success: true };
+    return { success: true } as any;
   });
 
-  ipcMain.handle('restructure-player', (_event: any, { playerId, pct }: { playerId: number; pct: number }) => {
+  ipcMain.handle('restructure-player', (_event: any, { playerId, pct }: {
+    playerId: number; pct: number;
+  }): Promise<SuccessResult> => {
     const contract = db.prepare('SELECT * FROM contracts WHERE player_id = ?').get(playerId) as any;
-    if (!contract) return { success: false, reason: 'No contract found.' };
-    if (contract.years_remaining < 2) return { success: false, reason: 'Need 2+ years remaining to restructure.' };
+    if (!contract) return { success: false, reason: 'No contract found.' } as any;
+    if (contract.years_remaining < 2) return { success: false, reason: 'Need 2+ years remaining to restructure.' } as any;
 
     const convertedAmount = contract.annual_salary * pct;
     const savings = Math.round(convertedAmount * (1 - 1 / contract.years_remaining) * 10) / 10;
@@ -162,10 +165,10 @@ export function registerContractHandlers(): void {
     db.prepare('UPDATE contracts SET annual_salary = ?, guaranteed_amount = ?, guaranteed_pct = ? WHERE player_id = ?')
       .run(newSalary, newGuaranteed, newGuaranteedPct, playerId);
 
-    return { success: true, savings, newSalary };
+    return { success: true, savings, newSalary } as any;
   });
 
-  ipcMain.handle('release-player', (_event: any, playerId: number) => {
+  ipcMain.handle('release-player', (_event: any, playerId: number): Promise<SuccessResult> => {
     const season = getCurrentSeason();
     const scheduleExists = (db.prepare(
       'SELECT COUNT(*) as count FROM games WHERE season = ? AND is_playoff = 0'
@@ -188,7 +191,7 @@ export function registerContractHandlers(): void {
       db.prepare(`UPDATE players SET team_id = NULL, is_free_agent = 1, roster_status = 'free_agent', waived_by_team_id = NULL, waiver_placed_week = NULL WHERE id = ?`)
         .run(playerId);
     }
-    return { success: true, onWaivers: !!isInSeason };
+    return { success: true } as any;
   });
 
   ipcMain.handle('get-team-stats', (_event: any, teamId: number, season?: number) => {
@@ -216,16 +219,16 @@ export function registerContractHandlers(): void {
     `).all(s, teamId);
   });
 
-  ipcMain.handle('promote-from-ps', (_event: any, playerId: number) => {
+  ipcMain.handle('promote-from-ps', (_event: any, playerId: number): Promise<SuccessResult> => {
     const teamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
-    if (!teamRow) return { success: false, reason: 'No franchise selected.' };
+    if (!teamRow) return { success: false, reason: 'No franchise selected.' } as any;
     const teamId = parseInt(teamRow.value);
 
     const active = (db.prepare("SELECT COUNT(*) as count FROM players WHERE team_id = ? AND roster_status = 'active'").get(teamId) as any).count;
-    if (active >= MAX_ACTIVE_ROSTER) return { success: false, reason: `Active roster is full (${MAX_ACTIVE_ROSTER}/${MAX_ACTIVE_ROSTER}). Release a player first.` };
+    if (active >= MAX_ACTIVE_ROSTER) return { success: false, reason: `Active roster is full (${MAX_ACTIVE_ROSTER}/${MAX_ACTIVE_ROSTER}). Release a player first.` } as any;
 
     const player = db.prepare('SELECT * FROM players WHERE id = ? AND roster_status = ?').get(playerId, 'practice_squad') as any;
-    if (!player) return { success: false, reason: 'Player not on practice squad.' };
+    if (!player) return { success: false, reason: 'Player not on practice squad.' } as any;
 
     db.prepare("UPDATE players SET roster_status = 'active' WHERE id = ?").run(playerId);
 
@@ -248,21 +251,21 @@ export function registerContractHandlers(): void {
         .run(playerId, teamId, years, years, salary, Math.round(salary * years * 0.3 * 10) / 10, 30);
     }
 
-    return { success: true, name: `${player.first_name} ${player.last_name}` };
+    return { success: true } as any;
   });
 
   ipcMain.handle('sign-free-agent', (_event: any, { playerId, years, salary }: {
     playerId: number; years: number; salary: number;
-  }) => {
+  }): Promise<SuccessResult> => {
     const teamRow = db.prepare("SELECT value FROM settings WHERE key = 'user_team_id'").get() as any;
-    if (!teamRow) return { success: false, reason: 'No franchise selected.' };
+    if (!teamRow) return { success: false, reason: 'No franchise selected.' } as any;
     const teamId = parseInt(teamRow.value);
 
     const spots = (db.prepare("SELECT COUNT(*) as count FROM players WHERE team_id = ? AND roster_status = 'active'").get(teamId) as any).count;
-    if (spots >= MAX_ACTIVE_ROSTER) return { success: false, reason: `Active roster is full (${MAX_ACTIVE_ROSTER}/${MAX_ACTIVE_ROSTER}). Release a player first.` };
+    if (spots >= MAX_ACTIVE_ROSTER) return { success: false, reason: `Active roster is full (${MAX_ACTIVE_ROSTER}/${MAX_ACTIVE_ROSTER}). Release a player first.` } as any;
 
     const player = db.prepare('SELECT id, overall_rating, age, position, dev_trait FROM players WHERE id = ?').get(playerId) as any;
-    if (!player) return { success: false, reason: 'Player not found.' };
+    if (!player) return { success: false, reason: 'Player not found.' } as any;
 
     const fairMarket = calcFairMarket(player.overall_rating, player.position, player.dev_trait);
     const ratio = salary / Math.max(fairMarket, 1);
@@ -296,7 +299,7 @@ export function registerContractHandlers(): void {
         ratio < 0.70 ? `Not enough money. Looking for closer to ${fairMarket.toFixed(1)}M/yr on the open market.` :
         ratio < 0.85 ? `Decided to explore other options. Try sweetening the offer slightly.` :
         `Chose to sign elsewhere. Sometimes it just doesn't work out.`;
-      return { success: false, reason };
+      return { success: false, reason } as any;
     }
 
     const guaranteedPct = Math.round(30 + Math.random() * 30);
@@ -306,7 +309,7 @@ export function registerContractHandlers(): void {
     db.prepare(`INSERT INTO contracts (player_id, team_id, years_total, years_remaining, annual_salary, guaranteed_amount, guaranteed_pct)
       VALUES (?, ?, ?, ?, ?, ?, ?)`)
       .run(playerId, teamId, years, years, salary, guaranteedAmount, guaranteedPct);
-    return { success: true };
+    return { success: true } as any;
   });
 
   ipcMain.handle('get-expiring-contracts', () => {
@@ -327,9 +330,9 @@ export function registerContractHandlers(): void {
 
   ipcMain.handle('resign-player', (_event: any, { playerId, years, salary }: {
     playerId: number; years: number; salary: number;
-  }) => {
+  }): Promise<SuccessResult> => {
     const player = db.prepare('SELECT id, overall_rating, age, position, dev_trait FROM players WHERE id = ?').get(playerId) as any;
-    if (!player) return { success: false, reason: 'Player not found.' };
+    if (!player) return { success: false, reason: 'Player not found.' } as any;
 
     const fairMarket = calcFairMarket(player.overall_rating, player.position, player.dev_trait);
     const ratio = salary / Math.max(fairMarket, 1);
@@ -353,14 +356,14 @@ export function registerContractHandlers(): void {
         ratio < 0.70 ? `Not enough to stay. Asking price is closer to ${fairMarket.toFixed(1)}M/yr.` :
         ratio < 0.85 ? `Wants to test the market. Try offering closer to ${fairMarket.toFixed(1)}M/yr.` :
         `Decided to explore other options despite the offer.`;
-      return { success: false, reason, willHitFA: true };
+      return { success: false, reason } as any;
     }
 
     const guaranteedPct = Math.round(35 + Math.random() * 25);
     const guaranteedAmount = Math.round(salary * years * (guaranteedPct / 100) * 10) / 10;
     db.prepare('UPDATE contracts SET years_total = ?, years_remaining = ?, annual_salary = ?, guaranteed_amount = ?, guaranteed_pct = ? WHERE player_id = ?')
       .run(years, years, salary, guaranteedAmount, guaranteedPct, playerId);
-    return { success: true };
+    return { success: true } as any;
   });
 
   ipcMain.handle('get-offseason-status', () => {
