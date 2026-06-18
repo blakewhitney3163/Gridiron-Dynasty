@@ -8,16 +8,9 @@ import FreeAgentsTab from './franchise/FreeAgentsTab';
 import OffseasonTab from './franchise/OffseasonTab';
 
 declare const window: any;
-
-interface Props {
-  userTeam: { id: number; city: string; name: string };
-  currentSeason: number;
-  playoffsComplete: boolean;
-}
-
 interface CpuFaResult { totalSigned: number; teamsActive: number; }
 
-export default function Franchise({ userTeam, currentSeason, playoffsComplete }: Props) {
+export default function Franchise() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [practiceSquad, setPracticeSquad] = useState<PracticePlayer[]>([]);
   const [freeAgents, setFreeAgents] = useState<FreeAgent[]>([]);
