@@ -110,8 +110,11 @@ export function registerContractHandlers(): void {
              SUM(st.tackles) AS tackles, SUM(st.assisted_tackles) AS assisted_tackles,
              SUM(st.sacks) AS sacks, SUM(st.tfl) AS tfl,
              SUM(st.forced_fumbles) AS forced_fumbles,
-             SUM(st.def_interceptions) AS def_interceptions,
-             SUM(st.pass_deflections) AS pass_deflections, SUM(st.def_tds) AS def_tds
+            SUM(st.def_interceptions) AS def_interceptions,
+             SUM(st.pass_deflections) AS pass_deflections, SUM(st.def_tds) AS def_tds,
+             SUM(st.fg_made) AS fg_made, SUM(st.fg_att) AS fg_att,
+             SUM(st.xp_made) AS xp_made, SUM(st.xp_att) AS xp_att
+      FROM stats st
       FROM stats st
       JOIN players p ON st.player_id = p.id
       JOIN teams t ON st.team_id = t.id
