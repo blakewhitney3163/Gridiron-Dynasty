@@ -39,6 +39,16 @@ function receiverLine(p: BoxScorePlayer | undefined) { return p ? `${lastName(p)
 function defenderLine(p: BoxScorePlayer | undefined) {
   return p ? `${lastName(p)} ${(p.tackles ?? 0) + (p.assisted_tackles ?? 0)} tkl${p.sacks > 0 ? ` ${p.sacks} sck` : ''}` : '—';
 }
+function topKicker(pl: BoxScorePlayer[]) {
+  return pl.filter(p => (p.fg_att ?? 0) > 0).sort((a, b) => (b.fg_made ?? 0) - (a.fg_made ?? 0))[0];
+}
+function kickerLine(p: BoxScorePlayer | undefined) {
+  if (!p) return '—';
+  const parts: string[] = [lastName(p)];
+  if (p.fg_att) parts.push(`${p.fg_made}/${p.fg_att} FG`);
+  if (p.xp_att) parts.push(`${p.xp_made}/${p.xp_att} XP`);
+  return parts.join(' ');
+}
 
 export default function BoxScoreModal({ gameId, onClose }: Props) {
   const [data, setData] = useState<{ game: BoxScoreGame; players: BoxScorePlayer[] } | null>(null);
