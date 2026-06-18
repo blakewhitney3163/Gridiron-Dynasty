@@ -1,4 +1,4 @@
-const { db } = require('../database');
+import { db } from '../database';
 
 class GameRepository {
   countBySeason(season: number, playoff = false): number {
