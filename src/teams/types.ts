@@ -25,6 +25,8 @@ export interface Player {
   tackle_rating: number;
   coverage: number;
   pass_rush: number;
+  kick_power?: number;
+  kick_accuracy?: number;
 }
 
 export interface PlayerStats {
@@ -34,6 +36,7 @@ export interface PlayerStats {
   targets: number; receptions: number; rec_yards: number; rec_tds: number;
   tackles: number; assisted_tackles: number; sacks: number; tfl: number;
   def_interceptions: number; pass_deflections: number; forced_fumbles: number;
+  fg_made: number; fg_att: number; xp_made: number; xp_att: number;
 }
 
 export interface CareerSeasonStats extends PlayerStats {
