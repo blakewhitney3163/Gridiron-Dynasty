@@ -3,22 +3,7 @@ const { db } = require('../database');
 const { simulateGame } = require('../simulateGame');
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { getDifficultyFactor } from './settingsHandlers';
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const POSITION_TO_GROUP: Record<string, string> = {
-  QB: 'QB',
-  RB: 'RB', HB: 'RB', FB: 'RB',
-  WR: 'WR', TE: 'TE',
-  LT: 'OL', LG: 'OL', C: 'OL', RG: 'OL', RT: 'OL', OL: 'OL',
-  LE: 'DL', RE: 'DL', DT: 'DL', IDL: 'DL', DL: 'DL',
-  MLB: 'LB', OLB: 'LB', LOLB: 'LB', ROLB: 'LB', WILL: 'LB', MIKE: 'LB', LB: 'LB',
-  CB: 'CB', FS: 'S', SS: 'S', S: 'S', K: 'K',
-};
-const WAIVER_POS_MAX: Record<string, number> = {
-  QB: 3, RB: 4, WR: 6, TE: 3, OL: 9, DL: 6, LB: 5, CB: 5, S: 4, K: 2,
-};
-const SOFT_CAP_M = 275;
+import { POSITION_TO_GROUP, WAIVER_POS_MAX, SOFT_CAP_M, MAX_ACTIVE_ROSTER, MAX_PRACTICE_SQUAD, PS_MINIMUM_SALARY } from '../constants';
 
 // ─── Injury Helpers ───────────────────────────────────────────────────────────
 
@@ -66,7 +51,7 @@ function processWaivers(userTeamId: number, week: number): void {
   const season = getCurrentSeason();
   const waiverPlayers = db.prepare(`
     SELECT p.id, p.waived_by_team_id, p.position,
-      COALESCE(c.annual_salary, 1.0) as annual_salary
+           COALESCE(c.annual_salary, 1.0) as annual_salary
     FROM players p
     LEFT JOIN contracts c ON c.player_id = p.id
     WHERE p.roster_status = 'waivers' AND p.waiver_placed_week < ?
@@ -76,8 +61,8 @@ function processWaivers(userTeamId: number, week: number): void {
 
   const cpuTeams = db.prepare(`
     SELECT t.id,
-      COUNT(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score)
-        OR (g.away_team_id = t.id AND g.away_score > g.home_score) THEN 1 END) as wins
+           COUNT(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score)
+                      OR (g.away_team_id = t.id AND g.away_score > g.home_score) THEN 1 END) as wins
     FROM teams t
     LEFT JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id)
       AND g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
@@ -93,7 +78,7 @@ function processWaivers(userTeamId: number, week: number): void {
     const active = (db.prepare(
       "SELECT COUNT(*) as count FROM players WHERE team_id = ? AND roster_status = 'active'"
     ).get(team.id) as any).count;
-    if (active >= 53) continue;
+    if (active >= MAX_ACTIVE_ROSTER) continue;
 
     const teamSalary = (db.prepare(`
       SELECT COALESCE(SUM(c.annual_salary), 0) as total
@@ -160,7 +145,7 @@ function processRosterAdjustments(
       const activeCount = (db.prepare(
         "SELECT COUNT(*) as count FROM players WHERE team_id = ? AND roster_status = 'active'"
       ).get(injured.team_id) as any).count;
-      if (activeCount < 53) {
+      if (activeCount < MAX_ACTIVE_ROSTER) {
         db.prepare("UPDATE players SET roster_status = 'active' WHERE id = ?").run(psPlayer.id);
         const teamRow = db.prepare('SELECT city, name FROM teams WHERE id = ?').get(injured.team_id) as any;
         callups.push({
@@ -179,7 +164,7 @@ function processRosterAdjustments(
     const psCount = (db.prepare(
       "SELECT COUNT(*) as count FROM players WHERE team_id = ? AND roster_status = 'practice_squad'"
     ).get(team.id) as any).count;
-    const openSpots = 16 - psCount;
+    const openSpots = MAX_PRACTICE_SQUAD - psCount;
     if (openSpots <= 0) continue;
 
     const fas = db.prepare(
@@ -192,12 +177,12 @@ function processRosterAdjustments(
       const existing = db.prepare('SELECT id FROM contracts WHERE player_id = ?').get(fa.id);
       if (existing) {
         db.prepare(
-          'UPDATE contracts SET team_id = ?, years_total = 1, years_remaining = 1, annual_salary = 0.87, guaranteed_amount = 0, guaranteed_pct = 0 WHERE player_id = ?'
-        ).run(team.id, fa.id);
+          'UPDATE contracts SET team_id = ?, years_total = 1, years_remaining = 1, annual_salary = ?, guaranteed_amount = 0, guaranteed_pct = 0 WHERE player_id = ?'
+        ).run(team.id, PS_MINIMUM_SALARY, fa.id);
       } else {
         db.prepare(
-          'INSERT INTO contracts (player_id, team_id, years_total, years_remaining, annual_salary, guaranteed_amount, guaranteed_pct) VALUES (?, ?, 1, 1, 0.87, 0, 0)'
-        ).run(fa.id, team.id);
+          'INSERT INTO contracts (player_id, team_id, years_total, years_remaining, annual_salary, guaranteed_amount, guaranteed_pct) VALUES (?, ?, 1, 1, ?, 0, 0)'
+        ).run(fa.id, team.id, PS_MINIMUM_SALARY);
       }
     }
   }
@@ -206,7 +191,7 @@ function processRosterAdjustments(
     "SELECT COUNT(*) as count FROM players WHERE team_id = ? AND roster_status = 'practice_squad'"
   ).get(userTeamId) as any).count;
 
-  return { callups, userPSOpenSpots: Math.max(0, 16 - userPSCount) };
+  return { callups, userPSOpenSpots: Math.max(0, MAX_PRACTICE_SQUAD - userPSCount) };
 }
 
 // ─── Register Handlers ────────────────────────────────────────────────────────
@@ -218,8 +203,8 @@ export function registerSimHandlers(): void {
     const userTeamId = teamRow ? parseInt(teamRow.value) : -1;
     const players = db.prepare(`
       SELECT id, first_name, last_name, position, position_label,
-        overall_rating, age, dev_trait,
-        speed, strength, awareness, waived_by_team_id
+             overall_rating, age, dev_trait,
+             speed, strength, awareness, waived_by_team_id
       FROM players WHERE roster_status = 'waivers'
       ORDER BY overall_rating DESC
     `).all() as any[];
@@ -234,7 +219,7 @@ export function registerSimHandlers(): void {
     const active = (db.prepare(
       "SELECT COUNT(*) as count FROM players WHERE team_id = ? AND roster_status = 'active'"
     ).get(teamId) as any).count;
-    if (active >= 53) return { success: false, reason: 'Active roster is full (53/53). Release a player first.' };
+    if (active >= MAX_ACTIVE_ROSTER) return { success: false, reason: `Active roster is full (${MAX_ACTIVE_ROSTER}/${MAX_ACTIVE_ROSTER}). Release a player first.` };
 
     const player = db.prepare(
       'SELECT * FROM players WHERE id = ? AND roster_status = ?'
@@ -342,8 +327,8 @@ export function registerSimHandlers(): void {
     const season = getCurrentSeason();
     return db.prepare(`
       SELECT g.id, g.week, g.home_score, g.away_score, g.is_simulated,
-        ht.id as home_team_id, ht.city || ' ' || ht.name AS home_team,
-        at.id as away_team_id, at.city || ' ' || at.name AS away_team
+             ht.id as home_team_id, ht.city || ' ' || ht.name AS home_team,
+             at.id as away_team_id, at.city || ' ' || at.name AS away_team
       FROM games g JOIN teams ht ON g.home_team_id = ht.id JOIN teams at ON g.away_team_id = at.id
       WHERE g.season = ? AND g.week = ? AND g.is_playoff = 0 ORDER BY g.id
     `).all(season, week);
@@ -459,8 +444,8 @@ export function registerSimHandlers(): void {
   ipcMain.handle('get-injury-report', (_event: any, teamId: number) => {
     return db.prepare(`
       SELECT p.id, p.first_name, p.last_name, p.position, p.position_label,
-        p.overall_rating, p.age, p.dev_trait,
-        p.injury_status, p.weeks_out, p.injury_type
+             p.overall_rating, p.age, p.dev_trait,
+             p.injury_status, p.weeks_out, p.injury_type
       FROM players p
       WHERE p.team_id = ? AND p.injury_status != 'healthy'
       ORDER BY CASE p.injury_status WHEN 'ir' THEN 1 WHEN 'out' THEN 2 ELSE 3 END, p.overall_rating DESC
@@ -470,18 +455,18 @@ export function registerSimHandlers(): void {
   ipcMain.handle('get-game-box-score', (_event: any, gameId: number) => {
     const game = db.prepare(`
       SELECT g.id, g.week, g.home_score, g.away_score,
-        g.home_q1, g.home_q2, g.home_q3, g.home_q4,
-        g.away_q1, g.away_q2, g.away_q3, g.away_q4,
-        ht.id as home_team_id, ht.city || ' ' || ht.name AS home_team,
-        at.id as away_team_id, at.city || ' ' || at.name AS away_team
+             g.home_q1, g.home_q2, g.home_q3, g.home_q4,
+             g.away_q1, g.away_q2, g.away_q3, g.away_q4,
+             ht.id as home_team_id, ht.city || ' ' || ht.name AS home_team,
+             at.id as away_team_id, at.city || ' ' || at.name AS away_team
       FROM games g JOIN teams ht ON g.home_team_id = ht.id JOIN teams at ON g.away_team_id = at.id WHERE g.id = ?
     `).get(gameId) as any;
     if (!game) return null;
     const players = db.prepare(`
       SELECT p.first_name || ' ' || p.last_name as player_name, p.position, s.team_id,
-        s.pass_attempts, s.completions, s.pass_yards, s.pass_tds, s.interceptions,
-        s.rush_attempts, s.rush_yards, s.rush_tds, s.targets, s.receptions, s.rec_yards, s.rec_tds,
-        s.tackles, s.assisted_tackles, s.sacks, s.tfl, s.def_interceptions, s.pass_deflections
+             s.pass_attempts, s.completions, s.pass_yards, s.pass_tds, s.interceptions,
+             s.rush_attempts, s.rush_yards, s.rush_tds, s.targets, s.receptions, s.rec_yards, s.rec_tds,
+             s.tackles, s.assisted_tackles, s.sacks, s.tfl, s.def_interceptions, s.pass_deflections
       FROM stats s JOIN players p ON s.player_id = p.id
       WHERE s.game_id = ? AND (s.pass_yards > 0 OR s.rush_yards > 0 OR s.rec_yards > 0 OR s.tackles > 2 OR s.sacks > 0)
       ORDER BY s.team_id, s.pass_yards DESC, s.rush_yards DESC, s.rec_yards DESC
