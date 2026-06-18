@@ -57,8 +57,8 @@ function importFromMadden(csvPath) {
       team_id, first_name, last_name, position, position_label, age,
       overall_rating, speed, strength, awareness,
       throw_accuracy, throw_power, catching, route_running,
-      tackle_rating, coverage, pass_rush
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      tackle_rating, coverage, pass_rush, kick_power, kick_accuracy
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const i   = v => parseInt(v) || 70;
   const avg = (...vals) => Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
@@ -90,8 +90,11 @@ function importFromMadden(csvPath) {
         avg(i(p.shortrouterunning), i(p.midrouterunning), i(p.deeprouterunning)),
         i(p.tackle),
         avg(i(p.mancoverage), i(p.zonecoverage)),
-        avg(i(p.strength), i(p.pursuit))
+        avg(i(p.strength), i(p.pursuit)),
+        i(p.kickpower),
+        i(p.kickaccuracy)
       );
+
       imported++;
     }
   });
