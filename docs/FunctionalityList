@@ -18,6 +18,7 @@ CORE INFRASTRUCTURE
   draft_prospects: scouted column
   news_events (season, week, event_type, category, headline, detail,
                team_id, player_id)
+  stats: fg_made, fg_att, xp_made, xp_att columns (kicker stats)
 - All 32 NFL teams auto-seeded on first launch
 - Madden ratings CSV import to populate real player rosters on fresh start
 - OTC contract HTML import to load real-world salaries
@@ -33,7 +34,8 @@ HOME TAB
   - Q1–Q4 scoring breakdown
   - Final score
   - Weather condition label
-  - Passing / rushing / receiving / defense stat leaders
+  - Passing / rushing / receiving / defense / kicker stat leaders
+  - Defensive TD row displayed when either team scored one
 - Live standings snapshot (top AFC / NFC teams)
 - Weekly stat leaders widget
 - Practice squad injury alert banner
@@ -58,7 +60,8 @@ SCHEDULE TAB
 - Clickable games → box score modal showing:
   - Quarter-by-quarter scoring (Q1–Q4 + Final)
   - Weather condition label
-  - Passing / rushing / receiving / defense stat leaders per team
+  - Passing / rushing / receiving / defense / kicker stat leaders per team
+  - Defensive TD row when applicable
 
 TEAMS TAB
 ────────────────────────────────────────────────────────────────────────────────
@@ -150,10 +153,12 @@ DRAFT TAB
 STATS TAB
 ────────────────────────────────────────────────────────────────────────────────
 Player Stats Mode:
-  - Categories: Passing, Rushing, Receiving, Tackles, Sacks, Interceptions
-  - Defensive sub-categories
+  - Categories: Passing, Rushing, Receiving, Defense, Special Teams
+  - Defense sub-categories: Tackles, Sacks, INTs / PDs
+    (INTs / PDs table includes DEF TDs column)
+  - Special Teams category: kicker leaderboard (FGM, FGA, FG%, XPM, XPA, PTS)
   - Season selector (view any historical season)
-  - Filter by team
+  - Filter by team (team-level view for all categories including Special Teams)
   - Player name search (real-time text filter)
   - Click any player → detailed stat card modal
 
@@ -203,7 +208,7 @@ NEWS TAB
   - Season: retirements, Hall of Fame inductions
   - Playoffs: every round result, Super Bowl champion headline
 
-GAME SIMULATION ENGINE (simulateGame.js)
+GAME SIMULATION ENGINE (simulateGame.ts)
 ────────────────────────────────────────────────────────────────────────────────
 Per-game outputs:
   - Home score, away score
@@ -211,14 +216,32 @@ Per-game outputs:
   - Weather condition for the game
   - Full player stat lines for both teams
 
-  Simulate game capability vs. simulate week
+Stats-first scoring approach:
+  - Scoring events (TDs, FGs) generated first from team ratings
+  - Player stats derived from scoring events — stats always match the scoreboard
+  - Defensive TDs from pick-6s and fumble return TDs added to the defensive
+    team's score (not the offensive score)
+  - Kicker stats generated from scoring events: FGM = events.fgs,
+    XPM = offensive TDs, occasional missed FG attempt adds flavor
 
 Player stat generation covers:
   - QB: completions, attempts, passing yards, TDs, interceptions
   - RB: carries, rushing yards, rushing TDs
   - WR/TE: targets, receptions, receiving yards, receiving TDs
-  - DL/LB: tackles, sacks, TFL
-  - DB: tackles, interceptions, pass deflections
+  - DL/LB: tackles, sacks, TFL, forced fumbles
+  - DB: tackles, interceptions, pass deflections, defensive TDs (pick-6s)
+  - K: FG made, FG attempted, XP made, XP attempted
+
+Game script (scoreDiff influence):
+  - Trailing teams pass more (gameScriptPassMod up to 1.20x)
+  - Leading teams run more (gameScriptRushMod up to 1.15x)
+  - Desperation throws increase INT risk when down 14+
+
+Overtime simulation:
+  - Triggers only on tied scores at end of regulation
+  - NFL rules: TD on first possession wins; FG gives opponent a chance
+  - Both teams fail → sudden death FG decides the game
+  - No ties allowed as final result
 
 Weather system (getWeather / weatherMultipliers):
   - Conditions: clear, rain, snow, wind
@@ -226,13 +249,14 @@ Weather system (getWeather / weatherMultipliers):
   - Each condition applies pass multiplier, rush multiplier, score multiplier
 
 Home field advantage:
-  - Home team scoring boost applied to final score
-  - Away QB accuracy penalty (crowd noise simulation)
+  - Home team scoring boost applied via baseDrives (+0.5 scoring drives)
+  - Away QB accuracy penalty applied (crowd noise simulation)
 
 Depth chart integration:
   - getHealthyByGroup pulls active, non-injured players by position group
   - Cascades to WR2/RB2 automatically when WR1/RB1 are injured
   - Targets distributed proportionally down the depth chart
+  - Kicker pulled from K position group
 
 Stat distributions:
   - randomNormal function for realistic bell-curve stat generation
@@ -338,3 +362,4 @@ import-otc-contracts get-depth-chart set-depth-chart-order
 reset-depth-chart get-alltime-leaders get-season-records
 get-season-awards get-team-needs import-nflverse-stats
 check-setup-done reset-save get-news-feed get-news-seasons
+simulate-game
