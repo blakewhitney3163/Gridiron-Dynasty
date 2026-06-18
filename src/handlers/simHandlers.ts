@@ -9,6 +9,8 @@ import { rollInjuries, processWaivers, processRosterAdjustments } from '../servi
 import { logNewsEvent } from '../helpers/logNewsEvent';
 import { runCpuTrades } from '../services/TradeService';
 import { checkMilestones } from '../helpers/checkMilestones';
+import { Worker } from 'worker_threads';
+import path from 'path';
 
 interface GameSummary {
   week: number;
@@ -110,6 +112,20 @@ function logInjuryNews(season: number, newlyInjured: any[], userTeamId: number):
       body: `${p.injury_type ?? 'Injury'} | ${weeksOut} | OVR ${p.overall_rating}`,
     });
   }
+}
+
+function runSimWorker(data: object): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(path.join(__dirname, 'simWorker.js'), { workerData: data });
+    worker.once('message', (result) => {
+      if (result?.__workerError) reject(new Error(result.__workerError));
+      else resolve(result);
+    });
+    worker.once('error', reject);
+    worker.once('exit', (code) => {
+      if (code !== 0) reject(new Error(`Sim worker exited with code ${code}`));
+    });
+  });
 }
 
 export function registerSimHandlers(): void {
@@ -248,11 +264,20 @@ export function registerSimHandlers(): void {
     `).all(season, week);
   });
 
-  ipcMain.handle('simulate-week', (_event: any, week: number) => {
-    const season = getCurrentSeason();
-    const games = gameRepo.getPendingByWeek(season, week);
-    if (games.length === 0) return { week, season, gamesSimulated: 0 };
-    playerRepo.advanceInjuryTimers();
+  ipcMain.handle('simulate-week', async (_event: any, week: number) => {
+  const season = getCurrentSeason();
+  const games = gameRepo.getPendingByWeek(season, week);
+  if (games.length === 0) return { week, season, gamesSimulated: 0 };
+
+  return runSimWorker({
+    type: 'simulate-week',
+    week,
+    season,
+    games,
+    userTeamId:       settingsRepo.getUserTeamId() ?? -1,
+    difficultyFactor: getDifficultyFactor(),
+  });
+});
 
       const insertStat = db.prepare(`
     INSERT INTO stats
