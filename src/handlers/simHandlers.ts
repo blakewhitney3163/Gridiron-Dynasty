@@ -253,18 +253,18 @@ export function registerSimHandlers(): void {
     if (games.length === 0) return { week, season, gamesSimulated: 0 };
     playerRepo.advanceInjuryTimers();
 
-    const insertStat = db.prepare(`
-      INSERT INTO stats
-        (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
-         interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards,
-         rec_tds, tackles, assisted_tackles, sacks, tfl, forced_fumbles, fumble_recoveries,
-         def_interceptions, pass_deflections, def_tds)
-      VALUES
-        (@game_id, @player_id, @team_id, @pass_attempts, @completions, @pass_yards, @pass_tds,
-         @interceptions, @rush_attempts, @rush_yards, @rush_tds, @targets, @receptions, @rec_yards,
-         @rec_tds, @tackles, @assisted_tackles, @sacks, @tfl, @forced_fumbles, @fumble_recoveries,
-         @def_interceptions, @pass_deflections, @def_tds)
-    `);
+      const insertStat = db.prepare(`
+    INSERT INTO stats
+    (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
+    interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards,
+    rec_tds, tackles, assisted_tackles, sacks, tfl, forced_fumbles, fumble_recoveries,
+    def_interceptions, pass_deflections, def_tds, fg_made, fg_att, xp_made, xp_att)
+    VALUES
+    (@game_id, @player_id, @team_id, @pass_attempts, @completions, @pass_yards, @pass_tds,
+    @interceptions, @rush_attempts, @rush_yards, @rush_tds, @targets, @receptions, @rec_yards,
+    @rec_tds, @tackles, @assisted_tackles, @sacks, @tfl, @forced_fumbles, @fumble_recoveries,
+    @def_interceptions, @pass_deflections, @def_tds, @fg_made, @fg_att, @xp_made, @xp_att)
+  `);
 
     const userTeamId = settingsRepo.getUserTeamId() ?? -1;
     const allStats: any[] = [];
@@ -309,18 +309,18 @@ export function registerSimHandlers(): void {
     if (!game) return { success: false, reason: 'Game not found.' };
     if (game.is_simulated) return { success: false, reason: 'Game already simulated.' };
 
-    const insertStat = db.prepare(`
-      INSERT INTO stats
-        (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
-         interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards,
-         rec_tds, tackles, assisted_tackles, sacks, tfl, forced_fumbles, fumble_recoveries,
-         def_interceptions, pass_deflections, def_tds)
-      VALUES
-        (@game_id, @player_id, @team_id, @pass_attempts, @completions, @pass_yards, @pass_tds,
-         @interceptions, @rush_attempts, @rush_yards, @rush_tds, @targets, @receptions, @rec_yards,
-         @rec_tds, @tackles, @assisted_tackles, @sacks, @tfl, @forced_fumbles, @fumble_recoveries,
-         @def_interceptions, @pass_deflections, @def_tds)
-    `);
+      const insertStat = db.prepare(`
+    INSERT INTO stats
+    (game_id, player_id, team_id, pass_attempts, completions, pass_yards, pass_tds,
+    interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards,
+    rec_tds, tackles, assisted_tackles, sacks, tfl, forced_fumbles, fumble_recoveries,
+    def_interceptions, pass_deflections, def_tds, fg_made, fg_att, xp_made, xp_att)
+    VALUES
+    (@game_id, @player_id, @team_id, @pass_attempts, @completions, @pass_yards, @pass_tds,
+    @interceptions, @rush_attempts, @rush_yards, @rush_tds, @targets, @receptions, @rec_yards,
+    @rec_tds, @tackles, @assisted_tackles, @sacks, @tfl, @forced_fumbles, @fumble_recoveries,
+    @def_interceptions, @pass_deflections, @def_tds, @fg_made, @fg_att, @xp_made, @xp_att)
+  `);
 
     let gameResult: any;
     const allStats: any[] = [];
@@ -380,18 +380,20 @@ export function registerSimHandlers(): void {
       WHERE g.id = ?
     `).get(gameId) as any;
     if (!game) return null;
-    const players = db.prepare(`
-      SELECT p.first_name || ' ' || p.last_name as player_name, p.position, s.team_id,
-             s.pass_attempts, s.completions, s.pass_yards, s.pass_tds, s.interceptions,
-             s.rush_attempts, s.rush_yards, s.rush_tds, s.targets, s.receptions,
-             s.rec_yards, s.rec_tds, s.tackles, s.assisted_tackles, s.sacks, s.tfl,
-             s.def_interceptions, s.pass_deflections
-      FROM stats s
-      JOIN players p ON s.player_id = p.id
-      WHERE s.game_id = ?
-        AND (s.pass_yards > 0 OR s.rush_yards > 0 OR s.rec_yards > 0 OR s.tackles > 2 OR s.sacks > 0)
-      ORDER BY s.team_id, s.pass_yards DESC, s.rush_yards DESC, s.rec_yards DESC
-    `).all(gameId);
+      const players = db.prepare(`
+    SELECT p.first_name || ' ' || p.last_name as player_name, p.position, s.team_id,
+    s.pass_attempts, s.completions, s.pass_yards, s.pass_tds, s.interceptions,
+    s.rush_attempts, s.rush_yards, s.rush_tds, s.targets, s.receptions,
+    s.rec_yards, s.rec_tds, s.tackles, s.assisted_tackles, s.sacks, s.tfl,
+    s.def_interceptions, s.pass_deflections, s.def_tds,
+    s.fg_made, s.fg_att, s.xp_made, s.xp_att
+    FROM stats s
+    JOIN players p ON s.player_id = p.id
+    WHERE s.game_id = ?
+    AND (s.pass_yards > 0 OR s.rush_yards > 0 OR s.rec_yards > 0
+      OR s.tackles > 2 OR s.sacks > 0 OR s.def_tds > 0 OR s.fg_att > 0)
+    ORDER BY s.team_id, s.pass_yards DESC, s.rush_yards DESC, s.rec_yards DESC
+  `).all(gameId);
     return { game, players };
   });
 
