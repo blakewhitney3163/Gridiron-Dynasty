@@ -2,18 +2,9 @@ import { ipcMain } from 'electron';
 const { db } = require('../database');
 const pathModule = require('path');
 const fsModule = require('fs');
+import { POSITION_TO_GROUP } from '../constants';
 
 // ─── Depth Chart Helper ───────────────────────────────────────────────────────
-
-const POSITION_TO_GROUP: Record<string, string> = {
-  QB: 'QB',
-  RB: 'RB', HB: 'RB', FB: 'RB',
-  WR: 'WR', TE: 'TE',
-  LT: 'OL', LG: 'OL', C: 'OL', RG: 'OL', RT: 'OL', OL: 'OL',
-  LE: 'DL', RE: 'DL', DT: 'DL', IDL: 'DL', DL: 'DL',
-  MLB: 'LB', OLB: 'LB', LOLB: 'LB', ROLB: 'LB', WILL: 'LB', MIKE: 'LB', LB: 'LB',
-  CB: 'CB', FS: 'S', SS: 'S', S: 'S', K: 'K',
-};
 
 function initDepthChart(teamId: number) {
   const existing = (db.prepare('SELECT COUNT(*) as count FROM depth_chart WHERE team_id = ?').get(teamId) as any).count;
