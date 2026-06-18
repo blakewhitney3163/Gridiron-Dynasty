@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-const { db } = require('../database');
+import { db } from '../database';
 const pathModule = require('path');
 const fsModule = require('fs');
 import { POSITION_TO_GROUP } from '../constants';
