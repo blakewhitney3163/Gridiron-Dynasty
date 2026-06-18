@@ -504,3 +504,83 @@ export function cpuFABiddingEngine(userTeamId: number): { totalSigned: number; t
 export function cpuFASigning(userTeamId: number): { totalSigned: number; teamsActive: number } {
   return cpuFABiddingEngine(userTeamId);
 }
+
+// ─── User-facing Roster Operations ──────────────────────────────────────────
+
+export function signFreeAgentToPS(playerId: number, teamId: number): SuccessResult {
+  if (playerRepo.getPSCount(teamId) >= MAX_PRACTICE_SQUAD)
+    return { success: false, reason: `Practice squad is full (${MAX_PRACTICE_SQUAD}/${MAX_PRACTICE_SQUAD}).` };
+  const player = playerRepo.getById(playerId);
+  if (!player || player.team_id !== null) return { success: false, reason: 'Player not available.' };
+  playerRepo.assignToPS(playerId, teamId);
+  contractRepo.createPS(playerId, teamId);
+  return { success: true };
+}
+
+export function extendPlayer(playerId: number, years: number, salary: number): SuccessResult {
+  const contract = contractRepo.getByPlayer(playerId);
+  if (!contract) return { success: false, reason: 'No contract found.' };
+  const guaranteedPct = Math.round(40 + Math.random() * 20);
+  contractRepo.update(playerId, years, salary, Math.round(salary * years * (guaranteedPct / 100) * 10) / 10, guaranteedPct);
+  return { success: true };
+}
+
+export function restructurePlayer(playerId: number, pct: number): SuccessResult & { savings?: number; newSalary?: number } {
+  const contract = contractRepo.getByPlayer(playerId);
+  if (!contract) return { success: false, reason: 'No contract found.' };
+  if (contract.years_remaining < 2) return { success: false, reason: 'Need 2+ years remaining to restructure.' };
+  const convertedAmount = contract.annual_salary * pct;
+  const savings = Math.round(convertedAmount * (1 - 1 / contract.years_remaining) * 10) / 10;
+  const newSalary = Math.round((contract.annual_salary - savings) * 10) / 10;
+  const newGuaranteed = Math.round(((contract.guaranteed_amount ?? 0) + convertedAmount) * 10) / 10;
+  contractRepo.updateSalary(
+    playerId, newSalary, newGuaranteed,
+    Math.min(100, Math.round((newGuaranteed / (newSalary * contract.years_remaining)) * 100))
+  );
+  return { success: true, savings, newSalary };
+}
+
+export function releasePlayer(playerId: number): SuccessResult & { onWaivers: boolean } {
+  const season = getCurrentSeason();
+  const isInSeason = gameRepo.countBySeason(season) > 0;
+  const player = playerRepo.getById(playerId) as any;
+  const teamId = player?.team_id ?? null;
+
+  if (isInSeason) {
+    playerRepo.releaseToWaivers(playerId, teamId, gameRepo.getCurrentWeek(season) ?? 1);
+  } else {
+    contractRepo.delete(playerId);
+    playerRepo.releaseToFA(playerId);
+  }
+
+  if (player) {
+    const t = teamId ? db.prepare('SELECT city, name FROM teams WHERE id = ?').get(teamId) as any : null;
+    logNewsEvent({
+      eventType: 'release', category: 'transactions',
+      headline: `${t ? `${t.city} ${t.name}` : 'Team'} Release ${player.first_name} ${player.last_name}`,
+      detail: `${player.position} · ${isInSeason ? 'Placed on waivers.' : 'Released to free agency.'}`,
+      teamId, playerId,
+    });
+  }
+  return { success: true, onWaivers: isInSeason };
+}
+
+export function getOffseasonStatus(teamId: number | null): {
+  playoffsComplete: boolean; pendingResigns: number;
+  draftGenerated: boolean; draftComplete: boolean;
+} {
+  const season = getCurrentSeason();
+  const champion = db.prepare('SELECT team_id FROM champions WHERE season = ?').get(season);
+  const draftGenerated = champion
+    ? (db.prepare('SELECT COUNT(*) as count FROM draft_prospects WHERE season = ?').get(season) as any).count > 0
+    : false;
+  const draftComplete = draftGenerated
+    ? (db.prepare('SELECT COUNT(*) as count FROM draft_prospects WHERE season = ? AND is_drafted = 0').get(season) as any).count === 0
+    : false;
+  return {
+    playoffsComplete: !!champion,
+    pendingResigns: teamId ? contractRepo.countExpiring(teamId) : 0,
+    draftGenerated,
+    draftComplete,
+  };
+}
