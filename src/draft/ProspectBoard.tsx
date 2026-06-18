@@ -181,7 +181,7 @@ export default function ProspectBoard({
             return (
               <div key={pick.slot} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 11, marginBottom: 4 }}>
                 <span style={{ color: '#FF8740', fontWeight: 700 }}>YOUR PICK #{pick.slot}</span>
-                <span style={{ color: T.text, fontWeight: 600 }}>{pick.player.first_name} {pick.player.last_name}</span>
+                <span style={{ color: T.textPrimary, fontWeight: 600 }}>{pick.player.first_name} {pick.player.last_name}</span>
                 <span style={{ color: T.textMuted }}>{pick.player.position}</span>
                 {trait.short && <span style={{ fontSize: 8, color: trait.color, background: trait.bg, borderRadius: 2, padding: '1px 3px', fontWeight: 700 }}>{trait.short}</span>}
                 <span style={{ color: ovrColor(pick.player.overall_rating), fontWeight: 700 }}>{pick.player.overall_rating}</span>
@@ -202,7 +202,7 @@ export default function ProspectBoard({
                     <div key={cp.pickInRound} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 10, marginBottom: 3 }}>
                       <span style={{ color: T.textDim, width: 20 }}>{cp.pickInRound}</span>
                       <span style={{ color: T.textMuted, flex: 1 }}>{teamName?.city} {teamName?.name}</span>
-                      <span style={{ color: T.text }}>{cp.prospect.first_name} {cp.prospect.last_name}</span>
+                      <span style={{ color: T.textPrimary }}>{cp.prospect.first_name} {cp.prospect.last_name}</span>
                       <span style={{ color: T.textMuted }}>{cp.prospect.position}</span>
                       {trait.short && <span style={{ fontSize: 8, color: trait.color, background: trait.bg, borderRadius: 2, padding: '1px 3px', fontWeight: 700 }}>{trait.short}</span>}
                       <span style={{ color: ovrColor(cp.prospect.overall_rating), fontWeight: 700 }}>{cp.prospect.overall_rating}</span>
