@@ -115,7 +115,6 @@ export function registerContractHandlers(): void {
              SUM(st.fg_made) AS fg_made, SUM(st.fg_att) AS fg_att,
              SUM(st.xp_made) AS xp_made, SUM(st.xp_att) AS xp_att
       FROM stats st
-      FROM stats st
       JOIN players p ON st.player_id = p.id
       JOIN teams t ON st.team_id = t.id
       JOIN games g ON st.game_id = g.id
