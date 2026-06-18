@@ -76,6 +76,7 @@ export async function advanceSeason(): Promise<AdvanceSeasonResult> {
   })();
 
   // Breakouts
+  const breakoutIds = new Set<number>();
     for (const row of db.prepare(`
     SELECT s.player_id, p.age, p.position,
       SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
