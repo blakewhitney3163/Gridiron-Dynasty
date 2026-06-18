@@ -502,4 +502,76 @@ if (!db.prepare("SELECT value FROM settings WHERE key = 'current_season'").get()
   db.prepare("INSERT INTO settings (key, value) VALUES ('current_season', '2025')").run();
 }
 
+// ─── Migration Versioning ─────────────────────────────────────────────────────
+//
+// All schema changes going forward must be added as a numbered migration here.
+// Do NOT use ad-hoc ALTER TABLE checks outside this block for new columns.
+//
+// Existing PRAGMA-based migrations above remain for backward compatibility
+// with pre-versioning saves. They are all idempotent (no-ops on current saves).
+// The version runner stamps new and existing DBs at CURRENT_SCHEMA_VERSION
+// so future migrations only run once per DB file.
+
+const CURRENT_SCHEMA_VERSION = 1;
+
+interface Migration {
+  version: number;
+  description: string;
+  up: () => void;
+}
+
+const MIGRATIONS: Migration[] = [
+  // Version 1 = baseline: all existing PRAGMA migrations above + indexes + player_milestones
+  // Add future migrations below as { version: 2, description: '...', up: () => { ... } }
+];
+
+function getSchemaVersion(): number {
+  try {
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'schema_version'").get() as any;
+    return row ? parseInt(row.value, 10) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setSchemaVersion(version: number): void {
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', ?)").run(String(version));
+}
+
+export function runMigrations(): void {
+  const currentVersion = getSchemaVersion();
+
+  if (currentVersion === 0) {
+    // Pre-versioning DB or brand-new DB — all existing PRAGMA migrations already applied above.
+    // Stamp at baseline so future migrations know where to start.
+    setSchemaVersion(CURRENT_SCHEMA_VERSION);
+    console.log(`Schema stamped at v${CURRENT_SCHEMA_VERSION} (baseline)`);
+    return;
+  }
+
+  const pending = MIGRATIONS
+    .filter(m => m.version > currentVersion)
+    .sort((a, b) => a.version - b.version);
+
+  if (pending.length === 0) {
+    console.log(`Schema up to date (v${currentVersion})`);
+    return;
+  }
+
+  for (const migration of pending) {
+    try {
+      db.transaction(() => migration.up())();
+      setSchemaVersion(migration.version);
+      console.log(`Migration v${migration.version} applied: ${migration.description}`);
+    } catch (err) {
+      console.error(`Migration v${migration.version} FAILED — rolling back:`, err);
+      throw err;
+    }
+  }
+
+  console.log(`Schema migrated to v${CURRENT_SCHEMA_VERSION}`);
+}
+
+runMigrations();
+
 console.log('Database ready');
