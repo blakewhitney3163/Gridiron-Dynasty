@@ -265,7 +265,7 @@ export default function App() {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflow: 'hidden' }}>
+      <div style={{ flex: 1, overflow: 'auto' }}>
         {activeTab === 'home' && (
           <Home
             userTeam={userTeam}
