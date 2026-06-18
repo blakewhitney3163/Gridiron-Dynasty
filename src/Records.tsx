@@ -11,11 +11,11 @@ declare const window: any;
 function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button onClick={onClick} style={{
-      padding: '6px 16px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
-      background: active ? '#FF8740' : '#111',
+      padding: '7px 18px', background: active ? '#FF8740' : '#111',
       border: `1px solid ${active ? '#FF8740' : '#222'}`,
-      color: active ? '#000' : '#666',
-      fontFamily: 'monospace',
+      borderRadius: 4, color: active ? '#000' : '#666',
+      fontWeight: active ? 700 : 400, fontSize: 12,
+      cursor: 'pointer', fontFamily: 'monospace',
     }}>
       {children}
     </button>
@@ -24,12 +24,12 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 
 export default function Records() {
   const { currentSeason } = useGameStore();
-  const [mode, setMode]       = useState<RecordMode>('alltime');
+  const [mode, setMode] = useState<RecordMode>('alltime');
   const [category, setCategory] = useState<StatCategory>('passing');
   const [alltime, setAlltime] = useState<RecordsData | null>(null);
-  const [season, setSeason]   = useState<RecordsData | null>(null);
+  const [season, setSeason] = useState<RecordsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [awards, setAwards]   = useState<SeasonAwards | null>(null);
+  const [awards, setAwards] = useState<SeasonAwards | null>(null);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [hofData, setHofData] = useState<HofEntry[]>([]);
@@ -55,20 +55,20 @@ export default function Records() {
   };
 
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 900, margin: '0 auto' }}>
+    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
       <div style={{ marginBottom: 20 }}>
-        <h2 style={{ color: '#fff', fontSize: 18, fontWeight: 700, margin: 0 }}>Historical Records</h2>
-        <p style={{ color: '#444', fontSize: 11, margin: '4px 0 0' }}>In-game leaders · gold rows are real NFL records to beat</p>
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#e0e0e0' }}>Historical Records</div>
+        <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>In-game leaders · gold rows are real NFL records to beat</div>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         <TabBtn active={mode === 'alltime'} onClick={() => setMode('alltime')}>ALL-TIME LEADERS</TabBtn>
-        <TabBtn active={mode === 'season'}  onClick={() => setMode('season')}>SEASON RECORDS</TabBtn>
-        <TabBtn active={mode === 'awards'}  onClick={() => setMode('awards')}>SEASON AWARDS</TabBtn>
-        <TabBtn active={mode === 'hof'}     onClick={() => setMode('hof')}>HALL OF FAME</TabBtn>
+        <TabBtn active={mode === 'season'} onClick={() => setMode('season')}>SEASON RECORDS</TabBtn>
+        <TabBtn active={mode === 'awards'} onClick={() => setMode('awards')}>SEASON AWARDS</TabBtn>
+        <TabBtn active={mode === 'hof'} onClick={() => setMode('hof')}>HALL OF FAME</TabBtn>
       </div>
 
-      {mode === 'hof' && <HallOfFame data={hofData} />}
+      {mode === 'hof' && <HallOfFame hofData={hofData} />}
 
       {mode !== 'awards' && mode !== 'hof' && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -88,7 +88,15 @@ export default function Records() {
       {mode === 'awards' && <AwardsView awards={awards} currentSeason={currentSeason} />}
 
       {mode !== 'awards' && mode !== 'hof' && (
-        <LeaderboardTable rows={rows} cols={cols} sortKey={sortKey} sortDir={sortDir} onSort={handleSort} loading={loading} />
+        <LeaderboardTable
+          rows={rows}
+          cols={cols}
+          mode={mode}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
+          loading={loading}
+        />
       )}
     </div>
   );
