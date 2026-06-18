@@ -8,6 +8,9 @@ export const mainConfig: Configuration = {
     index: './src/index.ts',
     simWorker: './src/workers/simWorker.ts',
   },
+  output: {
+    filename: '[name].js',
+  },
   module: {
     rules,
   },
