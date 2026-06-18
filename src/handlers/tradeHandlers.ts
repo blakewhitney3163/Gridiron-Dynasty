@@ -7,8 +7,26 @@ import {
   calcPlayerTradeValue, calcPickTradeValue,
   getTeamTradeProfile, proposeTrade, getCpuTradeOffer,
 } from '../services/TradeService';
+import { logNewsEvent } from '../helpers/logNewsEvent';
 
 export { calcPlayerTradeValue, calcPickTradeValue, getTeamTradeProfile };
+
+function getTeamName(teamId: number): string {
+  const t = db.prepare('SELECT city, name FROM teams WHERE id = ?').get(teamId) as any;
+  return t ? `${t.city} ${t.name}` : 'Unknown Team';
+}
+
+function getPlayerLabel(playerId: number): string {
+  const p = db.prepare('SELECT first_name, last_name, position, overall_rating FROM players WHERE id = ?').get(playerId) as any;
+  return p ? `${p.first_name} ${p.last_name} (${p.position}, OVR ${p.overall_rating})` : `Player #${playerId}`;
+}
+
+function getPickLabel(pickId: number): string {
+  const pk = db.prepare('SELECT round, season FROM pick_assets WHERE id = ?').get(pickId) as any;
+  if (!pk) return `Pick #${pickId}`;
+  const rounds: Record<number, string> = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th', 6: '6th', 7: '7th' };
+  return `${pk.season} ${rounds[pk.round] ?? pk.round + 'th'}-round pick`;
+}
 
 export function registerTradeHandlers(): void {
 
@@ -24,10 +42,39 @@ export function registerTradeHandlers(): void {
   ipcMain.handle('propose-trade', (_event: any, { myPlayerIds, theirPlayerIds, theirTeamId, myPickIds = [], theirPickIds = [] }: {
     myPlayerIds: number[]; theirPlayerIds: number[]; theirTeamId: number;
     myPickIds?: number[]; theirPickIds?: number[];
-  }): Promise<TradeResult> => {
+  }): Promise<any> => {
     const myTeamId = settingsRepo.getUserTeamId();
     if (!myTeamId) return { accepted: false, reason: 'No franchise selected.' } as any;
-    return proposeTrade({ myTeamId, theirTeamId, myPlayerIds, theirPlayerIds, myPickIds, theirPickIds }) as any;
+
+    // Capture labels before the trade executes
+    const myTeamName    = getTeamName(myTeamId);
+    const theirTeamName = getTeamName(theirTeamId);
+    const sentLabels    = [
+      ...myPlayerIds.map(getPlayerLabel),
+      ...myPickIds.map(getPickLabel),
+    ];
+    const receivedLabels = [
+      ...theirPlayerIds.map(getPlayerLabel),
+      ...theirPickIds.map(getPickLabel),
+    ];
+
+    const result = proposeTrade({
+      myTeamId, theirTeamId, myPlayerIds, theirPlayerIds, myPickIds, theirPickIds,
+    }) as any;
+
+    if (result?.accepted) {
+      logNewsEvent({
+        season: getCurrentSeason(),
+        category: 'trade',
+        title: `Trade: ${myTeamName} and ${theirTeamName} make a deal`,
+        body: [
+          receivedLabels.length ? `${myTeamName} receives: ${receivedLabels.join(', ')}` : null,
+          sentLabels.length     ? `${theirTeamName} receives: ${sentLabels.join(', ')}` : null,
+        ].filter(Boolean).join(' | '),
+      });
+    }
+
+    return result;
   });
 
   ipcMain.handle('get-tradeable-picks', (_event: any, teamId: number) =>
@@ -44,6 +91,14 @@ export function registerTradeHandlers(): void {
   }) => {
     const myTeamId = settingsRepo.getUserTeamId();
     if (!myTeamId) return { success: false };
+
+    // Capture labels before the transaction moves players
+    const myTeamName    = getTeamName(myTeamId);
+    const theirTeamName = getTeamName(theirTeamId);
+    const sentLabel     = getPlayerLabel(myPlayerId);
+    const receivedParts = [getPlayerLabel(theirPlayerId)];
+    if (theirPickId) receivedParts.push(getPickLabel(theirPickId));
+
     db.transaction(() => {
       playerRepo.updateTeam(myPlayerId, theirTeamId);
       contractRepo.updateTeam(myPlayerId, theirTeamId);
@@ -51,6 +106,17 @@ export function registerTradeHandlers(): void {
       contractRepo.updateTeam(theirPlayerId, myTeamId);
       if (theirPickId) pickRepo.transfer(theirPickId, myTeamId);
     })();
+
+    logNewsEvent({
+      season: getCurrentSeason(),
+      category: 'trade',
+      title: `Trade: ${myTeamName} and ${theirTeamName} make a deal`,
+      body: [
+        `${myTeamName} receives: ${receivedParts.join(', ')}`,
+        `${theirTeamName} receives: ${sentLabel}`,
+      ].join(' | '),
+    });
+
     return { success: true };
   });
 
