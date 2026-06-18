@@ -16,27 +16,27 @@ const DEADLINE = 8;
 export default function Trades() {
   const { userTeam, currentSeason } = useGameStore();
 
-  const [teams, setTeams]                           = useState<Team[]>([]);
-  const [selectedTeamId, setSelectedTeamId]         = useState<number | null>(null);
-  const [teamStatus, setTeamStatus]                 = useState<TeamStatus | null>(null);
-  const [myRoster, setMyRoster]                     = useState<Player[]>([]);
-  const [theirRoster, setTheirRoster]               = useState<Player[]>([]);
-  const [myPicks, setMyPicks]                       = useState<DraftPick[]>([]);
-  const [theirPicks, setTheirPicks]                 = useState<DraftPick[]>([]);
-  const [mySelected, setMySelected]                 = useState<number[]>([]);
-  const [theirSelected, setTheirSelected]           = useState<number[]>([]);
-  const [myPicksSelected, setMyPicksSelected]       = useState<number[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
+  const [teamStatus, setTeamStatus] = useState<TeamStatus | null>(null);
+  const [myRoster, setMyRoster] = useState<Player[]>([]);
+  const [theirRoster, setTheirRoster] = useState<Player[]>([]);
+  const [myPicks, setMyPicks] = useState<DraftPick[]>([]);
+  const [theirPicks, setTheirPicks] = useState<DraftPick[]>([]);
+  const [mySelected, setMySelected] = useState<number[]>([]);
+  const [theirSelected, setTheirSelected] = useState<number[]>([]);
+  const [myPicksSelected, setMyPicksSelected] = useState<number[]>([]);
   const [theirPicksSelected, setTheirPicksSelected] = useState<number[]>([]);
-  const [myPos, setMyPos]                           = useState('ALL');
-  const [theirPos, setTheirPos]                     = useState('ALL');
-  const [result, setResult]                         = useState<{ accepted: boolean; reason?: string } | null>(null);
-  const [proposing, setProposing]                   = useState(false);
-  const [needs, setNeeds]                           = useState<TeamNeed[]>([]);
-  const [weekInfo, setWeekInfo]                     = useState<{ hasSchedule: boolean; currentWeek: number | null } | null>(null);
-  const [cpuOffer, setCpuOffer]                     = useState<CpuOffer | null>(null);
-  const [offerHandled, setOfferHandled]             = useState(false);
-  const [offerWorking, setOfferWorking]             = useState(false);
-  const [savingOverride, setSavingOverride]         = useState(false);
+  const [myPos, setMyPos] = useState('ALL');
+  const [theirPos, setTheirPos] = useState('ALL');
+  const [result, setResult] = useState<{ accepted: boolean; reason?: string } | null>(null);
+  const [proposing, setProposing] = useState(false);
+  const [needs, setNeeds] = useState<TeamNeed[]>([]);
+  const [weekInfo, setWeekInfo] = useState<{ hasSchedule: boolean; currentWeek: number | null } | null>(null);
+  const [cpuOffer, setCpuOffer] = useState<CpuOffer | null>(null);
+  const [offerHandled, setOfferHandled] = useState(false);
+  const [offerWorking, setOfferWorking] = useState(false);
+  const [savingOverride, setSavingOverride] = useState(false);
 
   useEffect(() => {
     if (!userTeam) return;
@@ -75,10 +75,10 @@ export default function Trades() {
     setSavingOverride(false);
   };
 
-  const toggleMine       = (id: number) => { setResult(null); setMySelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
-  const toggleTheirs     = (id: number) => { setResult(null); setTheirSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
-  const toggleMyPick     = (id: number) => { setResult(null); setMyPicksSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
-  const toggleTheirPick  = (id: number) => { setResult(null); setTheirPicksSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
+  const toggleMine = (id: number) => { setResult(null); setMySelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
+  const toggleTheirs = (id: number) => { setResult(null); setTheirSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
+  const toggleMyPick = (id: number) => { setResult(null); setMyPicksSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
+  const toggleTheirPick = (id: number) => { setResult(null); setTheirPicksSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
 
   const handlePropose = async () => {
     if (!canPropose) return;
@@ -137,43 +137,103 @@ export default function Trades() {
     (theirSelected.length > 0 || theirPicksSelected.length > 0) &&
     selectedTeamId !== null;
 
-  const selectedTeam    = teams.find(t => t.id === selectedTeamId);
-  const isPastDeadline  = !!(weekInfo?.hasSchedule && (!weekInfo.currentWeek || weekInfo.currentWeek > DEADLINE));
+  const selectedTeam = teams.find(t => t.id === selectedTeamId);
+  const isPastDeadline = !!(weekInfo?.hasSchedule && (!weekInfo.currentWeek || weekInfo.currentWeek > DEADLINE));
   const weeksToDeadline = weekInfo?.currentWeek ? Math.max(0, DEADLINE - weekInfo.currentWeek + 1) : null;
-  const myFiltered      = myRoster.filter(p => myPos === 'ALL' || p.position === myPos);
-  const theirFiltered   = theirRoster.filter(p => theirPos === 'ALL' || p.position === theirPos);
+  const myFiltered = myRoster.filter(p => myPos === 'ALL' || p.position === myPos);
+  const theirFiltered = theirRoster.filter(p => theirPos === 'ALL' || p.position === theirPos);
 
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-        <h2 style={{ color: T.textPrimary, fontSize: 18, fontWeight: 700, margin: 0 }}>Trade Center</h2>
+    <div style={{ padding: '20px 24px', maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+        <div style={{ fontSize: 20, fontWeight: 700, color: T.textPrimary }}>Trade Center</div>
         {weekInfo?.hasSchedule && (
-          <span style={{ color: isPastDeadline ? '#e57373' : T.textDim, fontSize: 12 }}>
+          <div style={{ fontSize: 11, color: isPastDeadline ? '#e57373' : T.textDim }}>
             {isPastDeadline
               ? 'Trade deadline has passed.'
               : `Trade deadline: Week ${DEADLINE}${weeksToDeadline !== null ? ` · ${weeksToDeadline} week${weeksToDeadline !== 1 ? 's' : ''} remaining` : ''}`}
-          </span>
+          </div>
         )}
       </div>
 
       {cpuOffer && !offerHandled && (
-        <CpuOfferBanner offer={cpuOffer} onAccept={handleAcceptOffer} onDecline={() => setOfferHandled(true)} working={offerWorking} />
+        <CpuOfferBanner
+          cpuOffer={cpuOffer}
+          offerWorking={offerWorking}
+          currentSeason={currentSeason}
+          onAccept={handleAcceptOffer}
+          onDecline={() => setOfferHandled(true)}
+        />
       )}
 
-      <TeamSelector teams={teams} selectedTeamId={selectedTeamId} onSelect={handleSelectTeam} needs={needs} />
+      <TeamSelector
+        teams={teams}
+        selectedTeamId={selectedTeamId}
+        onSelect={handleSelectTeam}
+      />
 
       {!selectedTeamId ? (
         <div style={{ color: T.textDim, fontSize: 13, padding: '40px 0' }}>Select a team above to build a trade.</div>
       ) : (
         <>
           {teamStatus && (
-            <TeamStatusBanner status={teamStatus} onSetOverride={handleSetOverride} saving={savingOverride} />
+            <TeamStatusBanner
+              selectedTeam={selectedTeam}
+              teamStatus={teamStatus}
+              savingOverride={savingOverride}
+              onSetOverride={handleSetOverride}
+            />
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 16 }}>
-            <RosterPanel label={`${userTeam.city} ${userTeam.name}`} players={myFiltered} picks={myPicks} selectedPlayers={mySelected} selectedPicks={myPicksSelected} onTogglePlayer={toggleMine} onTogglePick={toggleMyPick} pos={myPos} onPosChange={setMyPos} currentSeason={currentSeason} />
-            <RosterPanel label={selectedTeam ? `${selectedTeam.city} ${selectedTeam.name}` : 'Their Team'} players={theirFiltered} picks={theirPicks} selectedPlayers={theirSelected} selectedPicks={theirPicksSelected} onTogglePlayer={toggleTheirs} onTogglePick={toggleTheirPick} pos={theirPos} onPosChange={setTheirPos} currentSeason={currentSeason} />
+            <RosterPanel
+              title={`${userTeam.city} ${userTeam.name}`}
+              subtitle=""
+              players={myFiltered}
+              picks={myPicks}
+              selectedPlayers={mySelected}
+              selectedPicks={myPicksSelected}
+              posFilter={myPos}
+              onPosFilter={setMyPos}
+              onTogglePlayer={toggleMine}
+              onTogglePick={toggleMyPick}
+              accent="#FF8740"
+              needs={needs}
+              currentSeason={currentSeason}
+            />
+            <RosterPanel
+              title={selectedTeam ? `${selectedTeam.city} ${selectedTeam.name}` : 'Their Team'}
+              subtitle=""
+              players={theirFiltered}
+              picks={theirPicks}
+              selectedPlayers={theirSelected}
+              selectedPicks={theirPicksSelected}
+              posFilter={theirPos}
+              onPosFilter={setTheirPos}
+              onTogglePlayer={toggleTheirs}
+              onTogglePick={toggleTheirPick}
+              accent="#4FC3F7"
+              currentSeason={currentSeason}
+            />
           </div>
-          <TradeSummary myValue={myValue} theirValue={theirValue} canPropose={canPropose} proposing={proposing} onPropose={handlePropose} result={result} isPastDeadline={isPastDeadline} />
+          <TradeSummary
+            myRoster={myRoster}
+            theirRoster={theirRoster}
+            myPicks={myPicks}
+            theirPicks={theirPicks}
+            mySelected={mySelected}
+            theirSelected={theirSelected}
+            myPicksSelected={myPicksSelected}
+            theirPicksSelected={theirPicksSelected}
+            myValue={myValue}
+            theirValue={theirValue}
+            canPropose={canPropose}
+            isPastDeadline={isPastDeadline}
+            teamStatus={teamStatus}
+            result={result}
+            proposing={proposing}
+            currentSeason={currentSeason}
+            onPropose={handlePropose}
+          />
         </>
       )}
     </div>
