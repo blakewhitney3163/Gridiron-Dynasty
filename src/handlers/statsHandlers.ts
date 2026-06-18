@@ -131,25 +131,24 @@ export function registerStatsHandlers(): void {
       FROM historical_records WHERE record_type = 'season'
     `).all() as any[];
 
-    const ingame = db.prepare(`
-      SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
-        t.name as team_name, p.overall_rating, p.age, p.position, p.dev_trait,
-        g.season, COUNT(DISTINCT s.game_id) as games_played,
-        SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds, SUM(s.interceptions) as interceptions,
-        SUM(s.completions) as completions, SUM(s.pass_attempts) as pass_attempts,
-        SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds, SUM(s.rush_attempts) as rush_attempts,
-        SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds, SUM(s.receptions) as receptions, 0 as targets,
-        SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
-        SUM(s.sacks) as sacks, 0 as tfl, SUM(s.def_interceptions) as def_interceptions,
-        SUM(s.pass_deflections) as pass_deflections, SUM(s.forced_fumbles) as forced_fumbles,
-        0 as is_historical
-      FROM stats s
-      JOIN players p ON s.player_id = p.id
-      JOIN games g ON s.game_id = g.id
-      LEFT JOIN teams t ON p.team_id = t.id
-      WHERE g.is_playoff = 0
-      GROUP BY p.id, g.season
-    `).all() as any[];
+      const ingame = db.prepare(`
+    SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
+      t.name as team_name, p.overall_rating, p.age, p.position, p.dev_trait,
+      s.season, COUNT(DISTINCT s.game_id) as games_played,
+      SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds, SUM(s.interceptions) as interceptions,
+      SUM(s.completions) as completions, SUM(s.pass_attempts) as pass_attempts,
+      SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds, SUM(s.rush_attempts) as rush_attempts,
+      SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds, SUM(s.receptions) as receptions, 0 as targets,
+      SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
+      SUM(s.sacks) as sacks, 0 as tfl, SUM(s.def_interceptions) as def_interceptions,
+      SUM(s.pass_deflections) as pass_deflections, SUM(s.forced_fumbles) as forced_fumbles,
+      0 as is_historical
+    FROM stats s
+    JOIN players p ON s.player_id = p.id
+    LEFT JOIN teams t ON p.team_id = t.id
+    WHERE s.is_playoff = 0
+    GROUP BY s.player_id, s.season
+  `).all() as any[];
 
     const sortBy: Record<string, string> = {
       passing: 'pass_yards', rushing: 'rush_yards', receiving: 'rec_yards',
@@ -171,39 +170,37 @@ export function registerStatsHandlers(): void {
   });
 
   ipcMain.handle('get-season-awards', (_event: any, season: number) => {
-    const offStats = db.prepare(`
-      SELECT p.id, p.first_name || ' ' || p.last_name as name,
-        p.position, p.position_label, p.age, p.overall_rating, p.dev_trait,
-        p.team_id, t.name as team_name, t.city as team_city,
-        SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
-        SUM(s.interceptions) as interceptions,
-        SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds,
-        SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
-        SUM(s.receptions) as receptions,
-        COUNT(DISTINCT s.game_id) as games
-      FROM stats s
-      JOIN players p ON s.player_id = p.id
-      JOIN teams t ON p.team_id = t.id
-      JOIN games g ON s.game_id = g.id
-      WHERE g.season = ? AND g.is_playoff = 0
-      GROUP BY p.id HAVING games > 0
-    `).all(season) as any[];
+      const offStats = db.prepare(`
+    SELECT p.id, p.first_name || ' ' || p.last_name as name,
+      p.position, p.position_label, p.age, p.overall_rating, p.dev_trait,
+      p.team_id, t.name as team_name, t.city as team_city,
+      SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
+      SUM(s.interceptions) as interceptions,
+      SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds,
+      SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
+      SUM(s.receptions) as receptions,
+      COUNT(DISTINCT s.game_id) as games
+    FROM stats s
+    JOIN players p ON s.player_id = p.id
+    JOIN teams t ON p.team_id = t.id
+    WHERE s.season = ? AND s.is_playoff = 0
+    GROUP BY p.id HAVING games > 0
+  `).all(season) as any[];
 
-    const defStats = db.prepare(`
-      SELECT p.id, p.first_name || ' ' || p.last_name as name,
-        p.position, p.position_label, p.age, p.overall_rating, p.dev_trait,
-        p.team_id, t.name as team_name, t.city as team_city,
-        SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
-        SUM(s.sacks) as sacks, SUM(s.def_interceptions) as def_interceptions,
-        SUM(s.pass_deflections) as pass_deflections, SUM(s.forced_fumbles) as forced_fumbles,
-        COUNT(DISTINCT s.game_id) as games
-      FROM stats s
-      JOIN players p ON s.player_id = p.id
-      JOIN teams t ON p.team_id = t.id
-      JOIN games g ON s.game_id = g.id
-      WHERE g.season = ? AND g.is_playoff = 0
-      GROUP BY p.id HAVING games > 0
-    `).all(season) as any[];
+      const defStats = db.prepare(`
+    SELECT p.id, p.first_name || ' ' || p.last_name as name,
+      p.position, p.position_label, p.age, p.overall_rating, p.dev_trait,
+      p.team_id, t.name as team_name, t.city as team_city,
+      SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
+      SUM(s.sacks) as sacks, SUM(s.def_interceptions) as def_interceptions,
+      SUM(s.pass_deflections) as pass_deflections, SUM(s.forced_fumbles) as forced_fumbles,
+      COUNT(DISTINCT s.game_id) as games
+    FROM stats s
+    JOIN players p ON s.player_id = p.id
+    JOIN teams t ON p.team_id = t.id
+    WHERE s.season = ? AND s.is_playoff = 0
+    GROUP BY p.id HAVING games > 0
+  `).all(season) as any[];
 
     const offScore = (p: any) =>
       (p.pass_yards || 0) * 0.04 + (p.pass_tds || 0) * 6 - (p.interceptions || 0) * 3 +
