@@ -24,11 +24,24 @@ const COL_SETS: Record<string, ColDef[]> = {
     { key: 'rush_tds',    label: 'RUSH TDs' },
     { key: 'rush_att_pg', label: 'ATT/G' },
   ],
+  receiving: [
+    { key: 'pass_ypg', label: 'REC YPG' },
+    { key: 'pass_tds', label: 'REC TDs' },
+    { key: 'cmp_pct',  label: 'CTH%' },
+    { key: 'ypg',      label: 'TOT YPG' },
+  ],
   defense: [
     { key: 'papg',     label: 'PA/G' },
     { key: 'sacks',    label: 'SACKS' },
     { key: 'def_ints', label: 'DEF INTs' },
     { key: 'to_taken', label: 'TAKEAWAYS' },
+  ],
+  special_teams: [
+    { key: 'fg_made', label: 'FGM' },
+    { key: 'fg_att',  label: 'FGA' },
+    { key: 'fg_pct',  label: 'FG%' },
+    { key: 'xp_made', label: 'XPM' },
+    { key: 'xp_att',  label: 'XPA' },
   ],
   default: [
     { key: 'ppg',      label: 'PPG' },
@@ -41,9 +54,11 @@ const COL_SETS: Record<string, ColDef[]> = {
 };
 
 const DEFAULT_SORT: Record<string, string> = {
-  passing:  'pass_ypg',
-  rushing:  'rush_ypg',
-  defense:  'papg',
+  passing:       'pass_ypg',
+  rushing:       'rush_ypg',
+  receiving:     'pass_ypg',
+  defense:       'papg',
+  special_teams: 'fg_made',
 };
 
 export default function TeamStatsTable({ rows, sortKey, sortDir, onSort, category }: Props) {
