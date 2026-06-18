@@ -531,9 +531,6 @@ interface Migration {
   description: string;
   up: () => void;
 }
-
-const CURRENT_SCHEMA_VERSION = 2; // was 1
-
 const MIGRATIONS: Migration[] = [
   // Version 1 = baseline: all existing PRAGMA migrations above + indexes + player_milestones
   {
