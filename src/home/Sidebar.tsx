@@ -81,7 +81,7 @@ export default function Sidebar({
       {topAFC.length > 0 && (
         <SidebarBlock title="TOP AFC">
           {topAFC.map((t, i) => (
-            <SidebarRow key={t.id} left={`${i + 1}. ${t.city} ${t.name}`} right={`${t.wins}-${t.losses}`} />
+            <SidebarRow key={i} left={`${i + 1}. ${t.team_name}`} right={`${t.wins}-${t.losses}`} />
           ))}
         </SidebarBlock>
       )}
@@ -90,7 +90,7 @@ export default function Sidebar({
       {topNFC.length > 0 && (
         <SidebarBlock title="TOP NFC">
           {topNFC.map((t, i) => (
-            <SidebarRow key={t.id} left={`${i + 1}. ${t.city} ${t.name}`} right={`${t.wins}-${t.losses}`} />
+            <SidebarRow key={i} left={`${i + 1}. ${t.team_name}`} right={`${t.wins}-${t.losses}`} />
           ))}
         </SidebarBlock>
       )}
@@ -99,7 +99,7 @@ export default function Sidebar({
       {champions.length > 0 && (
         <SidebarBlock title="GRIDIRON CUP">
           {champions.slice(0, 6).map((c, i) => (
-            <SidebarRow key={i} left={`${c.season}`} right={`${c.city} ${c.name}`} dimLeft />
+          <SidebarRow key={i} left={`${c.season}`} right={c.team_name} dimLeft />
           ))}
         </SidebarBlock>
       )}
