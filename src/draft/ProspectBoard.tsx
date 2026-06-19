@@ -1,7 +1,7 @@
 import React from 'react';
 import { T } from '../theme';
 import { Prospect, MyPick, CpuPick, PickSlot, DraftTeam } from './types';
-import { POSITIONS, TRAIT_META, ovrColor, maskedOvr, preScoutTier, draftGrade } from './draftUtils';
+import { POSITIONS, TRAIT_META, ovrColor, maskedOvr, preScoutTier, draftGrade, fortyColor, benchColor, vertColor, coneColor } from './draftUtils';
 
 interface Props {
   available: Prospect[];
