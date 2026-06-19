@@ -638,6 +638,76 @@ export function releasePlayer(playerId: number): SuccessResult & { onWaivers: bo
   return { success: true, onWaivers: isInSeason };
 }
 
+export function applyFranchiseTag(
+  playerId: number, teamId: number, tagType: 'franchise' | 'transition'
+): SuccessResult {
+  const tagValue = tagType === 'franchise' ? 1 : 2;
+  const tagLabel = tagType === 'franchise' ? 'Franchise Tag' : 'Transition Tag';
+
+  // Ensure team hasn't already used this tag type
+  const existing = db.prepare(
+    `SELECT id FROM players WHERE team_id = ? AND franchise_tagged = ? AND roster_status = 'active'`
+  ).get(teamId, tagValue);
+  if (existing) {
+    return { success: false, reason: `${tagLabel} already used this offseason.` };
+  }
+
+  // Fetch the player + their current contract salary in one shot
+  const player = db.prepare(`
+    SELECT p.id, p.first_name, p.last_name, p.position, p.dev_trait,
+           p.overall_rating, p.team_id,
+           COALESCE(c.annual_salary, 0) as annual_salary
+    FROM players p
+    LEFT JOIN contracts c ON c.player_id = p.id
+    WHERE p.id = ? AND p.team_id = ?
+  `).get(playerId, teamId) as any;
+  if (!player) return { success: false, reason: 'Player not found on your roster.' };
+
+  const fairMarket = calcFairMarket(player.overall_rating, player.position, player.dev_trait);
+  const multiplier = tagType === 'franchise' ? 1.35 : 1.10;
+  const tagSalary = Math.round(fairMarket * multiplier * 10) / 10;
+
+  // Cap check — only count the delta from their current salary
+  const capUsed = contractRepo.getCapUsage(teamId);
+  const capLeft = Math.round((SALARY_CAP - capUsed) * 10) / 10;
+  const capImpact = Math.round((tagSalary - player.annual_salary) * 10) / 10;
+  if (capImpact > capLeft + 0.1) {
+    return {
+      success: false,
+      reason: `Not enough cap space. Tag costs $${tagSalary}M (${capImpact >= 0 ? '+' : ''}$${capImpact.toFixed(1)}M net). Only $${capLeft.toFixed(1)}M available.`,
+    };
+  }
+
+  // Apply tag: mark player and rewrite contract to 1 yr at tag salary (50% guaranteed)
+  const guaranteed = Math.round(tagSalary * 0.50 * 10) / 10;
+  db.prepare('UPDATE players SET franchise_tagged = ? WHERE id = ?').run(tagValue, playerId);
+  contractRepo.update(playerId, 1, tagSalary, guaranteed, 50);
+
+  logNewsEvent({
+    eventType: 'resign', category: 'transactions',
+    headline: `${player.first_name} ${player.last_name} Receives ${tagLabel}`,
+    detail: `${player.position} · 1-year deal at $${tagSalary}M (${tagLabel}).`,
+    teamId, playerId,
+  });
+
+  return { success: true };
+}
+
+export function removeFranchiseTag(playerId: number): SuccessResult {
+  const player = db.prepare(
+    `SELECT id, first_name, last_name, position, franchise_tagged FROM players WHERE id = ?`
+  ).get(playerId) as any;
+  if (!player) return { success: false, reason: 'Player not found.' };
+  if (!player.franchise_tagged) return { success: false, reason: 'Player is not franchise tagged.' };
+
+  // Clear tag and release player to free agency
+  db.prepare('UPDATE players SET franchise_tagged = 0, team_id = NULL, roster_status = ? WHERE id = ?')
+    .run('free_agent', playerId);
+  db.prepare('UPDATE contracts SET team_id = NULL WHERE player_id = ?').run(playerId);
+
+  return { success: true };
+}
+
 export function getOffseasonStatus(teamId: number | null): {
   playoffsComplete: boolean; pendingResigns: number;
   draftGenerated: boolean; draftComplete: boolean;
