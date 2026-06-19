@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useGameStore } from './store/gameStore';
-import { Contract, PracticePlayer, FreeAgent, CapSummary, RosterSpots, Decision } from './franchise/types';
+import { Contract, PracticePlayer, FreeAgent, CapSummary, RosterSpots, Decision, Coach } from './franchise/types';
 import { fmtSalary, fairMarketValue, askingPrice } from './franchise/utils';
 import ActiveRosterTab from './franchise/ActiveRosterTab';
 import PracticeSquadTab from './franchise/PracticeSquadTab';
