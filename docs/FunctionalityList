@@ -17,11 +17,12 @@ CORE INFRASTRUCTURE
            speed, strength, awareness, throw_accuracy, throw_power,
            catching, route_running, tackle_rating, coverage, pass_rush,
            kickpower, kickaccuracy, runblocking, passblocking,
-           morale (INTEGER DEFAULT 75)
-  stats:   tackles, assisted_tackles, sacks, tfl, forced_fumbles,
-           fumble_recoveries, def_interceptions, pass_deflections, def_tds,
-           fg_made, fg_att, xp_made, xp_att
-  games:   home_q1–q4, away_q1–q4, weather
+           morale (INTEGER DEFAULT 75),
+           franchise_tagged (INTEGER DEFAULT 0) [migration v3]
+  stats: tackles, assisted_tackles, sacks, tfl, forced_fumbles,
+         fumble_recoveries, def_interceptions, pass_deflections, def_tds,
+         fg_made, fg_att, xp_made, xp_att
+  games: home_q1–q4, away_q1–q4, weather
   contracts: guaranteed_amount, guaranteed_pct
   draft_prospects: scouted
 - DB indexes on stats(game_id), stats(player_id), stats(team_id),
@@ -35,6 +36,24 @@ CORE INFRASTRUCTURE
 - Multiple save files — save picker at launch, lazy DB init via Proxy,
   full save create / load / delete UI (SavePicker.tsx + saveHandlers.ts)
 - Reset save / new dynasty supported
+
+MEET THE TEAM SCREEN
+────────────────────────────────────────────────────────────────────────────────
+- Shown automatically after team selection on a new dynasty (between
+  setup animation and main game screen)
+- Implemented in MeetTheTeam.tsx, wired into App.tsx as the 'meet-team'
+  screen state — runSetup() transitions here after balanceRosters()
+- Fetches data via existing APIs: getTeamContracts, getCapSummary, getTeamNeeds
+- Displays:
+  - Team name, conference, division header
+  - Four stat cards: Team Grade (letter + avg OVR), Offense OVR, Defense OVR,
+    Cap Space (with used / total breakdown)
+  - Top 10 players ranked by OVR with dev trait badges (XF/SS/★),
+    position label, and color-coded OVR
+  - Team Needs panel showing position shortfalls as orange chips
+  - Roster Snapshot: active roster size, expiring contract count, cap room
+  - Getting Started tips panel
+  - "BEGIN DYNASTY →" CTA button that navigates to the main game screen
 
 HOME TAB
 ────────────────────────────────────────────────────────────────────────────────
@@ -86,17 +105,23 @@ TEAMS TAB
 - Filter roster by position
 - Click a player to open detail panel showing:
   - Full attribute ratings per position:
-    QB: SPD / ACC / PWR / AWR
-    RB/HB/FB: SPD / STR / CAT / AWR
-    WR/TE: SPD / CAT / RTE / AWR
-    OL (LT/LG/C/RG/RT): PBK / RBK / STR / AWR
-    DL (LE/RE/DT/IDL/DE): SPD / STR / PRSH / AWR
-    LB: SPD / TKL / COV / AWR
-    CB/S: SPD / COV / TKL / AWR
-    K: KPW / KAC / AWR
+      QB: SPD / ACC / PWR / AWR
+      RB/HB/FB: SPD / STR / CAT / AWR
+      WR/TE: SPD / CAT / RTE / AWR
+      OL (LT/LG/C/RG/RT): PBK / RBK / STR / AWR
+      DL (LE/RE/DT/IDL/DE): SPD / STR / PRSH / AWR
+      LB: SPD / TKL / COV / AWR
+      CB/S: SPD / COV / TKL / AWR
+      K: KPW / KAC / AWR
   - Development trait badge (Normal / Star / Superstar / X-Factor)
   - Season stats (current season)
   - Career stats (all seasons, expandable by season)
+- Player Editor (inline edit mode, toggled by Edit button):
+  - Editable fields: overall rating, age, dev trait (select), position-group
+    specific attribute sliders (range 40–99 for all position attributes)
+  - On save, calls edit-player IPC handler with column allowlist
+  - Parent Teams.tsx updates selectedPlayer and roster state immutably
+    so changes are reflected immediately without a full reload
 
 DEPTH CHART TAB
 ────────────────────────────────────────────────────────────────────────────────
@@ -112,7 +137,7 @@ FRANCHISE TAB (5 sub-tabs)
 Roster Tab:
   - View full active roster with salary, years remaining, OVR, age, dev trait
   - Morale bar per player — 48px colored progress bar + numeric value:
-    green (80+), orange (60–79), red (<60)
+      green (80+), orange (60–79), red (<60)
   - Sort by salary / years / OVR / age
   - Filter by position, player name search
   - Contract grade badges (TEAM DEAL / OVERPAID) based on fair market value
@@ -139,6 +164,22 @@ Free Agents Tab:
 
 Offseason Tab:
   - Re-sign expiring players with market value guidance
+  - Franchise Tag (FT) designation — 1-year contract at ~135% of fair market:
+      Gold "🏷 FT" button per expiring player while tag is available
+      One franchise tag per team per offseason (enforced server-side)
+      Instantly resolves player's decision as "Re-Signed"
+  - Transition Tag (TT) designation — 1-year contract at ~110% of fair market:
+      Purple "🏷 TT" button per expiring player while tag is available
+      One transition tag per team per offseason
+  - Tag Usage banner at top of Offseason tab:
+      Shows Franchise Tag and Transition Tag as Available (green) or USED
+      (gold/purple) in real time
+  - Tagged players display "FRANCHISE TAGGED" / "TRANSITION TAGGED" badge
+  - Remove Tag button releases player to free agency and reclaims designation
+  - Both tags fire a news event and update the cap on application
+  - Backed by franchise_tagged INTEGER on players (0=none, 1=FT, 2=TT)
+  - applyFranchiseTag / removeFranchiseTag in ContractService.ts
+  - apply-franchise-tag / remove-franchise-tag IPC handlers
   - CPU teams run their own FA signings via cpu-fa-signing handler
   - Offseason status tracking
 
@@ -212,22 +253,24 @@ RECORDS TAB
 
 PLAYOFFS TAB
 ────────────────────────────────────────────────────────────────────────────────
-- AFC and NFC seeding display (7 teams per conference)
+- Bracket-style playoff visualization (Playoffs.tsx):
+  - AFC and NFC conference bracket with Wild Card, Divisional, Championship,
+    and Gridiron Cup rounds rendered in a side-by-side bracket layout
+  - SVG overlay connector lines linking each round's matchups
+  - Seed labels, team names, and scores on each game card
+  - Champion banner at center when Gridiron Cup is complete
 - Simulate round-by-round: Wild Card, Divisional, Championship, Gridiron Cup
-- Game-by-game results with scores per round
 - Gridiron Cup champion recorded to champions history
-- Champions viewable on Home tab
-- All playoff game results logged to news feed with round label
-- Gridiron Cup champion gets dedicated headline in news feed
 
-NEWS TAB
+NEWS CENTER TAB
 ────────────────────────────────────────────────────────────────────────────────
 - Dedicated News Center tab in main navigation
 - Filterable event feed by category:
   Transactions, Draft, Games, Injuries, Milestones, Season events
 - Season selector to browse news from any past season
 - Events logged automatically across all domains:
-  - Contracts: free agent signings, re-signs, releases, cap cuts
+  - Contracts: free agent signings, re-signs, releases, franchise/transition
+    tag applications, cap cuts
   - Draft: every user pick, all Round 1 CPU picks, Star+ dev picks in later rounds
   - Trades: user trades and CPU-vs-CPU trades with full player/pick detail
   - Games: user team results, blowouts (21+ pt margin), standout stat lines
@@ -316,6 +359,8 @@ Contracts:
   - Each player has salary (AAV), years remaining, signing bonus / dead cap
   - Salary cap enforced on signings, extensions, and restructures
   - Dead cap tracked on release
+  - Franchise Tag / Transition Tag locks player to a 1-year premium deal
+    without requiring negotiation (see Offseason Tab for full detail)
 
 Morale:
   - Stored as INTEGER (0–100) on players table, default 75
@@ -410,28 +455,29 @@ CPU-vs-CPU In-Season Trades (runCpuTrades):
 
 BACKEND IPC HANDLERS (full list)
 ────────────────────────────────────────────────────────────────────────────────
-balance-rosters        get-waiver-wire         claim-waiver
-get-standings          get-teams               get-roster
-get-player-stats       get-player-career-stats get-schedule
-get-dashboard          get-stats               get-hall-of-fame
-get-team-season-stats  simulate-playoffs       get-playoffs
-get-champions          get-seasons             get-current-season
-advance-season         generate-schedule       get-current-week
-get-week-matchups      simulate-week           get-injury-report
-get-game-box-score     reset-dynasty           get-playoff-seeds
-get-user-team          set-user-team           get-team-status
-set-team-trade-status  propose-trade           get-tradeable-picks
-get-cpu-trade-offer    accept-cpu-trade-offer  get-team-contracts
-get-practice-squad     get-cap-summary         get-roster-spots
-sign-free-agent-to-ps  get-free-agents         extend-player
-restructure-player     release-player          get-team-stats
-promote-from-ps        sign-free-agent         get-expiring-contracts
-resign-player          get-offseason-status    cpu-fa-signing
-generate-draft-class   get-draft-class         get-draft-order
-get-round-pick-order   make-draft-pick         scout-prospect
-get-scout-count        run-cpu-round           complete-draft
-get-depth-chart        set-depth-chart-order   reset-depth-chart
-get-alltime-leaders    get-season-records      get-season-awards
-get-team-needs         check-setup-done        reset-save
-get-news-feed          get-news-seasons        simulate-game
-list-saves             open-save               delete-save
+balance-rosters      get-waiver-wire       claim-waiver
+get-standings        get-teams             get-roster
+get-player-stats     get-player-career-stats get-schedule
+get-dashboard        get-stats             get-hall-of-fame
+get-team-season-stats simulate-playoffs   get-playoffs
+get-champions        get-seasons           get-current-season
+advance-season       generate-schedule     get-current-week
+get-week-matchups    simulate-week         get-injury-report
+get-game-box-score   reset-dynasty         get-playoff-seeds
+get-user-team        set-user-team         get-team-status
+set-team-trade-status propose-trade        get-tradeable-picks
+get-cpu-trade-offer  accept-cpu-trade-offer get-team-contracts
+get-practice-squad   get-cap-summary       get-roster-spots
+sign-free-agent-to-ps get-free-agents      extend-player
+restructure-player   release-player        get-team-stats
+promote-from-ps      sign-free-agent       get-expiring-contracts
+resign-player        get-offseason-status  cpu-fa-signing
+generate-draft-class get-draft-class       get-draft-order
+get-round-pick-order make-draft-pick       scout-prospect
+get-scout-count      run-cpu-round         complete-draft
+get-depth-chart      set-depth-chart-order reset-depth-chart
+get-alltime-leaders  get-season-records    get-season-awards
+get-team-needs       check-setup-done      reset-save
+get-news-feed        get-news-seasons      simulate-game
+list-saves           open-save             delete-save
+edit-player          apply-franchise-tag   remove-franchise-tag
