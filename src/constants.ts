@@ -28,11 +28,20 @@ export const MAX_SCOUTS = 25;
 export const POSITION_TO_GROUP: Record<string, string> = {
   QB: 'QB',
   RB: 'RB', HB: 'RB', FB: 'RB',
-  WR: 'WR', TE: 'TE',
-  LT: 'OL', LG: 'OL', C: 'OL', RG: 'OL', RT: 'OL', OL: 'OL',
-  LE: 'DL', RE: 'DL', DT: 'DL', IDL: 'DL', DL: 'DL',
+  WR: 'WR',
+  TE: 'TE',
+  // OL — each position gets its own group
+  LT: 'LT', LG: 'LG', C: 'C', RG: 'RG', RT: 'RT',
+  OL: 'LT', // fallback for unlabeled OL players
+  // DL — DE and DT are separate groups
+  DE: 'DE', LE: 'DE', RE: 'DE',
+  DT: 'DT', IDL: 'DT',
+  DL: 'DE', // fallback for unlabeled DL players
+  // LB / DB / K
   MLB: 'LB', OLB: 'LB', LOLB: 'LB', ROLB: 'LB', WILL: 'LB', MIKE: 'LB', LB: 'LB',
-  CB: 'CB', FS: 'S', SS: 'S', S: 'S', K: 'K',
+  CB: 'CB',
+  FS: 'S', SS: 'S', S: 'S',
+  K: 'K',
 };
 
 export const WAIVER_POS_MAX: Record<string, number> = {
@@ -49,18 +58,19 @@ export const HOF_MIN_GAMES = 80;
 
 export const HOF_THRESHOLDS: Record<string, { stat: string; value: number }[]> = {
   QB:  [{ stat: 'pass_yards', value: 25000 }, { stat: 'pass_tds', value: 150 }],
-  RB:  [{ stat: 'rush_yards', value: 8000  }, { stat: 'rush_tds', value: 65  }],
-  HB:  [{ stat: 'rush_yards', value: 8000  }, { stat: 'rush_tds', value: 65  }],
-  WR:  [{ stat: 'rec_yards',  value: 7000  }, { stat: 'rec_tds',  value: 50  }],
-  TE:  [{ stat: 'rec_yards',  value: 6000  }, { stat: 'rec_tds',  value: 45  }],
-  DL:  [{ stat: 'sacks',      value: 80    }],
-  LE:  [{ stat: 'sacks',      value: 80    }],
-  RE:  [{ stat: 'sacks',      value: 80    }],
-  DT:  [{ stat: 'sacks',      value: 60    }],
-  IDL: [{ stat: 'sacks',      value: 60    }],
-  LB:  [{ stat: 'tackles',    value: 800   }, { stat: 'sacks', value: 60 }],
-  MLB: [{ stat: 'tackles',    value: 800   }, { stat: 'sacks', value: 60 }],
-  OLB: [{ stat: 'tackles',    value: 700   }, { stat: 'sacks', value: 70 }],
+  RB:  [{ stat: 'rush_yards', value: 8000 },  { stat: 'rush_tds', value: 65 }],
+  HB:  [{ stat: 'rush_yards', value: 8000 },  { stat: 'rush_tds', value: 65 }],
+  WR:  [{ stat: 'rec_yards',  value: 7000 },  { stat: 'rec_tds', value: 50 }],
+  TE:  [{ stat: 'rec_yards',  value: 6000 },  { stat: 'rec_tds', value: 45 }],
+  DL:  [{ stat: 'sacks', value: 80 }],
+  DE:  [{ stat: 'sacks', value: 80 }],
+  LE:  [{ stat: 'sacks', value: 80 }],
+  RE:  [{ stat: 'sacks', value: 80 }],
+  DT:  [{ stat: 'sacks', value: 60 }],
+  IDL: [{ stat: 'sacks', value: 60 }],
+  LB:  [{ stat: 'tackles', value: 800 }, { stat: 'sacks', value: 60 }],
+  MLB: [{ stat: 'tackles', value: 800 }, { stat: 'sacks', value: 60 }],
+  OLB: [{ stat: 'tackles', value: 700 }, { stat: 'sacks', value: 70 }],
   CB:  [{ stat: 'def_interceptions', value: 25 }, { stat: 'pass_deflections', value: 80 }],
   S:   [{ stat: 'def_interceptions', value: 25 }, { stat: 'tackles', value: 700 }],
   FS:  [{ stat: 'def_interceptions', value: 25 }, { stat: 'tackles', value: 700 }],
