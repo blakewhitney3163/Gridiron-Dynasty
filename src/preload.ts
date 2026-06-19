@@ -272,4 +272,17 @@ getScoutCount: () =>
     runblocking?: number; passblocking?: number;
   }) => ipcRenderer.invoke('edit-player', payload),
 
+    // Coaching Staff
+  getCoachingStaff: (teamId: number) =>
+    ipcRenderer.invoke('get-coaching-staff', teamId),
+
+  getAvailableCoaches: (role?: string) =>
+    ipcRenderer.invoke('get-available-coaches', role),
+
+  hireCoach: (payload: { teamId: number; coachId: number }) =>
+    ipcRenderer.invoke('hire-coach', payload),
+
+  fireCoach: (coachId: number) =>
+    ipcRenderer.invoke('fire-coach', coachId),
+
 });
