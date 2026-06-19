@@ -1,4 +1,4 @@
-NFL SIMULATOR — FULL FEATURE INVENTORY
+GRIDIRON DYNASTY — FULL FEATURE INVENTORY
 Last Updated: June 18, 2026
 Repository: https://github.com/blakewhitney3163/NFLSimulator
 ================================================================================
@@ -13,12 +13,13 @@ CORE INFRASTRUCTURE
   player_milestones
 - Auto-migrated columns on launch (ALTER TABLE ADD COLUMN pattern):
   players: position_label, dev_trait, roster_status, injury_status,
-    weeks_out, injury_type, waived_by_team_id, waiver_placed_week,
-    + all raw Madden CSV attributes (agility, acceleration, runblocking,
-    passblocking, kickpower, kickaccuracy, throwpower, etc.)
+           weeks_out, injury_type, waived_by_team_id, waiver_placed_week,
+           speed, strength, awareness, throw_accuracy, throw_power,
+           catching, route_running, tackle_rating, coverage, pass_rush,
+           kickpower, kickaccuracy, runblocking, passblocking
   stats: tackles, assisted_tackles, sacks, tfl, forced_fumbles,
-    fumble_recoveries, def_interceptions, pass_deflections, def_tds,
-    fg_made, fg_att, xp_made, xp_att
+         fumble_recoveries, def_interceptions, pass_deflections, def_tds,
+         fg_made, fg_att, xp_made, xp_att
   games: home_q1–q4, away_q1–q4, weather
   contracts: guaranteed_amount, guaranteed_pct
   draft_prospects: scouted
@@ -26,9 +27,12 @@ CORE INFRASTRUCTURE
   stats(team_id, game_id), games(season), games(season, is_simulated)
 - player_milestones table — deduplication store for career/season milestones
   with PRIMARY KEY (player_id, milestone_key)
-- All 32 NFL teams auto-seeded on first launch
-- Madden ratings CSV import to populate real player rosters on fresh start
-- OTC contract HTML import to load real-world salaries
+- 32 fictional teams auto-seeded on first launch (AFC/NFC, 4 divisions each)
+- Fictional player generator seeds 53 players per team + 176 free agents
+  on fresh start (generatePlayers.ts — position-specific attributes,
+  dev trait distribution, role-based OVR curves, full FA pool)
+- Multiple save files — save picker at launch, lazy DB init via Proxy,
+  full save create / load / delete UI (SavePicker.tsx + saveHandlers.ts)
 - Reset save / new dynasty supported
 
 HOME TAB
@@ -182,13 +186,12 @@ Team Stats Mode (toggle):
   - Columns: PPG, YPG, passing YPG, rushing YPG, points allowed, etc.
   - Sort by any column ascending or descending
 
-Import:
-  - Import real NFL stats from nflverse CSV files
-
 RECORDS TAB
 ────────────────────────────────────────────────────────────────────────────────
 - All-time leaders by stat category (sortable table)
 - Single-season records by category
+- Empty state on fresh dynasty: "No records yet — simulate some games first"
+- Gold benchmark rows supported for imported historical records (BENCHMARK badge)
 - Season awards per year:
   MVP, Defensive Player of the Year, Offensive ROY, Defensive ROY,
   Coach of the Year
@@ -200,12 +203,12 @@ RECORDS TAB
 PLAYOFFS TAB
 ────────────────────────────────────────────────────────────────────────────────
 - AFC and NFC seeding display (7 teams per conference)
-- Simulate round-by-round: Wild Card, Divisional, Championship, Super Bowl
+- Simulate round-by-round: Wild Card, Divisional, Championship, Gridiron Cup
 - Game-by-game results with scores per round
-- Super Bowl champion recorded to champions history
+- Gridiron Cup champion recorded to champions history
 - Champions viewable on Home tab
 - All playoff game results logged to news feed with round label
-- Super Bowl champion gets dedicated headline in news feed
+- Gridiron Cup champion gets dedicated headline in news feed
 
 NEWS TAB
 ────────────────────────────────────────────────────────────────────────────────
@@ -221,7 +224,7 @@ NEWS TAB
     (300+ pass yds, 4+ TDs, 150+ rush yds, 120+ rec yds, 2+ rec TDs)
   - Injuries: user team injury reports with severity and weeks out
   - Season: retirements, Hall of Fame inductions
-  - Playoffs: every round result, Super Bowl champion headline
+  - Playoffs: every round result, Gridiron Cup champion headline
   - Milestones: career stat thresholds (10k/20k/30k/40k/50k pass yds,
     100/200/300/400 pass TDs, 5k/10k/15k rush yds, 50/100 rush TDs,
     5k/10k/15k rec yds, 50/100 rec TDs, 500/750/1k receptions,
@@ -260,7 +263,7 @@ Game script (scoreDiff influence):
 
 Overtime simulation:
   - Triggers only on tied scores at end of regulation
-  - NFL rules: TD on first possession wins; FG gives opponent a chance
+  - Rules: TD on first possession wins; FG gives opponent a chance
   - Both teams fail → sudden death FG decides the game
   - No ties allowed as final result
 
@@ -376,28 +379,28 @@ CPU-vs-CPU In-Season Trades (runCpuTrades):
 
 BACKEND IPC HANDLERS (full list)
 ────────────────────────────────────────────────────────────────────────────────
-balance-rosters        get-waiver-wire         claim-waiver
-get-standings          get-teams               get-roster
-get-player-stats       get-player-career-stats get-schedule
-get-dashboard          get-stats               get-hall-of-fame
-get-team-season-stats  simulate-playoffs       get-playoffs
-get-champions          get-seasons             get-current-season
-advance-season         generate-schedule       get-current-week
-get-week-matchups      simulate-week           get-injury-report
-get-game-box-score     reset-dynasty           get-playoff-seeds
-get-user-team          set-user-team           get-team-status
-set-team-trade-status  propose-trade           get-tradeable-picks
-get-cpu-trade-offer    accept-cpu-trade-offer  get-team-contracts
-get-practice-squad     get-cap-summary         get-roster-spots
-sign-free-agent-to-ps  get-free-agents         extend-player
-restructure-player     release-player          get-team-stats
-promote-from-ps        sign-free-agent         get-expiring-contracts
-resign-player          get-offseason-status    cpu-fa-signing
-generate-draft-class   get-draft-class         get-draft-order
-get-round-pick-order   make-draft-pick         scout-prospect
-get-scout-count        run-cpu-round           complete-draft
-import-otc-contracts   get-depth-chart         set-depth-chart-order
-reset-depth-chart      get-alltime-leaders     get-season-records
-get-season-awards      get-team-needs          import-nflverse-stats
-check-setup-done       reset-save              get-news-feed
-get-news-seasons       simulate-game
+balance-rosters get-waiver-wire claim-waiver
+get-standings get-teams get-roster
+get-player-stats get-player-career-stats get-schedule
+get-dashboard get-stats get-hall-of-fame
+get-team-season-stats simulate-playoffs get-playoffs
+get-champions get-seasons get-current-season
+advance-season generate-schedule get-current-week
+get-week-matchups simulate-week get-injury-report
+get-game-box-score reset-dynasty get-playoff-seeds
+get-user-team set-user-team get-team-status
+set-team-trade-status propose-trade get-tradeable-picks
+get-cpu-trade-offer accept-cpu-trade-offer get-team-contracts
+get-practice-squad get-cap-summary get-roster-spots
+sign-free-agent-to-ps get-free-agents extend-player
+restructure-player release-player get-team-stats
+promote-from-ps sign-free-agent get-expiring-contracts
+resign-player get-offseason-status cpu-fa-signing
+generate-draft-class get-draft-class get-draft-order
+get-round-pick-order make-draft-pick scout-prospect
+get-scout-count run-cpu-round complete-draft
+get-depth-chart set-depth-chart-order reset-depth-chart
+get-alltime-leaders get-season-records get-season-awards
+get-team-needs check-setup-done reset-save
+get-news-feed get-news-seasons simulate-game
+list-saves open-save delete-save
