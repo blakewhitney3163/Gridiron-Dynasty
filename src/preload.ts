@@ -154,7 +154,7 @@ getNewsSeasons: () =>
     ipcRenderer.invoke('sign-free-agent', payload),
 
   importHistoricalRecords: (recordType: 'alltime' | 'season') =>
-  ipcRenderer.invoke('import-historical-records', recordType),
+    ipcRenderer.invoke('import-historical-records', recordType),
 
   getExpiringContracts: () =>
     ipcRenderer.invoke('get-expiring-contracts'),
@@ -240,5 +240,12 @@ getScoutCount: () =>
    
    getTeamNeeds: (teamId: number) =>
     ipcRenderer.invoke('get-team-needs', teamId),
+
+  // Custom Data Imports
+  importCustomTeams: () =>
+    ipcRenderer.invoke('import-custom-teams'),
+
+  importCustomPlayers: () =>
+    ipcRenderer.invoke('import-custom-players'),
 
 });
