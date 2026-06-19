@@ -10,7 +10,7 @@ declare const window: any;
 function StatBox({ label, value }: { label: string; value: any }) {
   return (
     <div style={{ textAlign: 'center', minWidth: 60 }}>
-      <div style={{ fontSize: 18, fontWeight: 700, color: T.text }}>{value ?? '—'}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: T.textPrimary }}>{value ?? '—'}</div>
       <div style={{ fontSize: 10, color: T.textSecondary, marginTop: 2 }}>{label}</div>
     </div>
   );
@@ -266,17 +266,17 @@ export default function PlayerProfile({
 
   return (
     <div style={{
-      background: T.bgCard, border: `1px solid ${T.border}`,
+      background: T.bgCard, border: `1px solid ${T.borderMid}`,
       borderRadius: 8, overflow: 'hidden',
     }}>
 
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-        padding: '14px 16px 12px', borderBottom: `1px solid ${T.border}`,
+        padding: '14px 16px 12px', borderBottom: `1px solid ${T.borderMid}`,
       }}>
         <div>
-          <div style={{ color: T.text, fontSize: 16, fontWeight: 700 }}>
+          <div style={{ olor: T.textPrimary, fontSize: 16, fontWeight: 700 }}>
             {player.first_name} {player.last_name}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
@@ -319,7 +319,7 @@ export default function PlayerProfile({
 
       {/* Edit panel */}
       {editing && (
-        <div style={{ borderBottom: `1px solid ${T.border}`, padding: '14px 0 0' }}>
+        <div style={{ borderBottom: `1px solid ${T.borderMid}`, padding: '14px 0 0' }}>
           <EditPanel
             player={player}
             onSave={handleSave}
@@ -330,7 +330,7 @@ export default function PlayerProfile({
 
       {/* Attributes (view mode) */}
       {!editing && (
-        <div style={{ padding: '14px 16px', borderBottom: `1px solid ${T.border}` }}>
+        <div style={{ padding: '14px 16px', borderBottom: `1px solid ${T.borderMid}` }}>
           <div style={{ color: T.textSecondary, fontSize: 10, letterSpacing: 1, marginBottom: 8 }}>
             ATTRIBUTES
           </div>
