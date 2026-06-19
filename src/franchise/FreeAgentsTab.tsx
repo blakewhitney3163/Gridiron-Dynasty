@@ -1,5 +1,4 @@
 import React from 'react';
-import { FixedSizeList, ListChildComponentProps } from 'react-window';
 import { FreeAgent, CapSummary, RosterSpots } from './types';
 import { POSITIONS, TRAIT_META, ratingColor, trajectory, fmtSalary, fairMarketValue } from './utils';
 
@@ -26,12 +25,8 @@ interface Props {
   working: boolean;
 }
 
-// ─── Virtualized Row ──────────────────────────────────────────────────────────
-
-const ITEM_HEIGHT = 54;
-
-interface FaRowData {
-  items: FreeAgent[];
+interface FaRowProps {
+  fa: FreeAgent;
   signingId: number | null;
   psSigningId: number | null;
   rosterSpots: RosterSpots | null;
@@ -40,87 +35,67 @@ interface FaRowData {
   setSigningId: (id: number | null) => void;
 }
 
-const FaRow = React.memo(({ index, style, data }: ListChildComponentProps<FaRowData>) => {
-  const { items, signingId, psSigningId, rosterSpots, openSign, handleSignToPs, setSigningId } = data;
-  const fa = items[index];
-  if (!fa) return null;
-
+const FaRow = React.memo(({ fa, signingId, psSigningId, rosterSpots, openSign, handleSignToPs, setSigningId }: FaRowProps) => {
   const trait = TRAIT_META[fa.dev_trait] ?? TRAIT_META['Normal'];
   const traj = trajectory(fa.age);
   const mv = fairMarketValue(fa.position, fa.overall_rating, fa.dev_trait);
   const isSigning = signingId === fa.id;
 
   return (
-    <div style={style}>
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 80px 60px 90px 90px 80px',
-        gap: 6, alignItems: 'center', padding: '8px 10px',
-        background: isSigning ? '#0a1020' : T_bgCard,
-        borderRadius: 4, height: ITEM_HEIGHT - 4, boxSizing: 'border-box',
-        border: `1px solid ${isSigning ? '#4FC3F7' : T_borderFaint}`,
-      }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ fontWeight: 600, fontSize: 12, color: '#e0e0e0' }}>
-              {fa.first_name} {fa.last_name}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderBottom: '1px solid #1a1a1a', fontSize: 12 }}>
+      <div style={{ width: 3, alignSelf: 'stretch', background: ratingColor(fa.overall_rating), borderRadius: 2, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ color: '#ccc', fontWeight: 600, fontSize: 12 }}>{fa.first_name} {fa.last_name}</span>
+          {trait.short && (
+            <span style={{ fontSize: 8, fontWeight: 700, color: trait.color, background: trait.bg, borderRadius: 2, padding: '1px 3px' }}>
+              {trait.short}
             </span>
-            {trait.short && (
-              <span style={{ fontSize: 8, fontWeight: 700, color: trait.color, background: trait.bg, borderRadius: 2, padding: '1px 3px' }}>
-                {trait.short}
-              </span>
-            )}
-          </div>
-          <span style={{ fontSize: 10, color: '#555' }}>{fa.position_label || fa.position}</span>
+          )}
         </div>
-        <div>
-          <span style={{ fontSize: 11, color: '#888' }}>{fa.age} </span>
-          <span style={{ fontSize: 10, color: traj.color }}>{traj.label}</span>
-        </div>
-        <span style={{ fontSize: 13, fontWeight: 700, color: ratingColor(fa.overall_rating) }}>
-          {fa.overall_rating}
-        </span>
-        <span style={{ fontSize: 11, color: '#555' }}>
-          {fa.dev_trait === 'Normal' ? '—' : fa.dev_trait}
-        </span>
-        <span style={{ fontSize: 11, color: '#888' }}>{fmtSalary(mv)}/yr</span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button
-            onClick={() => isSigning ? setSigningId(null) : openSign(fa)}
-            disabled={!!(rosterSpots && rosterSpots.activeFree <= 0)}
-            style={{
-              padding: '4px 10px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
-              background: isSigning ? '#0a1a3a' : '#141414',
-              border: `1px solid ${isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? '#1a1a1a' : '#2a2a2a'}`,
-              color: isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? '#2a2a2a' : '#555',
-            }}
-          >
-            {isSigning ? 'Cancel' : 'Sign'}
-          </button>
-          <button
-            onClick={() => handleSignToPs(fa)}
-            disabled={!!(psSigningId === fa.id || (rosterSpots && rosterSpots.psFree <= 0))}
-            style={{
-              padding: '4px 8px', fontSize: 10, cursor: 'pointer', borderRadius: 4,
-              background: '#141414',
-              border: `1px solid ${rosterSpots && rosterSpots.psFree <= 0 ? '#1a1a1a' : '#1a2a3a'}`,
-              color: psSigningId === fa.id ? '#888' : rosterSpots && rosterSpots.psFree <= 0 ? '#2a2a2a' : '#4FC3F7',
-              fontWeight: 700,
-            }}
-          >
-            {psSigningId === fa.id ? '...' : 'PS'}
-          </button>
-        </div>
+        <span style={{ color: '#555', fontSize: 10 }}>{fa.position_label || fa.position}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#777', fontSize: 11 }}>
+        <span>{fa.age}</span>
+        <span style={{ color: traj.color }}>{traj.label}</span>
+      </div>
+      <div style={{ width: 32, textAlign: 'center', color: ratingColor(fa.overall_rating), fontWeight: 700, fontSize: 13 }}>
+        {fa.overall_rating}
+      </div>
+      <div style={{ width: 72, color: '#555', fontSize: 10, textAlign: 'center' }}>
+        {fa.dev_trait === 'Normal' ? '—' : fa.dev_trait}
+      </div>
+      <div style={{ width: 64, color: '#888', fontSize: 11 }}>{fmtSalary(mv)}/yr</div>
+      <div style={{ display: 'flex', gap: 4 }}>
+        <button
+          onClick={() => isSigning ? setSigningId(null) : openSign(fa)}
+          disabled={!!(rosterSpots && rosterSpots.activeFree <= 0)}
+          style={{
+            padding: '4px 10px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
+            background: isSigning ? '#0a1a3a' : '#141414',
+            border: `1px solid ${isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? '#1a1a1a' : '#2a2a2a'}`,
+            color: isSigning ? '#4FC3F7' : rosterSpots && rosterSpots.activeFree <= 0 ? '#2a2a2a' : '#555',
+          }}
+        >
+          {isSigning ? 'Cancel' : 'Sign'}
+        </button>
+        <button
+          onClick={() => handleSignToPs(fa)}
+          disabled={!!(psSigningId === fa.id || (rosterSpots && rosterSpots.psFree <= 0))}
+          style={{
+            padding: '4px 8px', fontSize: 10, cursor: 'pointer', borderRadius: 4,
+            background: '#141414',
+            border: `1px solid ${rosterSpots && rosterSpots.psFree <= 0 ? '#1a1a1a' : '#1a2a3a'}`,
+            color: psSigningId === fa.id ? '#888' : rosterSpots && rosterSpots.psFree <= 0 ? '#2a2a2a' : '#4FC3F7',
+            fontWeight: 700,
+          }}
+        >
+          {psSigningId === fa.id ? '...' : 'PS'}
+        </button>
       </div>
     </div>
   );
 });
-
-// ─── Theme shims (mirrors T object values used here) ─────────────────────────
-const T_bgCard = '#161616';
-const T_borderFaint = '#222';
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function FreeAgentsTab({
   freeAgents, cap, rosterSpots, teamNeeds,
@@ -153,13 +128,11 @@ export default function FreeAgentsTab({
     setSignSalary(market.toFixed(1));
   };
 
-  const rowData: FaRowData = { items: filteredFa, signingId, psSigningId, rosterSpots, openSign, handleSignToPs, setSigningId };
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: 'monospace' }}>
 
       {/* Filters */}
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', padding: '8px 12px', borderBottom: '1px solid #222' }}>
         {['NEEDS', ...POSITIONS].map(pos => {
           const isNeeds = pos === 'NEEDS';
           const isActive = faPos === pos;
@@ -198,7 +171,7 @@ export default function FreeAgentsTab({
 
       {/* Cap / roster status bar */}
       {rosterSpots && cap && (
-        <div style={{ display: 'flex', gap: 12, fontSize: 11, marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 16, padding: '6px 12px', fontSize: 11, borderBottom: '1px solid #1a1a1a' }}>
           <span style={{ color: rosterSpots.activeFree > 0 ? '#4caf50' : '#e57373' }}>
             Active: {rosterSpots.active}/53 · {rosterSpots.activeFree > 0 ? `${rosterSpots.activeFree} open` : 'FULL'}
           </span>
@@ -211,18 +184,15 @@ export default function FreeAgentsTab({
         </div>
       )}
 
-      {/* Signing panel — rendered once, outside the list */}
+      {/* Signing panel */}
       {signingPlayer && (
-        <div style={{
-          background: '#0a1020', border: '1px solid #4FC3F7', borderRadius: 6,
-          padding: '12px 14px', marginBottom: 8,
-        }}>
-          <div style={{ color: '#4FC3F7', fontWeight: 700, fontSize: 12, marginBottom: 8 }}>
+        <div style={{ background: '#0d1a2a', border: '1px solid #1a3a5a', borderRadius: 6, margin: '8px 12px', padding: 12 }}>
+          <div style={{ color: '#4FC3F7', fontWeight: 700, fontSize: 12, marginBottom: 10 }}>
             OFFER CONTRACT — {signingPlayer.first_name} {signingPlayer.last_name}
           </div>
           <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             <div>
-              <div style={{ color: '#888', fontSize: 10, marginBottom: 4 }}>YEARS</div>
+              <div style={{ color: '#555', fontSize: 10, marginBottom: 6 }}>YEARS</div>
               <div style={{ display: 'flex', gap: 4 }}>
                 {[1, 2, 3, 4, 5].map(y => (
                   <button key={y} onClick={() => setSignYears(y)} style={{
@@ -236,9 +206,9 @@ export default function FreeAgentsTab({
               </div>
             </div>
             <div>
-              <div style={{ color: '#888', fontSize: 10, marginBottom: 4 }}>ANNUAL SALARY (M)</div>
+              <div style={{ color: '#555', fontSize: 10, marginBottom: 6 }}>ANNUAL SALARY (M)</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ color: '#888', fontSize: 12 }}>$</span>
+                <span style={{ color: '#555' }}>$</span>
                 <input
                   type="number"
                   value={signSalary}
@@ -249,17 +219,13 @@ export default function FreeAgentsTab({
                     color: '#ccc', padding: '6px 10px', fontSize: 13, width: 80,
                   }}
                 />
-                <span style={{ color: '#888', fontSize: 12 }}>M</span>
+                <span style={{ color: '#555' }}>M</span>
               </div>
-              <div style={{ color: '#555', fontSize: 10, marginTop: 4 }}>
-                Market: {fmtSalary(mv)}/yr
-              </div>
+              <div style={{ color: '#4FC3F7', fontSize: 10, marginTop: 4 }}>Market: {fmtSalary(mv)}/yr</div>
             </div>
             <div>
-              <div style={{ color: '#888', fontSize: 10, marginBottom: 4 }}>CAP AFTER SIGNING</div>
-              <div style={{ color: signCapLeft < 0 ? '#e57373' : '#4caf50', fontWeight: 700, fontSize: 13 }}>
-                {fmtSalary(signCapLeft)} remaining
-              </div>
+              <div style={{ color: '#555', fontSize: 10, marginBottom: 6 }}>CAP AFTER SIGNING</div>
+              <div style={{ color: signCapLeft >= 0 ? '#4caf50' : '#e57373', fontWeight: 700 }}>{fmtSalary(signCapLeft)} remaining</div>
               {rosterSpots && (
                 <div style={{ color: '#555', fontSize: 10, marginTop: 2 }}>
                   {rosterSpots.activeFree - 1} roster spot{rosterSpots.activeFree - 1 !== 1 ? 's' : ''} left after
@@ -271,8 +237,8 @@ export default function FreeAgentsTab({
               disabled={working || signCapLeft < 0}
               style={{
                 alignSelf: 'flex-end', padding: '8px 20px', fontSize: 12, fontWeight: 700,
-                background: working || signCapLeft < 0 ? '#141414' : '#4FC3F7',
-                color: working || signCapLeft < 0 ? '#555' : '#000',
+                background: working || signCapLeft < 0 ? '#1a1a1a' : '#4FC3F7',
+                color: working || signCapLeft < 0 ? '#333' : '#000',
                 border: 'none', borderRadius: 4, cursor: working || signCapLeft < 0 ? 'not-allowed' : 'pointer',
               }}
             >
@@ -283,33 +249,33 @@ export default function FreeAgentsTab({
       )}
 
       {/* Column header */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 80px 60px 90px 90px 80px',
-        gap: 6, padding: '4px 10px', marginBottom: 2,
-      }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 44px 80px 80px 110px', gap: 4, padding: '4px 20px', fontSize: 9, color: '#444', letterSpacing: 1, borderBottom: '1px solid #1a1a1a' }}>
         {['PLAYER', 'AGE / OVR', 'OVR', 'DEV', 'MARKET VALUE', ''].map((h, i) => (
-          <span key={i} style={{ fontSize: 9, color: '#444', fontWeight: 700, letterSpacing: 0.5 }}>{h}</span>
+          <span key={i}>{h}</span>
         ))}
       </div>
 
-      {/* Virtualized free agent list */}
-      {filteredFa.length === 0 ? (
-        <div style={{ textAlign: 'center', color: '#555', padding: 20, fontSize: 12 }}>
-          No free agents found
-        </div>
-      ) : (
-        <FixedSizeList
-          height={480}
-          itemCount={filteredFa.length}
-          itemSize={ITEM_HEIGHT}
-          width="100%"
-          itemData={rowData}
-        >
-          {FaRow}
-        </FixedSizeList>
-      )}
+      {/* Scrollable free agent list */}
+      <div style={{ overflowY: 'auto', flex: 1 }}>
+        {filteredFa.length === 0 ? (
+          <div style={{ color: '#444', padding: 20, fontSize: 12 }}>No free agents found</div>
+        ) : (
+          filteredFa.map(fa => (
+            <FaRow
+              key={fa.id}
+              fa={fa}
+              signingId={signingId}
+              psSigningId={psSigningId}
+              rosterSpots={rosterSpots}
+              openSign={openSign}
+              handleSignToPs={handleSignToPs}
+              setSigningId={setSigningId}
+            />
+          ))
+        )}
+      </div>
 
-      <div style={{ color: '#333', fontSize: 10, textAlign: 'right', marginTop: 4 }}>
+      <div style={{ padding: '6px 12px', fontSize: 10, color: '#444', borderTop: '1px solid #1a1a1a' }}>
         {filteredFa.length} free agent{filteredFa.length !== 1 ? 's' : ''} shown (top 200 by OVR)
       </div>
     </div>
