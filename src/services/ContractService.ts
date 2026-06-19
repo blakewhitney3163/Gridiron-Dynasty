@@ -77,7 +77,7 @@ export function signFreeAgent(
 
 export function resignPlayer(
   playerId: number, years: number, salary: number
-): SuccessResult & { willHitFA?: boolean } {
+): SuccessResult & { willHitFA?: boolean; counterOffer?: { salary: number; years: number } } {
   const player = playerRepo.getById(playerId);
   if (!player) return { success: false, reason: 'Player not found.' };
 
@@ -92,12 +92,19 @@ export function resignPlayer(
   if (player.dev_trait === 'Superstar') acceptChance = Math.max(0, acceptChance - 0.08);
 
   if (Math.random() >= acceptChance) {
+    // Build a counter offer at the player's actual asking price
+    const ageMul = player.age <= 28 ? 1.10 : player.age <= 32 ? 1.00 : 0.90;
+    const rawCounter = fairMarket * ageMul * 1.05;
+    const counterSalary = Math.round(rawCounter * 2) / 2; // round to nearest $0.5M
+    const counterYears = player.age <= 26 ? 4 : player.age <= 30 ? 3 : player.age <= 33 ? 2 : 1;
+
     const reason =
-      ratio < 0.50 ? `Insulted by the offer. Looking for around ${fairMarket.toFixed(1)}M/yr.` :
-      ratio < 0.70 ? `Not enough to stay. Asking price is closer to ${fairMarket.toFixed(1)}M/yr.` :
-      ratio < 0.85 ? `Wants to test the market. Try offering closer to ${fairMarket.toFixed(1)}M/yr.` :
-      `Decided to explore other options despite the offer.`;
-    return { success: false, reason, willHitFA: true };
+      ratio < 0.50 ? `Insulted by the offer. Counters at $${counterSalary.toFixed(1)}M/yr.` :
+      ratio < 0.70 ? `Not enough to stay. Counters at $${counterSalary.toFixed(1)}M/yr.` :
+      ratio < 0.85 ? `Wants more guaranteed money. Counters at $${counterSalary.toFixed(1)}M/yr.` :
+      `Not settling at that rate. Counters at $${counterSalary.toFixed(1)}M/yr.`;
+
+    return { success: false, reason, willHitFA: true, counterOffer: { salary: counterSalary, years: counterYears } };
   }
 
   const guaranteedPct = Math.round(35 + Math.random() * 25);
@@ -618,6 +625,21 @@ export function releasePlayer(playerId: number): SuccessResult & { onWaivers: bo
   const isInSeason = gameRepo.countBySeason(season) > 0;
   const player = playerRepo.getById(playerId) as any;
   const teamId = player?.team_id ?? null;
+  const contract = contractRepo.getByPlayer(playerId);
+
+  // Write dead cap for mid-contract releases (years_remaining > 1)
+  if (contract && contract.years_remaining > 1 && (contract.guaranteed_amount ?? 0) > 0 && teamId && player) {
+    const deadCap = Math.round(
+      contract.guaranteed_amount * (contract.years_remaining / Math.max(contract.years_total, 1)) * 10
+    ) / 10;
+    if (deadCap > 0) {
+      contractRepo.addDeadCap(
+        teamId, playerId,
+        `${player.first_name} ${player.last_name}`,
+        player.position, season, deadCap
+      );
+    }
+  }
 
   if (isInSeason) {
     playerRepo.releaseToWaivers(playerId, teamId, gameRepo.getCurrentWeek(season) ?? 1);
@@ -631,7 +653,7 @@ export function releasePlayer(playerId: number): SuccessResult & { onWaivers: bo
     logNewsEvent({
       eventType: 'release', category: 'transactions',
       headline: `${t ? `${t.city} ${t.name}` : 'Team'} Release ${player.first_name} ${player.last_name}`,
-      detail: `${player.position} · ${isInSeason ? 'Placed on waivers.' : 'Released to free agency.'}`,
+      detail: `${player.position} · ${isInSeason ? 'Placed on waivers.' : 'Released to free agency.'}${contract && contract.years_remaining > 1 && (contract.guaranteed_amount ?? 0) > 0 ? ` Dead cap applied.` : ''}`,
       teamId, playerId,
     });
   }
