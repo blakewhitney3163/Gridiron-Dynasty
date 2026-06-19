@@ -3,13 +3,8 @@ Last Updated: June 18, 2026
 Repository: https://github.com/blakewhitney3163/NFLSimulator
 ================================================================================
 
-TIER 1 — Makes the sim feel alive (highest impact)
-────────────────────────────────────────────────────────────────────────────────
-[DONE June 18, 2026] Milestone Notifications — career and single-season
-  milestones fire as news events when a player crosses a threshold for the
-  first time. Covers 9 career stat categories and 5 historic single-season
-  lines. Tracked in player_milestones table (deduped per player/threshold).
-  Wired into simulate-week and simulate-game via checkMilestones.ts.
+When you first start the dynasty - a meet the team screen - roster - overall ratings - best players etc Surface trade offers on main screen (same with news) Also be able to update own team status
+Place for users to select picks to trade that’s more obvious
 
 TIER 2 — Adds strategic depth
 ────────────────────────────────────────────────────────────────────────────────
