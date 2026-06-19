@@ -1,18 +1,35 @@
 import { T } from '../theme';
 
-export const POSITION_GROUPS = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K'];
+export const POSITION_GROUPS = [
+  'QB', 'RB', 'WR', 'TE',
+  'LT', 'LG', 'C', 'RG', 'RT',
+  'DE', 'DT',
+  'LB', 'CB', 'S', 'K',
+];
 
 export const GROUP_LABELS: Record<string, string> = {
-  QB: 'Quarterback', RB: 'Running Back', WR: 'Wide Receiver', TE: 'Tight End',
-  OL: 'Offensive Line', DL: 'Defensive Line', LB: 'Linebacker',
-  CB: 'Cornerback', S: 'Safety', K: 'Kicker',
+  QB: 'Quarterback',
+  RB: 'Running Back',
+  WR: 'Wide Receiver',
+  TE: 'Tight End',
+  LT: 'Left Tackle',
+  LG: 'Left Guard',
+  C:  'Center',
+  RG: 'Right Guard',
+  RT: 'Right Tackle',
+  DE: 'Defensive End',
+  DT: 'Defensive Tackle',
+  LB: 'Linebacker',
+  CB: 'Cornerback',
+  S:  'Safety',
+  K:  'Kicker',
 };
 
 export const TRAIT_META: Record<string, { color: string; short: string }> = {
-  Normal:     { color: T.textDim,  short: '' },
-  Star:       { color: '#4FC3F7', short: 'S' },
-  Superstar:  { color: '#FF8740', short: 'SS' },
-  'X-Factor': { color: '#FFD700', short: 'XF' },
+  Normal:    { color: T.textDim,  short: '' },
+  Star:      { color: '#4FC3F7', short: 'S' },
+  Superstar: { color: '#FF8740', short: 'SS' },
+  'X-Factor':{ color: '#FFD700', short: 'XF' },
 };
 
 export function ovrColor(ovr: number): string {
