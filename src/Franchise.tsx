@@ -49,6 +49,8 @@ export default function Franchise() {
   const [playerDecisions, setPlayerDecisions] = useState<Record<number, Decision>>({});
   const [cpuFaResult, setCpuFaResult] = useState<CpuFaResult | null>(null);
   const [cpuFaDone, setCpuFaDone] = useState(false);
+    const [pendingCounters, setPendingCounters] = useState<Record<number, { salary: number; years: number }>>({});
+  const [deadCap, setDeadCap] = useState<{ amount: number; entries: any[] } | null>(null);
 
     // Tag decisions
   const [tagWorking, setTagWorking] = useState(false);
@@ -67,14 +69,16 @@ export default function Franchise() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  const loadData = async () => {
-    const [c, s, ps, spots] = await Promise.all([
+    const loadData = async () => {
+    const [c, s, ps, spots, dc] = await Promise.all([
       window.api.getTeamContracts(userTeam.id),
       window.api.getCapSummary(userTeam.id),
       window.api.getPracticeSquad(userTeam.id),
       window.api.getRosterSpots(userTeam.id),
+      window.api.getDeadCap(userTeam.id),
     ]);
     setContracts(c); setCap(s); setPracticeSquad(ps); setRosterSpots(spots);
+    setDeadCap(dc ?? null);
   };
 
   const loadFreeAgents = async () => {
@@ -158,7 +162,7 @@ export default function Franchise() {
     setPsSigningId(null);
   };
 
-  const handleResign = async () => {
+    const handleResign = async () => {
     if (!resigningId || working) return;
     const salary = parseFloat(resignSalary);
     if (isNaN(salary) || salary <= 0) return;
@@ -166,7 +170,14 @@ export default function Franchise() {
     setWorking(true);
     const result = await window.api.resignPlayer({ playerId: resigningId, years: resignYears, salary });
     if (!result.success) {
-      showToast(result.reason ?? 'Player declined the offer.', 'error');
+      if (result.counterOffer) {
+        // Player countered — store and show the counter panel
+        setPendingCounters(prev => ({ ...prev, [resigningId]: result.counterOffer! }));
+        setResigningId(null);
+        showToast(`${player?.first_name} ${player?.last_name} counters at $${result.counterOffer.salary.toFixed(1)}M/yr`, 'error');
+      } else {
+        showToast(result.reason ?? 'Player declined the offer.', 'error');
+      }
       setWorking(false);
       return;
     }
@@ -177,13 +188,31 @@ export default function Franchise() {
     setWorking(false);
   };
 
-  const handleLetWalk = async (playerId: number) => {
+    const handleAcceptCounter = async (playerId: number, salary: number, years: number) => {
+    if (working) return;
+    const player = expiringPlayers.find(p => p.id === playerId);
+    setWorking(true);
+    const result = await window.api.acceptCounterOffer({ playerId, years, salary });
+    if (!result.success) {
+      showToast(result.reason ?? 'Could not accept counter.', 'error');
+      setWorking(false);
+      return;
+    }
+    setPendingCounters(prev => { const n = { ...prev }; delete n[playerId]; return n; });
+    setPlayerDecisions(prev => ({ ...prev, [playerId]: 'resigned' }));
+    showToast(`${player?.first_name} ${player?.last_name} counter accepted — ${years}yr / ${fmtSalary(salary)}`, 'success');
+    await loadData();
+    setWorking(false);
+  };
+
+  const handleDeclineCounter = async (playerId: number) => {
     const player = expiringPlayers.find(p => p.id === playerId);
     setWorking(true);
     await window.api.releasePlayer(playerId);
+    setPendingCounters(prev => { const n = { ...prev }; delete n[playerId]; return n; });
     setPlayerDecisions(prev => ({ ...prev, [playerId]: 'walking' }));
     setResigningId(null);
-    showToast(`${player?.first_name} ${player?.last_name} released to free agency.`, 'error');
+    showToast(`${player?.first_name} ${player?.last_name} walks to free agency.`, 'error');
     await loadData();
     await loadExpiringContracts();
     setWorking(false);
@@ -280,6 +309,16 @@ export default function Franchise() {
             {expiringCount > 0 && <span style={{ color: '#FF8740' }}>⚠ {expiringCount} expiring this offseason</span>}
             {rosterSpots && <span>{rosterSpots.active}/53 active · {rosterSpots.ps}/16 PS</span>}
           </div>
+            {deadCap && deadCap.amount > 0 && (
+    <span style={{ color: '#e57373' }}>
+      💀 Dead cap: {fmtSalary(deadCap.amount)}
+      {deadCap.entries.length > 0 && (
+        <span style={{ fontSize: 9, color: '#555', marginLeft: 4 }}>
+          ({deadCap.entries.map((e: any) => `${e.player_name} ${fmtSalary(e.amount)}`).join(', ')})
+        </span>
+      )}
+    </span>
+  )}
         </div>
       )}
 
@@ -337,30 +376,33 @@ export default function Franchise() {
         />
       )}
 
-      {activeTab === 'offseason' && (
-  <OffseasonTab
-    expiringPlayers={expiringPlayers}
-    cap={cap}
-    playerDecisions={playerDecisions}
-    setPlayerDecisions={setPlayerDecisions}
-    resigningId={resigningId}
-    setResigningId={setResigningId}
-    resignYears={resignYears}
-    setResignYears={setResignYears}
-    resignSalary={resignSalary}
-    setResignSalary={setResignSalary}
-    cpuFaResult={cpuFaResult}
-    cpuFaDone={cpuFaDone}
-    setCpuFaDone={setCpuFaDone}
-    setCpuFaResult={setCpuFaResult}
-    handleResign={handleResign}
-    handleLetWalk={handleLetWalk}
-    handleCpuFa={handleCpuFa}
-    handleApplyTag={handleApplyTag}
-    handleRemoveTag={handleRemoveTag}
-    working={working || tagWorking}
-  />
-)}
+        {activeTab === 'offseason' && (
+    <OffseasonTab
+      expiringPlayers={expiringPlayers}
+      cap={cap}
+      playerDecisions={playerDecisions}
+      setPlayerDecisions={setPlayerDecisions}
+      resigningId={resigningId}
+      setResigningId={setResigningId}
+      resignYears={resignYears}
+      setResignYears={setResignYears}
+      resignSalary={resignSalary}
+      setResignSalary={setResignSalary}
+      cpuFaResult={cpuFaResult}
+      cpuFaDone={cpuFaDone}
+      setCpuFaDone={setCpuFaDone}
+      setCpuFaResult={setCpuFaResult}
+      handleResign={handleResign}
+      handleLetWalk={handleLetWalk}
+      handleCpuFa={handleCpuFa}
+      handleApplyTag={handleApplyTag}
+      handleRemoveTag={handleRemoveTag}
+      pendingCounters={pendingCounters}
+      handleAcceptCounter={handleAcceptCounter}
+      handleDeclineCounter={handleDeclineCounter}
+      working={working || tagWorking}
+    />
+  )}
 
     </div>
   );
