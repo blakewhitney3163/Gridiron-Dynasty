@@ -118,8 +118,8 @@ export default function Records() {
         </div>
       </div>
 
-      {mode === 'hof' && <HallOfFame data={hofData} />}
-
+      {mode === 'hof' && <HallOfFame hofData={hofData} />}
+      
       {mode !== 'awards' && mode !== 'hof' && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
           {CATEGORIES.map(c => (
@@ -139,7 +139,7 @@ export default function Records() {
         </div>
       )}
 
-      {mode === 'awards' && <AwardsView awards={awards} season={currentSeason} />}
+            {mode === 'awards' && <AwardsView awards={awards} currentSeason={currentSeason} />}
 
       {mode !== 'awards' && mode !== 'hof' && (
         <LeaderboardTable
