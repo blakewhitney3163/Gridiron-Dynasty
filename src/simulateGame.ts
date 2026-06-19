@@ -88,8 +88,20 @@ function getTeamRatings(teamId: number): TeamRatings {
 
   const offense = players.filter(p => ['QB','RB','WR','TE','OL'].includes(p.position));
   const defense = players.filter(p => ['DL','LB','CB','S'].includes(p.position));
-  const offenseRating = offense.reduce((s, p) => s + effOvr(p), 0) / (offense.length || 1);
-  const defenseRating = defense.reduce((s, p) => s + effOvr(p), 0) / (defense.length || 1);
+  let offenseRating = offense.reduce((s, p) => s + effOvr(p), 0) / (offense.length || 1);
+  let defenseRating = defense.reduce((s, p) => s + effOvr(p), 0) / (defense.length || 1);
+
+  // Apply coordinator coaching modifiers — OC boosts offense, DC boosts defense,
+  // HC provides a smaller lift to both sides.
+  try {
+    const hc = db.prepare("SELECT overall_rating FROM coaching_staff WHERE team_id = ? AND role = 'HC'").get(teamId) as any;
+    const oc = db.prepare("SELECT offense_rating FROM coaching_staff WHERE team_id = ? AND role = 'OC'").get(teamId) as any;
+    const dc = db.prepare("SELECT defense_rating FROM coaching_staff WHERE team_id = ? AND role = 'DC'").get(teamId) as any;
+    if (hc) { offenseRating += (hc.overall_rating - 70) * 0.05; defenseRating += (hc.overall_rating - 70) * 0.05; }
+    if (oc) offenseRating += (oc.offense_rating - 70) * 0.15;
+    if (dc) defenseRating += (dc.defense_rating - 70) * 0.15;
+  } catch { /* coaching_staff table not yet created on this save */ }
+
   return { offenseRating, defenseRating };
 }
 
