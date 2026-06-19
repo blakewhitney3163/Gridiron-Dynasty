@@ -52,7 +52,6 @@ export default function Franchise() {
   const [pendingCounters, setPendingCounters] = useState<Record<number, { salary: number; years: number }>>({});
   const [deadCap, setDeadCap] = useState<{ amount: number; entries: any[] } | null>(null);
   const [staff, setStaff] = useState<Coach[]>([]);
-
   const [tagWorking, setTagWorking] = useState(false);
 
   useEffect(() => { loadData(); loadTeamNeeds(); }, [userTeam.id]);
@@ -187,6 +186,10 @@ export default function Franchise() {
     showToast(`${player?.first_name} ${player?.last_name} re-signed — ${resignYears}yr / ${fmtSalary(salary)}`, 'success');
     await loadData();
     setWorking(false);
+  };
+
+  const handleLetWalk = (playerId: number) => {
+    setPlayerDecisions(prev => ({ ...prev, [playerId]: 'walking' }));
   };
 
   const handleAcceptCounter = async (playerId: number, salary: number, years: number) => {
@@ -367,7 +370,7 @@ export default function Franchise() {
       )}
 
       {activeTab === 'ps' && (
-                <PracticeSquadTab
+        <PracticeSquadTab
           practiceSquad={practiceSquad}
           rosterSpots={rosterSpots}
           showToast={showToast}
@@ -392,19 +395,21 @@ export default function Franchise() {
       {activeTab === 'offseason' && (
         <OffseasonTab
           expiringPlayers={expiringPlayers} playerDecisions={playerDecisions}
+          setPlayerDecisions={setPlayerDecisions}
           pendingCounters={pendingCounters}
           cap={cap} working={working || tagWorking}
           resigningId={resigningId} setResigningId={setResigningId}
           resignYears={resignYears} setResignYears={setResignYears}
           resignSalary={resignSalary} setResignSalary={setResignSalary}
-          cpuFaDone={cpuFaDone} cpuFaResult={cpuFaResult}
-                    handleResign={handleResign}
+          cpuFaDone={cpuFaDone} setCpuFaDone={setCpuFaDone}
+          cpuFaResult={cpuFaResult} setCpuFaResult={setCpuFaResult}
+          handleResign={handleResign}
+          handleLetWalk={handleLetWalk}
           handleAcceptCounter={handleAcceptCounter}
           handleDeclineCounter={handleDeclineCounter}
           handleCpuFa={handleCpuFa}
           handleApplyTag={handleApplyTag}
           handleRemoveTag={handleRemoveTag}
-          handleLetWalk={handleLetWalk}
         />
       )}
 
