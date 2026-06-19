@@ -8,36 +8,37 @@ interface Props {
   onStart: () => void;
 }
 
-function ratingColor(ovr: number): string {
-  if (ovr >= 90) return '#4caf50';
-  if (ovr >= 80) return '#8bc34a';
-  if (ovr >= 70) return '#ffeb3b';
-  return '#e57373';
+function gradeFromOvr(ovr: number): { letter: string; color: string } {
+  if (ovr >= 90) return { letter: 'A+', color: '#22c55e' };
+  if (ovr >= 85) return { letter: 'A',  color: '#4ade80' };
+  if (ovr >= 80) return { letter: 'B+', color: '#86efac' };
+  if (ovr >= 75) return { letter: 'B',  color: '#fbbf24' };
+  if (ovr >= 70) return { letter: 'C+', color: '#f59e0b' };
+  if (ovr >= 65) return { letter: 'C',  color: '#fb923c' };
+  return { letter: 'D', color: '#f87171' };
 }
 
-function gradeFromOvr(ovr: number): { letter: string; color: string } {
-  if (ovr >= 90) return { letter: 'A+', color: '#4caf50' };
-  if (ovr >= 85) return { letter: 'A',  color: '#66bb6a' };
-  if (ovr >= 80) return { letter: 'B+', color: '#8bc34a' };
-  if (ovr >= 75) return { letter: 'B',  color: '#cddc39' };
-  if (ovr >= 70) return { letter: 'C+', color: '#ffeb3b' };
-  if (ovr >= 65) return { letter: 'C',  color: '#ffc107' };
-  return              { letter: 'D',  color: '#ff5722' };
+function ovrColor(ovr: number): string {
+  if (ovr >= 90) return '#22c55e';
+  if (ovr >= 80) return '#86efac';
+  if (ovr >= 70) return '#fbbf24';
+  return '#f87171';
 }
 
 const OFFENSE_POS = new Set(['QB','WR','RB','TE','OL','C','G','OT','T','LT','RT','LG','RG']);
-const TRAIT_META: Record<string, { short: string; color: string }> = {
-  'X-Factor': { short: 'XF', color: '#ff9100' },
-  'Superstar': { short: 'SS', color: '#e040fb' },
-  'Star':      { short: '★',  color: '#4fc3f7' },
-  'Normal':    { short: '',   color: '#555'    },
+
+const TRAIT_META: Record<string, { short: string; color: string; bg: string }> = {
+  'X-Factor': { short: 'XF',  color: '#fff',    bg: '#f97316' },
+  'Superstar': { short: 'SS', color: '#fff',    bg: '#a855f7' },
+  'Star':      { short: '★',  color: '#1e293b', bg: '#38bdf8' },
+  'Normal':    { short: '',   color: '#94a3b8', bg: 'transparent' },
 };
 
 export default function MeetTheTeam({ team, season, onStart }: Props) {
   const [contracts, setContracts] = useState<any[]>([]);
-  const [cap, setCap]             = useState<any>(null);
-  const [needs, setNeeds]         = useState<string[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const [cap, setCap] = useState<any>(null);
+  const [needs, setNeeds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -55,174 +56,397 @@ export default function MeetTheTeam({ team, season, onStart }: Props) {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: '100vh', background: '#080808', color: '#444', fontFamily: 'monospace', letterSpacing: 2 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0f172a', color: '#e2e8f0', fontSize: 18, letterSpacing: 2 }}>
         LOADING ROSTER...
       </div>
     );
   }
 
-  const sorted      = [...contracts].sort((a, b) => b.overall_rating - a.overall_rating);
+  const sorted = [...contracts].sort((a, b) => b.overall_rating - a.overall_rating);
   const starPlayers = sorted.slice(0, 10);
-  const offense     = contracts.filter(p => OFFENSE_POS.has(p.position));
-  const defense     = contracts.filter(p => !OFFENSE_POS.has(p.position));
-  const avgOvr      = contracts.length ? Math.round(contracts.reduce((s, p) => s + p.overall_rating, 0) / contracts.length) : 0;
-  const avgOff      = offense.length   ? Math.round(offense.reduce((s, p) => s + p.overall_rating, 0) / offense.length) : 0;
-  const avgDef      = defense.length   ? Math.round(defense.reduce((s, p) => s + p.overall_rating, 0) / defense.length) : 0;
-  const expiring    = contracts.filter(c => c.years_remaining === 1).length;
+  const offense = contracts.filter(p => OFFENSE_POS.has(p.position));
+  const defense = contracts.filter(p => !OFFENSE_POS.has(p.position));
+  const avgOvr = contracts.length ? Math.round(contracts.reduce((s, p) => s + p.overall_rating, 0) / contracts.length) : 0;
+  const avgOff = offense.length ? Math.round(offense.reduce((s, p) => s + p.overall_rating, 0) / offense.length) : 0;
+  const avgDef = defense.length ? Math.round(defense.reduce((s, p) => s + p.overall_rating, 0) / defense.length) : 0;
+  const expiring = contracts.filter(c => c.years_remaining === 1).length;
   const { letter: grade, color: gradeColor } = gradeFromOvr(avgOvr);
 
-  const statCard = (label: string, value: React.ReactNode, sub: string) => (
-    <div style={{ background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 8, padding: 16, textAlign: 'center' }}>
-      <div style={{ fontSize: 9, color: '#444', letterSpacing: 1, marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 30, fontWeight: 'bold', lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 10, color: '#555', marginTop: 5 }}>{sub}</div>
-    </div>
-  );
+  const S = {
+    page: {
+      minHeight: '100vh',
+      background: '#0f172a',
+      color: '#e2e8f0',
+      fontFamily: "'Segoe UI', system-ui, sans-serif",
+      overflowY: 'auto' as const,
+    },
+    header: {
+      background: 'linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%)',
+      borderBottom: '2px solid #334155',
+      padding: '28px 40px 24px',
+    },
+    eyebrow: {
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 4,
+      color: '#60a5fa',
+      textTransform: 'uppercase' as const,
+      marginBottom: 8,
+    },
+    teamName: {
+      fontSize: 36,
+      fontWeight: 800,
+      color: '#f1f5f9',
+      margin: 0,
+      lineHeight: 1.1,
+    },
+    subHead: {
+      fontSize: 14,
+      color: '#94a3b8',
+      marginTop: 6,
+    },
+    cardRow: {
+      display: 'flex',
+      gap: 16,
+      padding: '24px 40px',
+      flexWrap: 'wrap' as const,
+    },
+    statCard: {
+      flex: 1,
+      minWidth: 160,
+      background: '#1e293b',
+      border: '1px solid #334155',
+      borderRadius: 12,
+      padding: '20px 24px',
+    },
+    cardLabel: {
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: 3,
+      color: '#64748b',
+      textTransform: 'uppercase' as const,
+      marginBottom: 10,
+    },
+    cardValue: {
+      fontSize: 32,
+      fontWeight: 800,
+      lineHeight: 1,
+      marginBottom: 6,
+    },
+    cardSub: {
+      fontSize: 12,
+      color: '#94a3b8',
+    },
+    body: {
+      display: 'flex',
+      gap: 20,
+      padding: '0 40px 40px',
+      alignItems: 'flex-start',
+    },
+    leftCol: {
+      flex: 2,
+      minWidth: 0,
+    },
+    rightCol: {
+      flex: 1,
+      minWidth: 260,
+      display: 'flex',
+      flexDirection: 'column' as const,
+      gap: 16,
+    },
+    panel: {
+      background: '#1e293b',
+      border: '1px solid #334155',
+      borderRadius: 12,
+      overflow: 'hidden',
+    },
+    panelHead: {
+      background: '#263548',
+      padding: '12px 20px',
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 3,
+      color: '#94a3b8',
+      textTransform: 'uppercase' as const,
+      borderBottom: '1px solid #334155',
+    },
+    playerRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      padding: '12px 20px',
+      borderBottom: '1px solid #1e2d3d',
+      transition: 'background 0.15s',
+    },
+    rankBadge: {
+      width: 24,
+      height: 24,
+      borderRadius: '50%',
+      background: '#334155',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 11,
+      fontWeight: 700,
+      color: '#94a3b8',
+      flexShrink: 0,
+    },
+    playerName: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: 600,
+      color: '#f1f5f9',
+    },
+    posBadge: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: '#94a3b8',
+      background: '#334155',
+      padding: '2px 8px',
+      borderRadius: 4,
+    },
+    ovrBadge: {
+      fontSize: 15,
+      fontWeight: 800,
+      minWidth: 36,
+      textAlign: 'right' as const,
+    },
+    needsWrap: {
+      display: 'flex',
+      flexWrap: 'wrap' as const,
+      gap: 8,
+      padding: 16,
+    },
+    needChip: {
+      background: '#172554',
+      border: '1px solid #1d4ed8',
+      color: '#93c5fd',
+      padding: '5px 14px',
+      borderRadius: 20,
+      fontSize: 13,
+      fontWeight: 700,
+    },
+    snapshotRow: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '13px 20px',
+      borderBottom: '1px solid #1e2d3d',
+    },
+    snapshotLabel: {
+      fontSize: 13,
+      color: '#cbd5e1',
+    },
+    tipRow: {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: 10,
+      padding: '10px 20px',
+      borderBottom: '1px solid #1e2d3d',
+      fontSize: 13,
+      color: '#cbd5e1',
+      lineHeight: 1.4,
+    },
+    tipArrow: {
+      color: '#3b82f6',
+      fontWeight: 700,
+      flexShrink: 0,
+      marginTop: 1,
+    },
+    cta: {
+      padding: '28px 40px',
+      background: '#0f172a',
+      borderTop: '1px solid #1e293b',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap' as const,
+      gap: 16,
+    },
+    ctaBtn: {
+      background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 10,
+      padding: '16px 40px',
+      fontSize: 16,
+      fontWeight: 800,
+      letterSpacing: 2,
+      textTransform: 'uppercase' as const,
+      cursor: 'pointer',
+      boxShadow: '0 4px 24px rgba(37,99,235,0.4)',
+      transition: 'transform 0.1s, box-shadow 0.1s',
+    },
+    ctaSub: {
+      fontSize: 13,
+      color: '#64748b',
+      maxWidth: 400,
+    },
+  };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', color: '#ccc',
-      fontFamily: 'monospace', display: 'flex', flexDirection: 'column', alignItems: 'center',
-      padding: '48px 24px 40px' }}>
+    <div style={S.page}>
+      {/* Header */}
+      <div style={S.header}>
+        <div style={S.eyebrow}>MEET YOUR TEAM · {season}</div>
+        <h1 style={S.teamName}>{team.city} {team.name}</h1>
+        <div style={S.subHead}>{team.conference} · {team.division}</div>
+      </div>
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div style={{ textAlign: 'center', marginBottom: 36 }}>
-        <div style={{ fontSize: 10, color: '#333', letterSpacing: 4, marginBottom: 8 }}>MEET YOUR TEAM · {season}</div>
-        <div style={{ fontSize: 34, fontWeight: 'bold', color: '#fff', letterSpacing: 2 }}>
-          {team.city} {team.name}
+      {/* Stat Cards */}
+      <div style={S.cardRow}>
+        <div style={S.statCard}>
+          <div style={S.cardLabel}>Team Grade</div>
+          <div style={{ ...S.cardValue, color: gradeColor }}>{grade}</div>
+          <div style={S.cardSub}>{avgOvr} avg OVR · {contracts.length} players</div>
         </div>
-        <div style={{ fontSize: 11, color: '#444', marginTop: 5, letterSpacing: 1 }}>
-          {team.conference} · {team.division}
+        <div style={S.statCard}>
+          <div style={S.cardLabel}>Offense</div>
+          <div style={{ ...S.cardValue, color: ovrColor(avgOff) }}>{avgOff}</div>
+          <div style={S.cardSub}>{offense.length} players</div>
+        </div>
+        <div style={S.statCard}>
+          <div style={S.cardLabel}>Defense</div>
+          <div style={{ ...S.cardValue, color: ovrColor(avgDef) }}>{avgDef}</div>
+          <div style={S.cardSub}>{defense.length} players</div>
+        </div>
+        {cap && (
+          <div style={S.statCard}>
+            <div style={S.cardLabel}>Cap Space</div>
+            <div style={{ ...S.cardValue, color: cap.available_cap < 5 ? '#f87171' : '#4ade80' }}>
+              ${cap.available_cap.toFixed(0)}M
+            </div>
+            <div style={S.cardSub}>${cap.used_cap.toFixed(0)}M used of ${cap.total_cap}M</div>
+          </div>
+        )}
+      </div>
+
+      {/* Body */}
+      <div style={S.body}>
+        {/* Top Players */}
+        <div style={S.leftCol}>
+          <div style={S.panel}>
+            <div style={S.panelHead}>Top Players</div>
+            {starPlayers.map((p, i) => {
+              const tm = TRAIT_META[p.dev_trait] ?? TRAIT_META['Normal'];
+              return (
+                <div key={p.id} style={S.playerRow}>
+                  <div style={{
+                    ...S.rankBadge,
+                    background: i === 0 ? '#854d0e' : i === 1 ? '#475569' : i === 2 ? '#78350f' : '#1e293b',
+                    color: i < 3 ? '#fbbf24' : '#94a3b8',
+                  }}>
+                    {i + 1}
+                  </div>
+                  <div style={S.playerName}>
+                    {p.first_name} {p.last_name}
+                    {tm.short && (
+                      <span style={{
+                        marginLeft: 8,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        background: tm.bg,
+                        color: tm.color,
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        verticalAlign: 'middle',
+                      }}>
+                        {tm.short}
+                      </span>
+                    )}
+                  </div>
+                  <div style={S.posBadge}>{p.position_label || p.position}</div>
+                  <div style={{ ...S.ovrBadge, color: ovrColor(p.overall_rating) }}>
+                    {p.overall_rating}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right column */}
+        <div style={S.rightCol}>
+          {/* Team Needs */}
+          <div style={S.panel}>
+            <div style={S.panelHead}>Team Needs</div>
+            {needs.length === 0 ? (
+              <div style={{ padding: '16px 20px', fontSize: 13, color: '#4ade80' }}>
+                Roster looks balanced.
+              </div>
+            ) : (
+              <div style={S.needsWrap}>
+                {needs.map(pos => (
+                  <div key={pos} style={S.needChip}>{pos}</div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Roster Snapshot */}
+          <div style={S.panel}>
+            <div style={S.panelHead}>Roster Snapshot</div>
+            {[
+              {
+                label: 'Active roster',
+                value: `${contracts.length} / 53`,
+                color: contracts.length < 45 ? '#f87171' : '#e2e8f0',
+              },
+              {
+                label: 'Expiring contracts',
+                value: String(expiring),
+                color: expiring > 5 ? '#f87171' : expiring > 0 ? '#fb923c' : '#4ade80',
+              },
+              {
+                label: 'Cap available',
+                value: cap ? `$${cap.available_cap.toFixed(1)}M` : '—',
+                color: cap && cap.available_cap < 5 ? '#f87171' : '#4ade80',
+              },
+            ].map(row => (
+              <div key={row.label} style={S.snapshotRow}>
+                <span style={S.snapshotLabel}>{row.label}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: row.color }}>{row.value}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Getting Started */}
+          <div style={S.panel}>
+            <div style={S.panelHead}>Getting Started</div>
+            {[
+              'Generate your schedule from the Home tab',
+              'Review your Depth Chart before simming',
+              'Check Free Agents to fill team needs',
+              'Sign backups to your Practice Squad',
+            ].map(tip => (
+              <div key={tip} style={S.tipRow}>
+                <span style={S.tipArrow}>→</span>
+                <span>{tip}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div style={{ width: '100%', maxWidth: 880, display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-        {/* ── Stat Cards ─────────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          {statCard('TEAM GRADE',
-            <span style={{ fontSize: 40, color: gradeColor }}>{grade}</span>,
-            `${avgOvr} avg OVR · ${contracts.length} players`)}
-          {statCard('OFFENSE',
-            <span style={{ color: ratingColor(avgOff) }}>{avgOff}</span>,
-            `${offense.length} players`)}
-          {statCard('DEFENSE',
-            <span style={{ color: ratingColor(avgDef) }}>{avgDef}</span>,
-            `${defense.length} players`)}
-          {cap && statCard('CAP SPACE',
-            <span style={{ fontSize: 26, color: cap.available_cap < 5 ? '#e57373' : '#4caf50' }}>
-              ${cap.available_cap.toFixed(0)}M
-            </span>,
-            `$${cap.used_cap.toFixed(0)}M used of $${cap.total_cap}M`)}
+      {/* CTA */}
+      <div style={S.cta}>
+        <div style={S.ctaSub}>
+          Head to the Home tab and generate your schedule to kick off the {season} season.
         </div>
-
-        {/* ── Main Body ──────────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 16, alignItems: 'start' }}>
-
-          {/* Best Players */}
-          <div style={{ background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 8, padding: 16 }}>
-            <div style={{ fontSize: 9, color: '#444', letterSpacing: 1, marginBottom: 14 }}>TOP PLAYERS</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {starPlayers.map((p, i) => {
-                const tm = TRAIT_META[p.dev_trait] ?? TRAIT_META['Normal'];
-                const isElite = p.dev_trait === 'X-Factor' || p.dev_trait === 'Superstar';
-                return (
-                  <div key={p.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '8px 10px', borderRadius: 4,
-                    background: i === 0 ? '#111' : 'transparent',
-                    border: i === 0 ? '1px solid #1e1e1e' : '1px solid transparent',
-                  }}>
-                    <span style={{ fontSize: 10, color: '#2a2a2a', width: 14, textAlign: 'right' }}>{i + 1}</span>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: 13, color: isElite ? '#fff' : '#bbb', fontWeight: isElite ? 'bold' : 'normal' }}>
-                        {p.first_name} {p.last_name}
-                      </span>
-                      {tm.short && (
-                        <span style={{ marginLeft: 6, fontSize: 9, color: tm.color, fontWeight: 'bold' }}>
-                          {tm.short}
-                        </span>
-                      )}
-                    </div>
-                    <span style={{ fontSize: 10, color: '#444', minWidth: 28 }}>
-                      {p.position_label || p.position}
-                    </span>
-                    <span style={{ fontSize: 14, fontWeight: 'bold', color: ratingColor(p.overall_rating), width: 28, textAlign: 'right' }}>
-                      {p.overall_rating}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right column */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-            {/* Team Needs */}
-            <div style={{ background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 8, padding: 16 }}>
-              <div style={{ fontSize: 9, color: '#444', letterSpacing: 1, marginBottom: 10 }}>TEAM NEEDS</div>
-              {needs.length === 0 ? (
-                <div style={{ fontSize: 11, color: '#333' }}>Roster looks balanced.</div>
-              ) : (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {needs.map(pos => (
-                    <span key={pos} style={{
-                      padding: '4px 9px', borderRadius: 3, fontSize: 10, fontWeight: 'bold',
-                      background: '#1a0a00', border: '1px solid #FF874044', color: '#FF8740',
-                    }}>{pos}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Roster snapshot */}
-            <div style={{ background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 8, padding: 16 }}>
-              <div style={{ fontSize: 9, color: '#444', letterSpacing: 1, marginBottom: 10 }}>ROSTER SNAPSHOT</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {[
-                  { label: 'Active roster', value: `${contracts.length} / 53`, color: contracts.length < 45 ? '#e57373' : '#aaa' },
-                  { label: 'Expiring contracts', value: String(expiring), color: expiring > 5 ? '#e57373' : expiring > 0 ? '#FF8740' : '#4caf50' },
-                  { label: 'Cap available', value: cap ? `$${cap.available_cap.toFixed(1)}M` : '—', color: cap && cap.available_cap < 5 ? '#e57373' : '#4caf50' },
-                ].map(row => (
-                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                    <span style={{ color: '#555' }}>{row.label}</span>
-                    <span style={{ color: row.color, fontWeight: 'bold' }}>{row.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Tips */}
-            <div style={{ background: '#0a0a10', border: '1px solid #14141e', borderRadius: 8, padding: 16 }}>
-              <div style={{ fontSize: 9, color: '#2a2a44', letterSpacing: 1, marginBottom: 8 }}>GETTING STARTED</div>
-              {[
-                'Generate your schedule from the Home tab',
-                'Review your Depth Chart before simming',
-                'Check Free Agents to fill team needs',
-                'Sign backups to your Practice Squad',
-              ].map(tip => (
-                <div key={tip} style={{ fontSize: 10, color: '#333', marginBottom: 5 }}>→ {tip}</div>
-              ))}
-            </div>
-
-          </div>
-        </div>
-
-        {/* ── CTA ────────────────────────────────────────────────────────── */}
-        <div style={{ textAlign: 'center', marginTop: 12 }}>
-          <button onClick={onStart} style={{
-            padding: '14px 52px', fontSize: 14, fontWeight: 'bold', letterSpacing: 3,
-            background: '#4FC3F7', color: '#000', border: 'none', borderRadius: 4,
-            cursor: 'pointer', fontFamily: 'monospace',
-          }}>
-            BEGIN DYNASTY →
-          </button>
-          <div style={{ fontSize: 10, color: '#2a2a2a', marginTop: 10 }}>
-            Head to the Home tab and generate your schedule to kick off the {season} season
-          </div>
-        </div>
-
+        <button
+          style={S.ctaBtn}
+          onClick={onStart}
+          onMouseOver={e => {
+            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
+            (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 8px 32px rgba(37,99,235,0.5)';
+          }}
+          onMouseOut={e => {
+            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
+            (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 24px rgba(37,99,235,0.4)';
+          }}
+        >
+          BEGIN DYNASTY →
+        </button>
       </div>
     </div>
   );
