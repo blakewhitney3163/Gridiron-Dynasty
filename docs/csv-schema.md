@@ -1,15 +1,17 @@
 # Gridiron Dynasty — CSV Import Schema
 
-## Historical Records CSV
+---
 
-Import all-time leaders or single-season records via **Records → IMPORT ALL-TIME** or **IMPORT SEASON**.
+## 1. Historical Records CSV
+
+Import all-time leaders or single-season benchmarks via **Records → IMPORT ALL-TIME** or **IMPORT SEASON**.
 
 ### Required Columns
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `category` | string | See valid values below |
-| `rank` | integer | Rank within the category (1 = best) |
+| `rank` | integer | Rank within category (1 = best) |
 | `player_name` | string | Full player name |
 | `team_display` | string | Team name or abbreviation to display |
 | `position` | string | `QB`, `RB`, `WR`, `TE`, `OL`, `DL`, `LB`, `CB`, `S`, `K` |
@@ -55,4 +57,4 @@ Import all-time leaders or single-season records via **Records → IMPORT ALL-TI
 
 ```csv
 category,rank,player_name,team_display,position,season,games_played,pass_yards,pass_tds,interceptions,completions,pass_attempts,rush_yards,rush_tds,rush_attempts,rec_yards,rec_tds,receptions,tackles,assisted_tackles,sacks,def_interceptions,pass_deflections,forced_fumbles
-passing,1,Tom Brady,New England,QB,,335,89214,649,212,6377,11317,0,0,0,0,0,0,0,0,0,0,0,0
+passing,1,Tom Brady,New England,QB,,335,89214,649,212,6377,11317,0,0,0,0,0,0,0,0,0,0,0
