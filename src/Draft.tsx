@@ -184,6 +184,18 @@ export default function Draft({ onDraftComplete }: Props) {
         </div>
       </div>
 
+// After the "Round X of 7" header section, add this block:
+{running && !showResults && (
+  <div style={{
+    margin: '12px 0', padding: '12px 18px', borderRadius: 6,
+    background: '#0d1a10', border: '1px solid #2a4a2a',
+    color: '#4caf50', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10,
+  }}>
+    <span style={{ fontSize: 18 }}>⏳</span>
+    <span>CPU teams are drafting… please wait.</span>
+  </div>
+)}
+      
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 300px', overflow: 'hidden' }}>
         <ProspectBoard
           available={available}
