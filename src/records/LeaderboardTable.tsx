@@ -75,7 +75,7 @@ export default function LeaderboardTable({ rows, cols, mode, sortKey, sortDir, o
                   </span>
                   {isHist && (
                     <span style={{ color: '#FFD700', fontSize: 8, fontWeight: 700, background: '#2a2000', padding: '1px 4px', borderRadius: 3, whiteSpace: 'nowrap' }}>
-                      NFL RECORD
+                      BENCHMARK
                     </span>
                   )}
                   {!isHist && trait?.short && (
