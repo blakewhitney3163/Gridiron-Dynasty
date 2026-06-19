@@ -305,9 +305,9 @@ export default function OffseasonTab({
                     <div style={{ fontSize: 9, color: '#444', marginBottom: 4 }}>ANNUAL SALARY (M)</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <span style={{ color: '#555', fontSize: 12 }}>$</span>
-                      <input type="number" value={resignSalary} onChange={e => setResignSalary(e.target.value)}
-                        min="0.9" step="0.5"
-                        style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4, color: '#ccc', padding: '6px 10px', fontSize: 13, width: 80 }} />
+                      <input type="text" inputMode="decimal" value={resignSalary} onChange={e => setResignSalary(e.target.value)}
+  placeholder="0.0"
+  style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4, color: '#ccc', padding: '6px 10px', fontSize: 13, width: 80 }} />
                       <span style={{ color: '#555', fontSize: 12 }}>M</span>
                     </div>
                     <div style={{ fontSize: 9, color: '#444', marginTop: 3 }}>Asking: ~{fmtSalary(ap)}/yr</div>
