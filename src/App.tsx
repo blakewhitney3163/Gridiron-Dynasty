@@ -342,7 +342,7 @@ export default function App() {
   if (screen === 'save-picker') {
     return (
       <Suspense fallback={<TabFallback />}>
-        <SavePicker onSaveLoaded={handleSaveLoaded} />
+        <SavePicker onSaveLoaded={handleSaveLoaded} onBack={() => setScreen('main-menu')} />
       </Suspense>
     );
   }
