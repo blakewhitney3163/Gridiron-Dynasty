@@ -345,19 +345,20 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
           />
         ) : (
           <WeeklySchedule
-            matchups={matchups}
-            viewWeek={viewWeek}
-            simulating={simulating}
-            simulatingGameId={simulatingGameId}
-            boxScore={boxScore}
-            boxScoreLoading={boxScoreLoading}
-            psAlert={psAlert}
-            onSimulateWeek={handleSimulateWeek}
-            onSimulateGame={handleSimulateGame}
-            onViewWeek={handleViewWeek}
-            onBoxScore={handleBoxScore}
-            onDismissAlert={() => setPSAlert(null)}
-          />
+  matchups={matchups}
+  viewWeek={viewWeek}
+  userTeam={userTeam}
+  simulating={simulating}
+  simulatingGameId={simulatingGameId}
+  boxScore={boxScore}
+  boxScoreLoading={boxScoreLoading}
+  psAlert={psAlert}
+  onSimulateWeek={handleSimulateWeek}
+  onSimulateGame={handleSimulateGame}
+  onViewWeek={handleViewWeek}
+  onBoxScore={handleBoxScore}
+  onDismissAlert={() => setPSAlert(null)}
+/>
         )}
       </div>
 
