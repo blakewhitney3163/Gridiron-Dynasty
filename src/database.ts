@@ -274,6 +274,12 @@ export function initDatabase(dbPath: string): void {
       salary REAL NOT NULL DEFAULT 1.5,
       years_remaining INTEGER NOT NULL DEFAULT 2
     )
+    CREATE TABLE IF NOT EXISTS team_schemes (
+  team_id INTEGER PRIMARY KEY,
+  offense_scheme TEXT NOT NULL DEFAULT 'West Coast',
+  defense_scheme TEXT NOT NULL DEFAULT '4-3',
+  FOREIGN KEY (team_id) REFERENCES teams(id)
+);
   `);
 
   // ── Indexes ──────────────────────────────────────────────────────────────────
@@ -474,7 +480,7 @@ export function generateContracts(): void {
 
 // ─── Migration Versioning ─────────────────────────────────────────────────────
 
-const CURRENT_SCHEMA_VERSION = 6;
+const CURRENT_SCHEMA_VERSION = 7;
 
 interface Migration { version: number; description: string; up: () => void; }
 
@@ -557,6 +563,20 @@ const MIGRATIONS: Migration[] = [
       if (!cols.includes('cone_time'))     db.prepare('ALTER TABLE draft_prospects ADD COLUMN cone_time REAL').run();
     },
   },
+  {
+  version: 7,
+  description: 'Add team_schemes table for Offensive and Defensive Schemes system',
+  up: () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS team_schemes (
+        team_id INTEGER PRIMARY KEY,
+        offense_scheme TEXT NOT NULL DEFAULT 'West Coast',
+        defense_scheme TEXT NOT NULL DEFAULT '4-3',
+        FOREIGN KEY (team_id) REFERENCES teams(id)
+      )
+    `);
+  },
+},
 ];
 
 function getSchemaVersion(): number {
