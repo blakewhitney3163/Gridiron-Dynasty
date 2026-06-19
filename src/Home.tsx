@@ -138,13 +138,19 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   };
 
   const handleGenerateSchedule = async () => {
-    setGeneratingSchedule(true);
-    await window.api.generateSchedule();
-    const status = await window.api.getCurrentWeek();
-    setHasSchedule(status.hasSchedule); setCurrentWeek(status.currentWeek); setViewWeek(1);
-    setMatchups(await window.api.getWeekMatchups(1));
-    setGeneratingSchedule(false);
-  };
+  setGeneratingSchedule(true);
+  await window.api.generateSchedule();
+  const status = await window.api.getCurrentWeek();
+  setHasSchedule(status.hasSchedule);
+  setCurrentWeek(status.currentWeek);
+  setViewWeek(1);
+  setMatchups(await window.api.getWeekMatchups(1));
+  // Fetch trade offer now that the season is active
+  const tradeOffer = await window.api.getCpuTradeOffer();
+  setCpuOffer(tradeOffer ?? null);
+  setOfferHandled(false);
+  setGeneratingSchedule(false);
+};
 
   const handleSimulateWeek = async () => {
     if (currentWeek === null || !userTeam) return;
