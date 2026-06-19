@@ -28,8 +28,6 @@ export default function Stats() {
   const [viewSeason, setViewSeason] = useState(currentSeason);
   const [availableSeasons, setAvailableSeasons] = useState<number[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<SelectedPlayer | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ matched: number; skipped: number } | null>(null);
   const [teams, setTeams] = useState<TeamEntry[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamEntry | null>(null);
   const [teamStats, setTeamStats] = useState<any[] | null>(null);
@@ -59,12 +57,6 @@ export default function Stats() {
       window.api.getTeamStats(selectedTeam.id, viewSeason).then((rows: any[]) => setTeamStats(rows));
     }
   }, [selectedTeam?.id, viewSeason]);
-
-  const handleImport = async () => {
-    setImporting(true); setImportResult(null);
-    const result = await window.api.importNflverseStats();
-    setImportResult(result); setImporting(false);
-  };
 
   const handleTeamSort = (k: string) => {
     if (teamSortKey === k) setTeamSortDir(d => d === 'desc' ? 'asc' : 'desc');
@@ -118,11 +110,6 @@ export default function Stats() {
           <button onClick={() => setViewMode('players')} style={{ padding: '4px 10px', fontSize: 10, background: viewMode === 'players' ? '#FF8740' : T.bgCard, color: viewMode === 'players' ? '#000' : T.textDim, border: `1px solid ${viewMode === 'players' ? '#FF8740' : T.borderFaint}`, borderRadius: 3, cursor: 'pointer', fontWeight: viewMode === 'players' ? 700 : 400 }}>PLAYERS</button>
           <button onClick={() => setViewMode('teams')} style={{ padding: '4px 10px', fontSize: 10, background: viewMode === 'teams' ? '#FF8740' : T.bgCard, color: viewMode === 'teams' ? '#000' : T.textDim, border: `1px solid ${viewMode === 'teams' ? '#FF8740' : T.borderFaint}`, borderRadius: 3, cursor: 'pointer', fontWeight: viewMode === 'teams' ? 700 : 400 }}>TEAMS</button>
         </div>
-
-        <button onClick={handleImport} disabled={importing} style={{ padding: '5px 12px', background: T.bgCard, border: `1px solid ${T.borderFaint}`, borderRadius: 4, color: T.textDim, fontSize: 11, cursor: importing ? 'not-allowed' : 'pointer' }}>
-          {importing ? 'importing...' : '↻ sync NFL history'}
-        </button>
-        {importResult && <span style={{ fontSize: 11, color: '#4caf50' }}>✓ {importResult.matched} players matched</span>}
 
         <select onChange={e => { const id = Number(e.target.value); setSelectedTeam(id ? teams.find(t => t.id === id) ?? null : null); }}
           style={{ background: T.bgPage, color: T.textPrimary, border: `1px solid ${T.borderFaint}`, borderRadius: 4, padding: '5px 12px', fontSize: 11, cursor: 'pointer', fontFamily: 'monospace' }}>
