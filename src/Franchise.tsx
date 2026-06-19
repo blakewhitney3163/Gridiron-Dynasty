@@ -362,19 +362,17 @@ export default function Franchise() {
           extendYears={extendYears} setExtendYears={setExtendYears}
           extendSalary={extendSalary} setExtendSalary={setExtendSalary}
           releasingId={releasingId} setReleasingId={setReleasingId}
-          working={working} onExtend={handleExtend} onRelease={handleRelease}
+          working={working} handleExtend={handleExtend} handleRelease={handleRelease}
           teamNeeds={teamNeeds}
         />
       )}
 
       {activeTab === 'ps' && (
-        <PracticeSquadTab
+                <PracticeSquadTab
           practiceSquad={practiceSquad}
-          onPromote={async (id) => {
-            const result = await window.api.promoteFromPs(id);
-            if (result.success) { showToast('Player promoted to active roster.', 'success'); await loadData(); }
-            else showToast(result.reason ?? 'Could not promote.', 'error');
-          }}
+          rosterSpots={rosterSpots}
+          showToast={showToast}
+          loadData={loadData}
         />
       )}
 
@@ -388,7 +386,7 @@ export default function Franchise() {
           signYears={signYears} setSignYears={setSignYears}
           signSalary={signSalary} setSignSalary={setSignSalary}
           psSigningId={psSigningId}
-          working={working} onSign={handleSign} onSignToPs={handleSignToPs}
+          working={working} handleSign={handleSign} handleSignToPs={handleSignToPs}
         />
       )}
 
@@ -396,7 +394,7 @@ export default function Franchise() {
         <OffseasonTab
           expiringPlayers={expiringPlayers} playerDecisions={playerDecisions}
           pendingCounters={pendingCounters}
-          cap={cap} working={working} tagWorking={tagWorking}
+          cap={cap} working={working || tagWorking}
           resigningId={resigningId} setResigningId={setResigningId}
           resignYears={resignYears} setResignYears={setResignYears}
           resignSalary={resignSalary} setResignSalary={setResignSalary}
@@ -414,8 +412,8 @@ export default function Franchise() {
         <CoachingTab
           teamId={userTeam.id}
           staff={staff}
-          onStaffChange={loadData}
-          onToast={showToast}
+          onRefresh={loadData}
+          showToast={showToast}
         />
       )}
 
