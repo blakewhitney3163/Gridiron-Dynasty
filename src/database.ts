@@ -122,6 +122,11 @@ export function initDatabase(dbPath: string): void {
       draft_round INTEGER,
       draft_pick INTEGER,
       drafted_by_team_id INTEGER
+          forty_time REAL,
+    bench_press INTEGER,
+    vertical_jump REAL,
+    broad_jump INTEGER,
+    cone_time REAL
     );
     CREATE TABLE IF NOT EXISTS depth_chart (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -469,7 +474,7 @@ export function generateContracts(): void {
 
 // ─── Migration Versioning ─────────────────────────────────────────────────────
 
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 
 interface Migration { version: number; description: string; up: () => void; }
 
@@ -538,6 +543,18 @@ const MIGRATIONS: Migration[] = [
           years_remaining INTEGER NOT NULL DEFAULT 2
         )
       `);
+    },
+  },
+    {
+    version: 6,
+    description: 'Add combine measurables to draft_prospects',
+    up: () => {
+      const cols = (db.prepare('PRAGMA table_info(draft_prospects)').all() as any[]).map((c: any) => c.name);
+      if (!cols.includes('forty_time'))    db.prepare('ALTER TABLE draft_prospects ADD COLUMN forty_time REAL').run();
+      if (!cols.includes('bench_press'))   db.prepare('ALTER TABLE draft_prospects ADD COLUMN bench_press INTEGER').run();
+      if (!cols.includes('vertical_jump')) db.prepare('ALTER TABLE draft_prospects ADD COLUMN vertical_jump REAL').run();
+      if (!cols.includes('broad_jump'))    db.prepare('ALTER TABLE draft_prospects ADD COLUMN broad_jump INTEGER').run();
+      if (!cols.includes('cone_time'))     db.prepare('ALTER TABLE draft_prospects ADD COLUMN cone_time REAL').run();
     },
   },
 ];
