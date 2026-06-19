@@ -182,24 +182,24 @@ const seedTeams = (conf: string) =>
     const nfcDiv  = [simGame(nfcTeams[0], nfcWC[2].winner, 19, 'NFC Divisional'), simGame(nfcWC[0].winner, nfcWC[1].winner, 19, 'NFC Divisional')];
     const afcChamp  = simGame(afcDiv[0].winner,  afcDiv[1].winner,  20, 'AFC Championship');
     const nfcChamp  = simGame(nfcDiv[0].winner,  nfcDiv[1].winner,  20, 'NFC Championship');
-    const superBowl = simGame(afcChamp.winner, nfcChamp.winner, 21, 'Super Bowl');
+        const gridironCup = simGame(afcChamp.winner, nfcChamp.winner, 21, 'Gridiron Cup');
 
-    db.prepare('INSERT OR REPLACE INTO champions (season, team_id) VALUES (?, ?)').run(s, superBowl.winner.id);
+    db.prepare('INSERT OR REPLACE INTO champions (season, team_id) VALUES (?, ?)').run(s, gridironCup.winner.id);
 
-    const champ    = superBowl.winner;
-    const runnerUp = superBowl.winner.id === afcChamp.winner.id ? nfcChamp.winner : afcChamp.winner;
-    const champScore = superBowl.homeScore > superBowl.awayScore ? superBowl.homeScore : superBowl.awayScore;
-    const ruScore    = superBowl.homeScore > superBowl.awayScore ? superBowl.awayScore : superBowl.homeScore;
+    const champ = gridironCup.winner;
+    const runnerUp = gridironCup.winner.id === afcChamp.winner.id ? nfcChamp.winner : afcChamp.winner;
+    const champScore = gridironCup.homeScore > gridironCup.awayScore ? gridironCup.homeScore : gridironCup.awayScore;
+    const ruScore = gridironCup.homeScore > gridironCup.awayScore ? gridironCup.awayScore : gridironCup.homeScore;
     logNewsEvent({
       season: s, category: 'game',
-      title: `🏆 ${champ.city} ${champ.name} are Super Bowl Champions!`,
-      body: `Defeated ${runnerUp.city} ${runnerUp.name} ${champScore}–${ruScore} in Super Bowl ${s}`,
+      title: `🏆 ${champ.city} ${champ.name} are Gridiron Cup Champions!`,
+      body: `Defeated ${runnerUp.city} ${runnerUp.name} ${champScore}–${ruScore} in the Gridiron Cup`,
     });
 
     return {
       afc: { seeds: afcTeams, wildCard: afcWC, divisional: afcDiv, championship: afcChamp },
       nfc: { seeds: nfcTeams, wildCard: nfcWC, divisional: nfcDiv, championship: nfcChamp },
-      superBowl,
+      gridironCup,
     };
   });
 
