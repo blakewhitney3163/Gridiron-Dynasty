@@ -66,9 +66,9 @@ export default function SavePicker({ onSaveLoaded }: Props) {
       alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', padding: 40,
     }}>
       {/* Header */}
-      <div style={{ marginBottom: 8, fontSize: 10, letterSpacing: 6, color: T.textDim }}>PRESENTED BY</div>
-      <div style={{ fontSize: 48, fontWeight: 900, letterSpacing: 8, color: '#4FC3F7', marginBottom: 4 }}>NFL</div>
-      <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: 4, color: T.textMuted, marginBottom: 40 }}>SIMULATOR</div>
+      <div style={{ marginBottom: 8, fontSize: 10, letterSpacing: 6, color: T.textDim }}>DYNASTY SIMULATOR</div>
+<div style={{ fontSize: 48, fontWeight: 900, letterSpacing: 8, color: '#4FC3F7', marginBottom: 4 }}>GRIDIRON</div>
+<div style={{ fontSize: 18, fontWeight: 700, letterSpacing: 4, color: T.textMuted, marginBottom: 40 }}>DYNASTY</div>
 
       <div style={{ width: '100%', maxWidth: 520 }}>
 
