@@ -62,7 +62,7 @@ function getHealthyByGroup(teamId: number, positionGroup: string, limit: number)
     SELECT ${cols} FROM depth_chart dc
     JOIN players p ON dc.player_id = p.id
     WHERE dc.team_id = ? AND dc.position_group = ? AND p.roster_status = 'active'
-      AND p.injury_status NOT IN ('out', 'ir')
+    AND p.injury_status NOT IN ('out', 'ir')
     ORDER BY dc.slot LIMIT ?
   `).all(teamId, positionGroup, limit) as PlayerRow[];
   if (rows.length > 0) return rows;
@@ -72,9 +72,93 @@ function getHealthyByGroup(teamId: number, positionGroup: string, limit: number)
       tackle_rating, coverage, pass_rush
     FROM players
     WHERE team_id = ? AND position = ? AND roster_status = 'active'
-      AND injury_status NOT IN ('out', 'ir')
+    AND injury_status NOT IN ('out', 'ir')
     ORDER BY overall_rating DESC LIMIT ?
   `).all(teamId, positionGroup, limit) as PlayerRow[];
+}
+
+// ─── Scheme Modifiers ─────────────────────────────────────────────────────────
+
+function getSchemeModifiers(teamId: number): { offMod: number; defMod: number } {
+  const scheme = db.prepare('SELECT offense_scheme, defense_scheme FROM team_schemes WHERE team_id = ?').get(teamId) as any;
+  if (!scheme) return { offMod: 0, defMod: 0 };
+
+  let offMod = 0;
+  let defMod = 0;
+
+  switch (scheme.offense_scheme) {
+    case 'West Coast': {
+      const qb = db.prepare("SELECT throw_accuracy FROM players WHERE team_id = ? AND position = 'QB' AND roster_status = 'active' ORDER BY overall_rating DESC LIMIT 1").get(teamId) as any;
+      const tes = db.prepare("SELECT overall_rating FROM players WHERE team_id = ? AND position = 'TE' AND roster_status = 'active' ORDER BY overall_rating DESC LIMIT 2").all(teamId) as any[];
+      const qbAcc = qb?.throw_accuracy ?? 70;
+      const teAvg = tes.length ? tes.reduce((s: number, t: any) => s + t.overall_rating, 0) / tes.length : 70;
+      offMod = ((qbAcc + teAvg) / 2 - 70) * 0.08;
+      break;
+    }
+    case 'Air Raid': {
+      const wrs = db.prepare("SELECT overall_rating FROM players WHERE team_id = ? AND position = 'WR' AND roster_status = 'active' ORDER BY overall_rating DESC LIMIT 3").all(teamId) as any[];
+      const wrAvg = wrs.length ? wrs.reduce((s: number, w: any) => s + w.overall_rating, 0) / wrs.length : 70;
+      offMod = (wrAvg - 70) * 0.14;
+      break;
+    }
+    case 'Power Run': {
+      const rbs = db.prepare("SELECT overall_rating FROM players WHERE team_id = ? AND position = 'RB' AND roster_status = 'active' ORDER BY overall_rating DESC LIMIT 2").all(teamId) as any[];
+      const ols = db.prepare("SELECT overall_rating FROM players WHERE team_id = ? AND position = 'OL' AND roster_status = 'active' ORDER BY overall_rating DESC LIMIT 5").all(teamId) as any[];
+      const rbAvg = rbs.length ? rbs.reduce((s: number, r: any) => s + r.overall_rating, 0) / rbs.length : 70;
+      const olAvg = ols.length ? ols.reduce((s: number, o: any) => s + o.overall_rating, 0) / ols.length : 70;
+      offMod = ((rbAvg + olAvg) / 2 - 70) * 0.12;
+      break;
+    }
+    case 'Spread': {
+      const qb = db.prepare("SELECT throw_accuracy, speed FROM players WHERE team_id = ? AND position = 'QB' AND roster_status = 'active' ORDER BY overall_rating DESC LIMIT 1").get(teamId) as any;
+      const qbCombo = qb ? ((qb.throw_accuracy ?? 70) + (qb.speed ?? 60)) / 2 : 65;
+      offMod = (qbCombo - 70) * 0.10;
+      break;
+    }
+    case 'Run & Gun': {
+      const off = db.prepare("SELECT overall_rating FROM players WHERE team_id = ? AND position IN ('QB','RB','WR','TE','OL') AND roster_status = 'active'").all(teamId) as any[];
+      const offAvg = off.length ? off.reduce((s: number, p: any) => s + p.overall_rating, 0) / off.length : 70;
+      offMod = (offAvg - 70) * 0.07;
+      break;
+    }
+  }
+
+  switch (scheme.defense_scheme) {
+    case '4-3': {
+      const dls = db.prepare("SELECT overall_rating FROM players WHERE team_id = ? AND position = 'DL' AND roster_status = 'active' ORDER BY overall_rating DESC LIMIT 4").all(teamId) as any[];
+      const dlAvg = dls.length ? dls.reduce((s: number, p: any) => s + p.overall_rating, 0) / dls.length : 70;
+      defMod = (dlAvg - 70) * 0.12;
+      break;
+    }
+    case '3-4': {
+      const lbs = db.prepare("SELECT overall_rating FROM players WHERE team_id = ? AND position = 'LB' AND roster_status = 'active' ORDER BY overall_rating DESC LIMIT 4").all(teamId) as any[];
+      const lbAvg = lbs.length ? lbs.reduce((s: number, p: any) => s + p.overall_rating, 0) / lbs.length : 70;
+      defMod = (lbAvg - 70) * 0.13;
+      break;
+    }
+    case 'Zone Cover 2': {
+      const cbs = db.prepare("SELECT coverage FROM players WHERE team_id = ? AND position = 'CB' AND roster_status = 'active' ORDER BY overall_rating DESC LIMIT 3").all(teamId) as any[];
+      const ss = db.prepare("SELECT coverage FROM players WHERE team_id = ? AND position = 'S' AND roster_status = 'active' ORDER BY overall_rating DESC LIMIT 2").all(teamId) as any[];
+      const dbAll = [...cbs, ...ss];
+      const covAvg = dbAll.length ? dbAll.reduce((s: number, p: any) => s + (p.coverage ?? 70), 0) / dbAll.length : 70;
+      defMod = (covAvg - 70) * 0.11;
+      break;
+    }
+    case 'Man Press': {
+      const cbs = db.prepare("SELECT overall_rating FROM players WHERE team_id = ? AND position = 'CB' AND roster_status = 'active' ORDER BY overall_rating DESC LIMIT 2").all(teamId) as any[];
+      const cbAvg = cbs.length ? cbs.reduce((s: number, p: any) => s + p.overall_rating, 0) / cbs.length : 70;
+      defMod = (cbAvg - 70) * 0.11;
+      break;
+    }
+    case 'Blitz Heavy': {
+      const rushers = db.prepare("SELECT pass_rush FROM players WHERE team_id = ? AND position IN ('DL','LB') AND roster_status = 'active' ORDER BY overall_rating DESC LIMIT 6").all(teamId) as any[];
+      const rushAvg = rushers.length ? rushers.reduce((s: number, p: any) => s + (p.pass_rush ?? 70), 0) / rushers.length : 70;
+      defMod = (rushAvg - 70) * 0.15;
+      break;
+    }
+  }
+
+  return { offMod, defMod };
 }
 
 function getTeamRatings(teamId: number): TeamRatings {
@@ -91,8 +175,7 @@ function getTeamRatings(teamId: number): TeamRatings {
   let offenseRating = offense.reduce((s, p) => s + effOvr(p), 0) / (offense.length || 1);
   let defenseRating = defense.reduce((s, p) => s + effOvr(p), 0) / (defense.length || 1);
 
-  // Apply coordinator coaching modifiers — OC boosts offense, DC boosts defense,
-  // HC provides a smaller lift to both sides.
+  // Apply coordinator coaching modifiers
   try {
     const hc = db.prepare("SELECT overall_rating FROM coaching_staff WHERE team_id = ? AND role = 'HC'").get(teamId) as any;
     const oc = db.prepare("SELECT offense_rating FROM coaching_staff WHERE team_id = ? AND role = 'OC'").get(teamId) as any;
@@ -101,6 +184,13 @@ function getTeamRatings(teamId: number): TeamRatings {
     if (oc) offenseRating += (oc.offense_rating - 70) * 0.15;
     if (dc) defenseRating += (dc.defense_rating - 70) * 0.15;
   } catch { /* coaching_staff table not yet created on this save */ }
+
+  // Apply scheme modifiers — fit bonus/penalty based on roster composition
+  try {
+    const { offMod, defMod } = getSchemeModifiers(teamId);
+    offenseRating += offMod;
+    defenseRating += defMod;
+  } catch { /* team_schemes table not yet created on this save */ }
 
   return { offenseRating, defenseRating };
 }
@@ -121,17 +211,12 @@ function weatherMultipliers(w: WeatherType): WeatherMultipliers {
     case 'snow': return { score: 0.84, passYards: 0.74, compPct: -0.07, rushYards: 1.06, rushAttempts: 1.08 };
     case 'rain': return { score: 0.92, passYards: 0.87, compPct: -0.03, rushYards: 1.02, rushAttempts: 1.04 };
     case 'wind': return { score: 0.90, passYards: 0.80, compPct: -0.05, rushYards: 1.00, rushAttempts: 1.02 };
-    default:     return { score: 1.00, passYards: 1.00, compPct: 0.00,  rushYards: 1.00, rushAttempts: 1.00 };
+    default:     return { score: 1.00, passYards: 1.00, compPct:  0.00, rushYards: 1.00, rushAttempts: 1.00 };
   }
 }
 
 // ─── Scoring Engine ───────────────────────────────────────────────────────────
 
-/**
- * Generate scoring events from drive outcomes rather than a raw score number.
- * This makes stats coherent with the final score: every TD and FG on the
- * scoreboard maps to real stat-line events.
- */
 function generateScoringEvents(
   offenseRating: number,
   defenseRating: number,
@@ -139,11 +224,9 @@ function generateScoringEvents(
   isHome: boolean
 ): ScoringEvents {
   const efficiencyRatio = (offenseRating / Math.max(defenseRating, 50)) * wx.score;
-  // Home field is worth ~half a scoring drive on average
   const baseDrives = isHome ? 4.4 : 3.9;
   const scoringDrives = Math.max(0, Math.round(randomNormal(baseDrives * efficiencyRatio, 1.1)));
 
-  // Better offenses convert scoring drives into TDs at a higher rate
   const tdRate = Math.min(0.78, Math.max(0.42,
     0.60 + (offenseRating - 75) * 0.004 + (isHome ? 0.02 : 0)
   ));
@@ -156,7 +239,7 @@ function generateScoringEvents(
   return { tds, fgs };
 }
 
-// ─── Overtime ────────────────────────────────────────────────────────────────
+// ─── Overtime ─────────────────────────────────────────────────────────────────
 
 function simulateOvertime(
   homeRatings: TeamRatings,
@@ -164,7 +247,7 @@ function simulateOvertime(
   wx: WeatherMultipliers
 ): { homeOTScore: number; awayOTScore: number } {
   const homeFirst = Math.random() > 0.5;
-  const firstOff  = homeFirst ? homeRatings : awayRatings;
+  const firstOff = homeFirst ? homeRatings : awayRatings;
   const secondOff = homeFirst ? awayRatings : homeRatings;
 
   function possession(offR: number, defR: number): 'td' | 'fg' | 'none' {
@@ -189,7 +272,6 @@ function simulateOvertime(
         : { homeOTScore: 7, awayOTScore: 3 };
     }
     if (r2 === 'fg') {
-      // Both kicked FGs — sudden death coin flip
       return Math.random() > 0.5
         ? (homeFirst ? { homeOTScore: 6, awayOTScore: 3 } : { homeOTScore: 3, awayOTScore: 6 })
         : (homeFirst ? { homeOTScore: 3, awayOTScore: 6 } : { homeOTScore: 6, awayOTScore: 3 });
@@ -199,7 +281,6 @@ function simulateOvertime(
       : { homeOTScore: 0, awayOTScore: 3 };
   }
 
-  // First team fails — second team gets full possession
   const r2 = possession(secondOff.offenseRating, firstOff.defenseRating);
   if (r2 !== 'none') {
     const pts = r2 === 'td' ? 7 : 3;
@@ -208,7 +289,6 @@ function simulateOvertime(
       : { homeOTScore: pts, awayOTScore: 0 };
   }
 
-  // Both teams fail — home team wins walk-off FG
   return { homeOTScore: 3, awayOTScore: 0 };
 }
 
@@ -220,14 +300,13 @@ function generatePlayerStats(
   offenseRating: number,
   wx: WeatherMultipliers,
   isHome: boolean,
-  scoreDiff: number   // positive = this team is winning (used for game script)
+  scoreDiff: number
 ): GamePlayerStat[] {
   const stats: GamePlayerStat[] = [];
   const teamRatingFactor = offenseRating / 75;
 
-  // Game script: trailing teams pass more; leading teams run more
   const gameScriptPassMod = scoreDiff < -14 ? 1.20 : scoreDiff < -7 ? 1.10 : scoreDiff > 14 ? 0.88 : 1.0;
-  const gameScriptRushMod = scoreDiff >  14 ? 1.15 : scoreDiff >  7 ? 1.08 : scoreDiff < -14 ? 0.85 : 1.0;
+  const gameScriptRushMod = scoreDiff > 14 ? 1.15 : scoreDiff > 7 ? 1.08 : scoreDiff < -14 ? 0.85 : 1.0;
 
   const passTDs = clamp(Math.round(events.tds * 0.72), 0, events.tds);
   const rushTDs = events.tds - passTDs;
@@ -236,9 +315,9 @@ function generatePlayerStats(
   const rbs = getHealthyByGroup(teamId, 'RB', 3);
   const wrs = getHealthyByGroup(teamId, 'WR', 4);
   const tes = getHealthyByGroup(teamId, 'TE', 2);
-  const qb  = qbs[0] ?? null;
+  const qb = qbs[0] ?? null;
 
-    const defStatDefaults = {
+  const defStatDefaults = {
     tackles: 0, assisted_tackles: 0, sacks: 0, tfl: 0,
     forced_fumbles: 0, fumble_recoveries: 0,
     def_interceptions: 0, pass_deflections: 0, def_tds: 0,
@@ -248,10 +327,10 @@ function generatePlayerStats(
   // ── QB ────────────────────────────────────────────────────────────────────
   let passYardsGenerated = 250 * teamRatingFactor;
   if (qb) {
-    const qbRatingFactor  = qb.overall_rating / 75;
-    const combinedFactor  = (teamRatingFactor + qbRatingFactor) / 2;
-    const powerBonus      = (attr(qb, 'throw_power') - 75) * 0.8;
-    const tdYardageBonus  = passTDs * 7; // TDs inflate passing yardage slightly
+    const qbRatingFactor = qb.overall_rating / 75;
+    const combinedFactor = (teamRatingFactor + qbRatingFactor) / 2;
+    const powerBonus = (attr(qb, 'throw_power') - 75) * 0.8;
+    const tdYardageBonus = passTDs * 7;
 
     passYardsGenerated = clamp(
       randomNormal((220 + powerBonus + tdYardageBonus) * combinedFactor, 48)
@@ -260,17 +339,17 @@ function generatePlayerStats(
     );
 
     const passAttempts = clamp(randomNormal(34 * gameScriptPassMod, 5), 18, 60);
-    const throwAcc     = attr(qb, 'throw_accuracy');
-    const homePenalty  = isHome ? 0.012 : -0.018;
+    const throwAcc = attr(qb, 'throw_accuracy');
+    const homePenalty = isHome ? 0.012 : -0.018;
     const compPct = Math.min(0.78, Math.max(0.42,
       0.55 + (throwAcc - 70) * 0.004 + homePenalty + wx.compPct + randomNormal(0, 0.033)
     ));
     const completions = clamp(passAttempts * compPct, 8, passAttempts);
     const intMean = Math.max(0.04,
       1.4 - (throwAcc / 100) * 0.6 - (attr(qb, 'awareness') / 100) * 0.35
-      + (isHome ? -0.05 : 0.10) + (scoreDiff < -14 ? 0.20 : 0) // desperation throws
+      + (isHome ? -0.05 : 0.10) + (scoreDiff < -14 ? 0.20 : 0)
     );
-    const ints    = clamp(randomNormal(intMean, 0.6), 0, 4);
+    const ints = clamp(randomNormal(intMean, 0.6), 0, 4);
     const qbCarries = Math.random() > 0.6 ? clamp(randomNormal(4, 2), 0, 8) : 0;
 
     stats.push({
@@ -289,23 +368,23 @@ function generatePlayerStats(
     randomNormal(26 * wx.rushAttempts * gameScriptRushMod, 5), 12, 48
   );
   const rbRatingWeights = rbs.map(rb => rb.overall_rating / 75);
-  const rbWeightTotal   = rbRatingWeights.reduce((a, b) => a + b, 0) || 1;
+  const rbWeightTotal = rbRatingWeights.reduce((a, b) => a + b, 0) || 1;
   const rb1Rating = rbs[0]?.overall_rating ?? 70;
   const rb2Rating = rbs[1]?.overall_rating ?? 60;
   const workhorseBonus = Math.max(0, (rb1Rating - rb2Rating) / 10) * 0.06;
 
   rbs.forEach((rb, i) => {
-    const baseShare     = rbRatingWeights[i] / rbWeightTotal;
+    const baseShare = rbRatingWeights[i] / rbWeightTotal;
     const adjustedShare = i === 0
       ? baseShare + workhorseBonus
       : baseShare - workhorseBonus / (rbs.length - 1 || 1);
-    const share   = clamp(randomNormal(adjustedShare * 100, 8), i === 0 ? 25 : 0, 82) / 100;
+    const share = clamp(randomNormal(adjustedShare * 100, 8), i === 0 ? 25 : 0, 82) / 100;
     const carries = clamp(totalRushAttempts * share, i === 0 ? 6 : 0, 36);
     const speedFactor = (attr(rb, 'speed') - 70) * 0.03;
-    const ypc       = Math.max(2.4, randomNormal((4.2 + speedFactor) * wx.rushYards, 0.8));
+    const ypc = Math.max(2.4, randomNormal((4.2 + speedFactor) * wx.rushYards, 0.8));
     const rushYards = clamp(carries * ypc, 0, 240);
     const rbRushTDs = i === 0 && rushTDs > 0 ? Math.ceil(rushTDs * 0.75) :
-                      i === 1 && rushTDs > 1 && Math.random() < 0.3 ? 1 : 0;
+      i === 1 && rushTDs > 1 && Math.random() < 0.3 ? 1 : 0;
 
     stats.push({
       player_id: rb.id, team_id: teamId,
@@ -320,7 +399,7 @@ function generatePlayerStats(
   });
 
   // ── WRs + TEs ─────────────────────────────────────────────────────────────
-  const receivers  = [...wrs, ...tes];
+  const receivers = [...wrs, ...tes];
   const actualCount = receivers.length;
 
   function buildSlotBias(count: number): number[] {
@@ -331,27 +410,27 @@ function generatePlayerStats(
     });
   }
 
-  const slotBias       = buildSlotBias(actualCount);
+  const slotBias = buildSlotBias(actualCount);
   const recPowerWeights = receivers.map((r, i) =>
     Math.pow(attr(r, 'route_running') / 75, 2.2) * (slotBias[i] ?? 0.30)
   );
-  const recPowerTotal   = recPowerWeights.reduce((a, b) => a + b, 0) || 1;
-  const noisyWeights    = recPowerWeights.map(w => Math.max(0.01, w + randomNormal(0, w * 0.3)));
-  const noisyTotal      = noisyWeights.reduce((a, b) => a + b, 0) || 1;
-  let remainingRecTDs   = passTDs;
+  const recPowerTotal = recPowerWeights.reduce((a, b) => a + b, 0) || 1;
+  const noisyWeights = recPowerWeights.map(w => Math.max(0.01, w + randomNormal(0, w * 0.3)));
+  const noisyTotal = noisyWeights.reduce((a, b) => a + b, 0) || 1;
+  let remainingRecTDs = passTDs;
 
   receivers.forEach((rec, i) => {
-    const powerShare  = noisyWeights[i] / noisyTotal;
-    const recYards    = clamp(Math.round(passYardsGenerated * powerShare), 0, 260);
+    const powerShare = noisyWeights[i] / noisyTotal;
+    const recYards = clamp(Math.round(passYardsGenerated * powerShare), 0, 260);
     const ratingFactor = rec.overall_rating / 75;
-    const baseTargets  = i === 0 ? 9 * ratingFactor : (8 * ratingFactor) - i * 0.8;
-    const targets      = clamp(randomNormal(baseTargets, 2), i === 0 ? 2 : 0, 16);
-    const catchRate    = Math.min(0.83, Math.max(0.42,
+    const baseTargets = i === 0 ? 9 * ratingFactor : (8 * ratingFactor) - i * 0.8;
+    const targets = clamp(randomNormal(baseTargets, 2), i === 0 ? 2 : 0, 16);
+    const catchRate = Math.min(0.83, Math.max(0.42,
       0.50 + (attr(rec, 'catching') - 65) * 0.006 + randomNormal(0, 0.04)
     ));
-    const recs    = clamp(targets * catchRate, 0, targets);
+    const recs = clamp(targets * catchRate, 0, targets);
     const tdThreshold = 0.60 - (rec.overall_rating - 70) * 0.005;
-    const recTDs  = remainingRecTDs > 0 && Math.random() > tdThreshold ? 1 : 0;
+    const recTDs = remainingRecTDs > 0 && Math.random() > tdThreshold ? 1 : 0;
     if (recTDs) remainingRecTDs--;
 
     stats.push({
@@ -379,7 +458,7 @@ function generateDefensiveStats(
   const dls = getHealthyByGroup(teamId, 'DL', 4);
   const lbs = getHealthyByGroup(teamId, 'LB', 4);
   const cbs = getHealthyByGroup(teamId, 'CB', 3);
-  const ss  = getHealthyByGroup(teamId, 'S',  2);
+  const ss  = getHealthyByGroup(teamId, 'S', 2);
   const dbs = [...cbs, ...ss];
   const allDef = [...dls, ...lbs, ...cbs, ...ss];
   if (allDef.length === 0) return [];
@@ -414,8 +493,8 @@ function generateDefensiveStats(
   for (const { players, share, max } of tackleGroups) {
     if (!players.length) continue;
     const groupTotal = Math.round(totalTackles * share);
-    const weights    = players.map(p => attr(p, 'tackle_rating') / 75);
-    const wTotal     = weights.reduce((a, b) => a + b, 0) || 1;
+    const weights = players.map(p => attr(p, 'tackle_rating') / 75);
+    const wTotal = weights.reduce((a, b) => a + b, 0) || 1;
     players.forEach((p, i) => {
       pTackles[p.id] = clamp(randomNormal((groupTotal * weights[i] / wTotal), 2), 0, max);
       pAssists[p.id] = clamp(randomNormal(pTackles[p.id] * 0.35, 1), 0, 4);
@@ -442,7 +521,6 @@ function generateDefensiveStats(
     const covProb = Math.max(0.15, Math.min(0.55, 0.25 + (attr(p, 'coverage') - 75) * 0.006));
     if (Math.random() < covProb) {
       pINTs[p.id] = 1;
-      // Pick-6: ~12% chance per INT
       if (Math.random() < 0.12) pDTDs[p.id] = 1;
       remINTs--;
     }
@@ -456,7 +534,6 @@ function generateDefensiveStats(
     remPDs -= pd;
   });
 
-  // Forced fumbles & fumble return TDs
   if (Math.random() < 0.30 && allDef.length > 0)
     pFFs[allDef[Math.floor(Math.random() * allDef.length)].id] = 1;
   if (Math.random() < 0.20 && allDef.length > 0) {
@@ -473,7 +550,7 @@ function generateDefensiveStats(
     const ffs     = pFFs[p.id]     || 0;
     if (tackles === 0 && sacks === 0 && ints === 0 && pds === 0 && ffs === 0) continue;
 
-        stats.push({
+    stats.push({
       player_id: p.id, team_id: teamId,
       pass_attempts: 0, completions: 0, pass_yards: 0, pass_tds: 0, interceptions: 0,
       rush_attempts: 0, rush_yards: 0, rush_tds: 0,
@@ -484,7 +561,7 @@ function generateDefensiveStats(
       forced_fumbles: ffs,
       fumble_recoveries: pFRs[p.id] || 0,
       def_interceptions: ints,
-      pass_deflections:  pds,
+      pass_deflections: pds,
       def_tds: pDTDs[p.id] || 0,
       fg_made: 0, fg_att: 0, xp_made: 0, xp_att: 0,
     });
@@ -505,9 +582,8 @@ function generateKickerStats(
   const k = ks[0];
 
   const fg_made = events.fgs;
-  // Occasionally there was a missed attempt not captured in scoring events
-  const fg_att = fg_made + (Math.random() < 0.18 ? 1 : 0);
-  const xp_att = offensiveTDs;
+  const fg_att  = fg_made + (Math.random() < 0.18 ? 1 : 0);
+  const xp_att  = offensiveTDs;
   const xp_made = xp_att > 0 && Math.random() < 0.02 ? xp_att - 1 : xp_att;
 
   if (fg_att === 0 && xp_att === 0) return null;
@@ -528,7 +604,6 @@ function generateKickerStats(
 
 function distributeToQuarters(total: number): number[] {
   const quarters = [0, 0, 0, 0];
-  // Slight Q2/Q4 weight — games tend to have more action late in each half
   const qWeights = [0.21, 0.28, 0.21, 0.30];
   let remaining = total;
   while (remaining >= 2) {
@@ -570,48 +645,41 @@ export function simulateGame(
   }
 
   const weather = getWeather(week);
-  const wx      = weatherMultipliers(weather);
+  const wx = weatherMultipliers(weather);
 
-  // ── Step 1: Generate scoring events (stats-first approach) ────────────────
   const homeEvents = generateScoringEvents(homeRatings.offenseRating, awayRatings.defenseRating, wx, true);
   const awayEvents = generateScoringEvents(awayRatings.offenseRating, homeRatings.defenseRating, wx, false);
 
-  // ── Step 2: Preliminary scores (before defensive TDs) ────────────────────
   let homeScore = homeEvents.tds * 7 + homeEvents.fgs * 3;
-  let awayScore = awayEvents.tds * 7 + awayEvents.fgs * 3;
+  let awayScore  = awayEvents.tds * 7 + awayEvents.fgs * 3;
 
-  // ── Step 3: Generate offensive stats with game script ─────────────────────
   const scoreDiff = homeScore - awayScore;
-  const homeOffStats = generatePlayerStats(homeTeamId, homeEvents, homeRatings.offenseRating, wx, true,   scoreDiff);
+  const homeOffStats = generatePlayerStats(homeTeamId, homeEvents, homeRatings.offenseRating, wx, true,  scoreDiff);
   const awayOffStats = generatePlayerStats(awayTeamId, awayEvents, awayRatings.offenseRating, wx, false, -scoreDiff);
 
-  // ── Step 4: Generate defensive stats ─────────────────────────────────────
   const homeQBInts = homeOffStats.find(s => s.pass_attempts > 0)?.interceptions ?? 0;
   const awayQBInts = awayOffStats.find(s => s.pass_attempts > 0)?.interceptions ?? 0;
 
   const homeDefStats = generateDefensiveStats(homeTeamId, awayQBInts, homeRatings.defenseRating);
   const awayDefStats = generateDefensiveStats(awayTeamId, homeQBInts, awayRatings.defenseRating);
 
-  // ── Step 5: Add defensive TDs to the DEFENSIVE team's score ──────────────
   const homeDefTDs = homeDefStats.reduce((sum, s) => sum + (s.def_tds ?? 0), 0);
   const awayDefTDs = awayDefStats.reduce((sum, s) => sum + (s.def_tds ?? 0), 0);
-  homeScore += homeDefTDs * 6; // ~6 pts avg (no guaranteed PAT)
-  awayScore += awayDefTDs * 6;
+  homeScore += homeDefTDs * 6;
+  awayScore  += awayDefTDs * 6;
 
-  // ── Step 6: Overtime ──────────────────────────────────────────────────────
   if (homeScore === awayScore) {
     const ot = simulateOvertime(homeRatings, awayRatings, wx);
     homeScore += ot.homeOTScore;
-    awayScore += ot.awayOTScore;
+    awayScore  += ot.awayOTScore;
   }
 
-  // ── Step 7: Final sanity — no ties allowed ────────────────────────────────
   if (homeScore === awayScore) {
     if (Math.random() > 0.5) homeScore += 3;
     else awayScore += 3;
   }
 
-    const homeKickerStat = generateKickerStats(homeTeamId, homeEvents, homeEvents.tds);
+  const homeKickerStat = generateKickerStats(homeTeamId, homeEvents, homeEvents.tds);
   const awayKickerStat = generateKickerStats(awayTeamId, awayEvents, awayEvents.tds);
 
   return {
