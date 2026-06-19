@@ -116,4 +116,9 @@ export function registerSeasonHandlers(): void {
 
   ipcMain.handle('advance-season', async (): Promise<AdvanceSeasonResult> =>
     advanceSeason() as any);
+  ipcMain.handle('open-free-agency', async () => {
+  const { openFreeAgency } = await import('../services/SeasonService');
+  const userTeamId = settingsRepo.getUserTeamId() ?? -1;
+  return openFreeAgency(userTeamId);
+});
 }
