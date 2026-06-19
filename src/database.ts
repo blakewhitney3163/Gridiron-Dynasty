@@ -246,26 +246,49 @@ export function initDatabase(dbPath: string): void {
       PRIMARY KEY (player_id, milestone_key),
       FOREIGN KEY (player_id) REFERENCES players(id)
     );
+    CREATE TABLE IF NOT EXISTS dead_cap_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      team_id INTEGER NOT NULL,
+      player_id INTEGER,
+      player_name TEXT,
+      position TEXT,
+      season INTEGER NOT NULL,
+      amount REAL NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS coaching_staff (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      team_id INTEGER,
+      role TEXT NOT NULL,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      overall_rating INTEGER NOT NULL DEFAULT 70,
+      offense_rating INTEGER NOT NULL DEFAULT 70,
+      defense_rating INTEGER NOT NULL DEFAULT 70,
+      development_rating INTEGER NOT NULL DEFAULT 70,
+      experience INTEGER NOT NULL DEFAULT 5,
+      salary REAL NOT NULL DEFAULT 1.5,
+      years_remaining INTEGER NOT NULL DEFAULT 2
+    )
   `);
 
   // ── Indexes ──────────────────────────────────────────────────────────────────
   _db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_stats_game_id         ON stats(game_id);
-    CREATE INDEX IF NOT EXISTS idx_stats_player_id       ON stats(player_id);
-    CREATE INDEX IF NOT EXISTS idx_stats_team_id         ON stats(team_id);
-    CREATE INDEX IF NOT EXISTS idx_stats_team_game       ON stats(team_id, game_id);
-    CREATE INDEX IF NOT EXISTS idx_games_season          ON games(season);
-    CREATE INDEX IF NOT EXISTS idx_games_season_sim      ON games(season, is_simulated);
-    CREATE INDEX IF NOT EXISTS idx_games_season_week     ON games(season, week, is_playoff);
-    CREATE INDEX IF NOT EXISTS idx_players_team_status   ON players(team_id, roster_status);
-    CREATE INDEX IF NOT EXISTS idx_players_status        ON players(roster_status);
-    CREATE INDEX IF NOT EXISTS idx_news_season_week      ON news_events(season, week);
-    CREATE INDEX IF NOT EXISTS idx_career_stats_player   ON career_stats_history(player_id);
-    CREATE INDEX IF NOT EXISTS idx_contracts_team        ON contracts(team_id);
-    CREATE INDEX IF NOT EXISTS idx_contracts_player      ON contracts(player_id);
-    CREATE INDEX IF NOT EXISTS idx_depth_team_group      ON depth_chart(team_id, position_group);
-    CREATE INDEX IF NOT EXISTS idx_picks_owner_season    ON pick_assets(owner_team_id, season);
-    CREATE INDEX IF NOT EXISTS idx_prospects_season      ON draft_prospects(season);
+    CREATE INDEX IF NOT EXISTS idx_stats_game_id ON stats(game_id);
+    CREATE INDEX IF NOT EXISTS idx_stats_player_id ON stats(player_id);
+    CREATE INDEX IF NOT EXISTS idx_stats_team_id ON stats(team_id);
+    CREATE INDEX IF NOT EXISTS idx_stats_team_game ON stats(team_id, game_id);
+    CREATE INDEX IF NOT EXISTS idx_games_season ON games(season);
+    CREATE INDEX IF NOT EXISTS idx_games_season_sim ON games(season, is_simulated);
+    CREATE INDEX IF NOT EXISTS idx_games_season_week ON games(season, week, is_playoff);
+    CREATE INDEX IF NOT EXISTS idx_players_team_status ON players(team_id, roster_status);
+    CREATE INDEX IF NOT EXISTS idx_players_status ON players(roster_status);
+    CREATE INDEX IF NOT EXISTS idx_news_season_week ON news_events(season, week);
+    CREATE INDEX IF NOT EXISTS idx_career_stats_player ON career_stats_history(player_id);
+    CREATE INDEX IF NOT EXISTS idx_contracts_team ON contracts(team_id);
+    CREATE INDEX IF NOT EXISTS idx_contracts_player ON contracts(player_id);
+    CREATE INDEX IF NOT EXISTS idx_depth_team_group ON depth_chart(team_id, position_group);
+    CREATE INDEX IF NOT EXISTS idx_picks_owner_season ON pick_assets(owner_team_id, season);
+    CREATE INDEX IF NOT EXISTS idx_prospects_season ON draft_prospects(season);
   `);
 
   // ── Player Column Migrations ─────────────────────────────────────────────────
@@ -283,10 +306,10 @@ export function initDatabase(dbPath: string): void {
         const ovr: number = player.overall_rating;
         const rand = Math.random();
         let trait: string;
-        if (ovr >= 90)      trait = rand < 0.40 ? 'X-Factor' : rand < 0.80 ? 'Superstar' : rand < 0.98 ? 'Star' : 'Normal';
+        if (ovr >= 90) trait = rand < 0.40 ? 'X-Factor' : rand < 0.80 ? 'Superstar' : rand < 0.98 ? 'Star' : 'Normal';
         else if (ovr >= 80) trait = rand < 0.05 ? 'X-Factor' : rand < 0.30 ? 'Superstar' : rand < 0.75 ? 'Star' : 'Normal';
         else if (ovr >= 70) trait = rand < 0.01 ? 'X-Factor' : rand < 0.09 ? 'Superstar' : rand < 0.44 ? 'Star' : 'Normal';
-        else                trait = rand < 0.002 ? 'X-Factor' : rand < 0.022 ? 'Superstar' : rand < 0.202 ? 'Star' : 'Normal';
+        else trait = rand < 0.002 ? 'X-Factor' : rand < 0.022 ? 'Superstar' : rand < 0.202 ? 'Star' : 'Normal';
         assignTrait.run(trait, player.id);
       }
     })();
@@ -299,11 +322,11 @@ export function initDatabase(dbPath: string): void {
   }
 
   const basicPlayerCols = ['injury_status', 'weeks_out', 'injury_type', 'waived_by_team_id', 'waiver_placed_week', 'morale'];
-const basicPlayerDefs: Record<string, string> = {
-  injury_status: "TEXT DEFAULT 'healthy'", weeks_out: 'INTEGER DEFAULT 0',
-  injury_type: 'TEXT', waived_by_team_id: 'INTEGER', waiver_placed_week: 'INTEGER',
-  morale: 'INTEGER DEFAULT 75',
-};
+  const basicPlayerDefs: Record<string, string> = {
+    injury_status: "TEXT DEFAULT 'healthy'", weeks_out: 'INTEGER DEFAULT 0',
+    injury_type: 'TEXT', waived_by_team_id: 'INTEGER', waiver_placed_week: 'INTEGER',
+    morale: 'INTEGER DEFAULT 75',
+  };
   const playerColNames = (playerCols.length ? playerCols : (_db.prepare('PRAGMA table_info(players)').all() as any[])).map((c: any) => c.name);
   for (const col of basicPlayerCols) {
     if (!playerColNames.includes(col))
@@ -384,7 +407,7 @@ const basicPlayerDefs: Record<string, string> = {
           const excess = active.slice(ACTIVE_LIMIT);
           excess.forEach((p: any, i: number) => {
             if (i < PS_LIMIT) _db!.prepare("UPDATE players SET roster_status = 'practice_squad' WHERE id = ?").run(p.id);
-            else               _db!.prepare("UPDATE players SET roster_status = 'free_agent', team_id = NULL, is_free_agent = 1 WHERE id = ?").run(p.id);
+            else _db!.prepare("UPDATE players SET roster_status = 'free_agent', team_id = NULL, is_free_agent = 1 WHERE id = ?").run(p.id);
           });
         }
       }
@@ -446,7 +469,7 @@ export function generateContracts(): void {
 
 // ─── Migration Versioning ─────────────────────────────────────────────────────
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 
 interface Migration { version: number; description: string; up: () => void; }
 
@@ -462,7 +485,7 @@ const MIGRATIONS: Migration[] = [
       db.prepare(`
         UPDATE stats
         SET season = (SELECT season FROM games WHERE games.id = stats.game_id),
-            week   = (SELECT week  FROM games WHERE games.id = stats.game_id),
+            week = (SELECT week FROM games WHERE games.id = stats.game_id),
             is_playoff = (SELECT is_playoff FROM games WHERE games.id = stats.game_id)
         WHERE season IS NULL
       `).run();
@@ -478,7 +501,6 @@ const MIGRATIONS: Migration[] = [
         db.prepare('ALTER TABLE players ADD COLUMN franchise_tagged INTEGER DEFAULT 0').run();
     },
   },
-];
   {
     version: 4,
     description: 'Add dead_cap_entries table for tracking dead cap from mid-contract releases',
@@ -496,6 +518,29 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    description: 'Add coaching_staff table for Coaching Staff System',
+    up: () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS coaching_staff (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          team_id INTEGER,
+          role TEXT NOT NULL,
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          overall_rating INTEGER NOT NULL DEFAULT 70,
+          offense_rating INTEGER NOT NULL DEFAULT 70,
+          defense_rating INTEGER NOT NULL DEFAULT 70,
+          development_rating INTEGER NOT NULL DEFAULT 70,
+          experience INTEGER NOT NULL DEFAULT 5,
+          salary REAL NOT NULL DEFAULT 1.5,
+          years_remaining INTEGER NOT NULL DEFAULT 2
+        )
+      `);
+    },
+  },
+];
 
 function getSchemaVersion(): number {
   try {
