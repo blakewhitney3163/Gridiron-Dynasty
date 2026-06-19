@@ -104,7 +104,12 @@ export default function FreeAgentsTab({
   psSigningId, handleSign, handleSignToPs, working,
 }: Props) {
   const filteredFa = freeAgents
-    .filter(f => faPos === 'ALL' ? true : faPos === 'NEEDS' ? teamNeeds.includes(f.position) : f.position === faPos)
+    .filter(f => {
+  if (faPos === 'ALL') return true;
+  if (faPos === 'NEEDS') return teamNeeds.includes(f.position) || teamNeeds.includes(f.position_label);
+  const pos = f.position_label || f.position;
+  return pos === faPos;
+})
     .filter(f => {
       if (!faSearch.trim()) return true;
       const q = faSearch.toLowerCase();
@@ -209,16 +214,9 @@ export default function FreeAgentsTab({
               <div style={{ color: '#555', fontSize: 10, marginBottom: 6 }}>ANNUAL SALARY (M)</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ color: '#555' }}>$</span>
-                <input
-                  type="number"
-                  value={signSalary}
-                  onChange={e => setSignSalary(e.target.value)}
-                  min="0.9" step="0.5"
-                  style={{
-                    background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4,
-                    color: '#ccc', padding: '6px 10px', fontSize: 13, width: 80,
-                  }}
-                />
+                <input type="text" inputMode="decimal" value={signSalary}
+  onChange={e => setSignSalary(e.target.value)}
+  placeholder="0.0" ... />
                 <span style={{ color: '#555' }}>M</span>
               </div>
               <div style={{ color: '#4FC3F7', fontSize: 10, marginTop: 4 }}>Market: {fmtSalary(mv)}/yr</div>
