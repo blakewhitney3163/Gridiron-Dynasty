@@ -72,10 +72,9 @@ function bootstrapDatabase(isNew: boolean): void {
 db.transaction(() => { for (const t of TEAMS) insertTeam.run(...t); })();
     console.log('32 teams seeded');
 
-    const { importFromMadden } = require('./importfromMadden');
-    const csvPath = path.join(app.getAppPath(), 'src', 'madden-ratings.csv');
-    importFromMadden(csvPath);
-    generateContracts();
+    const { generatePlayers } = require('./generatePlayers');
+generatePlayers();
+generateContracts();
     console.log('Fresh DB: players and contracts generated');
   }
 
