@@ -9,7 +9,7 @@ import { POSITION_TO_GROUP } from '../constants';
 function initDepthChart(teamId: number) {
   // Auto-migrate old flat OL/DL groups to specific position groups
   const hasOldGroups = (db.prepare(
-    "SELECT COUNT(*) as cnt FROM depth_chart WHERE team_id = ? AND position_group IN ('OL','DL')"
+    "SELECT COUNT(*) as cnt FROM depth_chart WHERE team_id = ? AND position_group IN ('OL','DL','LB')"
   ).get(teamId) as any).cnt > 0;
   if (hasOldGroups) {
     db.prepare('DELETE FROM depth_chart WHERE team_id = ?').run(teamId);
