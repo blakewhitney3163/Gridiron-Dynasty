@@ -93,12 +93,28 @@ export function initDatabase(dbPath: string): void {
       targets INTEGER DEFAULT 0,
       receptions INTEGER DEFAULT 0,
       rec_yards INTEGER DEFAULT 0,
-      rec_tds INTEGER DEFAULT 0,
-      FOREIGN KEY (game_id) REFERENCES games(id),
-      FOREIGN KEY (player_id) REFERENCES players(id),
-      FOREIGN KEY (team_id) REFERENCES teams(id)
-    );
-    CREATE TABLE IF NOT EXISTS contracts (
+        rec_tds INTEGER DEFAULT 0,
+  tackles INTEGER DEFAULT 0,
+  assisted_tackles INTEGER DEFAULT 0,
+  sacks REAL DEFAULT 0,
+  tfl INTEGER DEFAULT 0,
+  forced_fumbles INTEGER DEFAULT 0,
+  fumble_recoveries INTEGER DEFAULT 0,
+  def_interceptions INTEGER DEFAULT 0,
+  pass_deflections INTEGER DEFAULT 0,
+  def_tds INTEGER DEFAULT 0,
+  fg_made INTEGER DEFAULT 0,
+  fg_att INTEGER DEFAULT 0,
+  xp_made INTEGER DEFAULT 0,
+  xp_att INTEGER DEFAULT 0,
+  season INTEGER,
+  week INTEGER,
+  is_playoff INTEGER DEFAULT 0,
+  FOREIGN KEY (game_id) REFERENCES games(id),
+  FOREIGN KEY (player_id) REFERENCES players(id),
+  FOREIGN KEY (team_id) REFERENCES teams(id)
+);
+CREATE TABLE IF NOT EXISTS contracts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       player_id INTEGER NOT NULL,
       team_id INTEGER NOT NULL,
