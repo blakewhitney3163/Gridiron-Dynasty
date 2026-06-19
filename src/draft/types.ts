@@ -12,6 +12,11 @@ export interface Prospect {
   draft_pick: number | null;
   drafted_by_team_id: number | null;
   scouted: number;
+  forty_time: number | null;
+  bench_press: number | null;
+  vertical_jump: number | null;
+  broad_jump: number | null;
+  cone_time: number | null;
 }
 
 export interface DraftTeam {
