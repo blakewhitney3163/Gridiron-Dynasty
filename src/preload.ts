@@ -241,6 +241,12 @@ getScoutCount: () =>
    getTeamNeeds: (teamId: number) =>
     ipcRenderer.invoke('get-team-needs', teamId),
 
+    applyFranchiseTag: (payload: { playerId: number; tagType: 'franchise' | 'transition' }) =>
+    ipcRenderer.invoke('apply-franchise-tag', payload),
+
+  removeFranchiseTag: (playerId: number) =>
+    ipcRenderer.invoke('remove-franchise-tag', playerId),
+
   // Custom Data Imports
   importCustomTeams: () =>
     ipcRenderer.invoke('import-custom-teams'),
