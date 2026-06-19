@@ -225,21 +225,21 @@ const FA_SLOTS: { position: string; count: number }[] = [
 // ─── Main Export ─────────────────────────────────────────────────────────────
 
 export function generatePlayers(): void {
-  const insert = db.prepare(`
+    const insert = db.prepare(`
     INSERT INTO players (
       first_name, last_name, position, position_label, age, overall_rating,
       speed, strength, awareness, dev_trait,
       throw_accuracy, throw_power, catching, route_running,
       tackle_rating, coverage, pass_rush,
       kickpower, kickaccuracy, runblocking, passblocking,
-      team_id, is_free_agent
+      team_id, is_free_agent, roster_status
     ) VALUES (
       @first_name, @last_name, @position, @position_label, @age, @overall_rating,
       @speed, @strength, @awareness, @dev_trait,
       @throw_accuracy, @throw_power, @catching, @route_running,
       @tackle_rating, @coverage, @pass_rush,
       @kickpower, @kickaccuracy, @runblocking, @passblocking,
-      @team_id, @is_free_agent
+      @team_id, @is_free_agent, @roster_status
     )
   `);
 
@@ -254,17 +254,18 @@ export function generatePlayers(): void {
         for (let i = 0; i < slot.count; i++) {
           const ovr = getOverall(i, slot.count);
           const attrs = genAttrs(slot.position, ovr);
-          insert.run({
-            ...genName(),
-            position: slot.position,
-            position_label: labels[i % labels.length],
-            age: getAge(i, slot.count),
-            overall_rating: ovr,
-            ...attrs,
-            dev_trait: devTrait(ovr),
-            team_id: team.id,
-            is_free_agent: 0,
-          });
+                  insert.run({
+          ...genName(),
+          position: slot.position,
+          position_label: labels[i % labels.length],
+          age: getAge(i, slot.count),
+          overall_rating: ovr,
+          ...attrs,
+          dev_trait: devTrait(ovr),
+          team_id: team.id,
+          is_free_agent: 0,
+          roster_status: 'active',
+        });
           total++;
         }
       }
@@ -276,7 +277,7 @@ export function generatePlayers(): void {
       for (let i = 0; i < slot.count; i++) {
         const ovr = getFaOverall();
         const attrs = genAttrs(slot.position, ovr);
-        insert.run({
+                insert.run({
           ...genName(),
           position: slot.position,
           position_label: labels[i % labels.length],
@@ -286,6 +287,7 @@ export function generatePlayers(): void {
           dev_trait: devTrait(ovr),
           team_id: null,
           is_free_agent: 1,
+          roster_status: 'free_agent',
         });
         total++;
       }
