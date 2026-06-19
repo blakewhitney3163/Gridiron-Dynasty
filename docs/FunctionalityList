@@ -10,7 +10,12 @@ CORE INFRASTRUCTURE
   teams, players, games, stats, contracts, settings, champions,
   draft_prospects, depth_chart, career_stats_history, hall_of_fame,
   historical_records, news_events, pick_assets, team_trade_overrides,
-  player_milestones
+  player_milestones, dead_cap_entries, coaching_staff
+- Schema version: v5. Migration runner upgrades existing saves on launch.
+  v2: stats denormalization (season/week/is_playoff)
+  v3: franchise_tagged column on players
+  v4: dead_cap_entries table
+  v5: coaching_staff table
 - Auto-migrated columns on launch:
   players: position_label, dev_trait, roster_status, injury_status,
            weeks_out, injury_type, waived_by_team_id, waiver_placed_week,
@@ -145,6 +150,10 @@ Free Agents Tab:
 
 Offseason Tab:
   - Re-sign expiring players with market value guidance and offer form
+  - Counter Offer panel: elite players may reject and counter at asking price;
+    Accept or Decline — Let Walk resolve inline per player card
+  - Holdout Risk badge (⚠ HOLDOUT RISK): shown for OVR 85+,
+    Superstar/X-Factor trait, morale < 65, still pending — no tag applied
   - Franchise Tag (FT) — 1-year contract at ~135% fair market:
     Gold "🏷 FT" button per pending player; one use per team per offseason
     Auto-resolves decision as Re-Signed; fires news event
@@ -155,9 +164,23 @@ Offseason Tab:
   - Remove Tag button releases player to FA and reclaims the designation
   - CPU Free Agency: Run CPU FA signings for all 31 other teams
 
+Coaching Staff Tab:
+  - 2×2 staff card grid showing HC, OC, DC, ST coaches
+  - Each card: role badge, coach name, primary rating (large, color-coded),
+    Dev rating, experience (years), salary, years remaining on contract
+  - Empty role slot shows "No coach hired" with direct Hire button
+  - Fire button releases coach to free-agent pool
+  - "View Available Coaches" expands a panel below the staff grid with
+    role filter tabs (ALL / HC / OC / DC / ST) and coach rows showing
+    primary rating, experience, asking salary, and Hire button
+  - Hiring auto-releases any existing coach in that role first
+  - Pool replenishes automatically (min 3 per role) when panel is opened
+
 Cap Summary (displayed above all tabs):
   - Total cap, used cap, available cap, guaranteed-on-books
   - Expiring contract count warning; active / PS roster spot counters
+  - Dead Cap display: 💀 Dead cap total with per-player name + amount
+    (appears only when dead cap charges exist for the current season)
 
 TRADES TAB
 ────────────────────────────────────────────────────────────────────────────────
@@ -215,6 +238,11 @@ GAME SIMULATION ENGINE
 - Stats-first scoring: TDs/FGs generated from team ratings; player stats
   derived to always match the scoreboard
 - Morale modifier: effective OVR = rating × (1 + (morale − 75) × 0.001)
+- Coaching modifier (applied in getTeamRatings):
+    OC offense_rating: offenseRating += (oc_rating − 70) × 0.15
+    DC defense_rating: defenseRating += (dc_rating − 70) × 0.15
+    HC overall_rating: both sides += (hc_rating − 70) × 0.05
+    A 90-rated OC = +3.0 to offense; a 55-rated DC = −2.25 to defense
 - Game script: trailing teams pass more; leading teams run more; desperation
   INTs increase when down 14+
 - Overtime: TD wins outright; FG gives opponent a chance; no ties
@@ -222,6 +250,41 @@ GAME SIMULATION ENGINE
 - Home field advantage: +0.5 scoring drives home; away QB accuracy penalty
 - Depth chart integration: healthy players by position group; cascades
   to backups; targets distributed proportionally
+
+COACHING STAFF SYSTEM
+────────────────────────────────────────────────────────────────────────────────
+- coaching_staff table: id, team_id (NULL = available), role (HC/OC/DC/ST),
+  first_name, last_name, overall_rating, offense_rating, defense_rating,
+  development_rating, experience, salary, years_remaining
+- CoachingRepository: getByTeam, getAvailable, getById, getByTeamAndRole,
+  create, assignToTeam, release, countAvailable
+- CoachingService:
+  - generateAllCoachingStaff(): seeds 32 teams × 4 roles + 16-coach pool
+    at first launch; tiered rating generation (Elite 10% / Good 25% /
+    Average 35% / Below-Average 30%); role-specific primary/secondary
+    rating distribution; salary scaled to primary rating
+  - hireCoach(): releases existing role holder, assigns new coach
+  - fireCoach(): returns coach to available pool
+  - replenishCoachPool(): ensures minimum 3 coaches per role in pool
+- IPC handlers: get-coaching-staff, get-available-coaches, hire-coach,
+  fire-coach (registered in coachingHandlers.ts)
+
+CONTRACT NEGOTIATION DEPTH
+────────────────────────────────────────────────────────────────────────────────
+- dead_cap_entries table: id, team_id, player_id, player_name, position,
+  season, amount — written when a player with guaranteed money is released
+- ContractRepository:
+  - addDeadCap(): inserts a dead cap entry on mid-contract release
+  - getDeadCap() / getDeadCapEntries(): season-scoped queries
+  - getCapUsage(): sums active contract salaries + dead cap charges
+- ContractService:
+  - resignPlayer(): returns counterOffer { salary, years } when elite player
+    rejects an offer; conditions: OVR 80+, player morale < 65 or offer
+    below asking price, random acceptance threshold by OVR tier
+  - releasePlayer(): calculates remaining guaranteed amount and writes dead
+    cap entry before clearing the contract
+  - acceptCounterOffer(): processes accepted counter as a new contract
+- IPC handlers: accept-counter-offer, get-dead-cap
 
 MILESTONE SYSTEM
 ────────────────────────────────────────────────────────────────────────────────
@@ -279,3 +342,6 @@ get-team-needs       check-setup-done      reset-save
 get-news-feed        get-news-seasons      simulate-game
 list-saves           open-save             delete-save
 edit-player          apply-franchise-tag   remove-franchise-tag
+accept-counter-offer get-dead-cap
+get-coaching-staff   get-available-coaches hire-coach
+fire-coach
