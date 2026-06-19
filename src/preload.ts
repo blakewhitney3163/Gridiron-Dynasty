@@ -23,6 +23,15 @@ contextBridge.exposeInMainWorld('api', {
   getRoster: (teamId: number) =>
     ipcRenderer.invoke('get-roster', teamId),
 
+    listSaves: (): Promise<Array<{ name: string; teamName: string | null; season: number | null; lastPlayed: string | null }>> =>
+    ipcRenderer.invoke('list-saves'),
+
+  openSave: (name: string): Promise<{ ok: boolean; meta: { name: string; teamName: string | null; season: number | null } }> =>
+    ipcRenderer.invoke('open-save', name),
+
+  deleteSave: (name: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('delete-save', name),
+
     getWaiverWire: () =>
     ipcRenderer.invoke('get-waiver-wire'),
 
