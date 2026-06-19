@@ -4,6 +4,10 @@ import { MAX_ACTIVE_ROSTER, MAX_PRACTICE_SQUAD, POSITION_TO_GROUP, WAIVER_POS_MA
 import { InjuredPlayer, Callup } from '../types';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 
+export function applyMoraleModifier(baseRating: number, morale: number): number {
+  return baseRating * (1 + (morale - 75) * 0.001);
+}
+
 const INJURY_TYPES = ['Hamstring', 'Ankle', 'Knee', 'Shoulder', 'Concussion', 'Rib', 'Back', 'Quad', 'Calf', 'Hand'];
 const POS_INJURY_RISK: Record<string, number> = {
   QB: 0.025, RB: 0.055, WR: 0.035, TE: 0.035,
