@@ -7,7 +7,8 @@ declare const window: any;
 interface PlayoffTeam { id: number; city: string; name: string; wins: number; }
 interface PlayoffGame { home: PlayoffTeam; away: PlayoffTeam; homeScore: number; awayScore: number; winner: PlayoffTeam; }
 interface ConferenceBracket { seeds: PlayoffTeam[]; wildCard: PlayoffGame[]; divisional: PlayoffGame[]; championship: PlayoffGame; }
-interface PlayoffData { afc: ConferenceBracket; nfc: ConferenceBracket; superBowl: PlayoffGame; }
+interface PlayoffData { afc: ConferenceBracket; nfc: ConferenceBracket; gridironCup: PlayoffGame; }
+
 
 interface Props {
   data?: PlayoffData | null;
@@ -105,10 +106,10 @@ export default function Playoffs({ data: propData, setData: propSetData }: Props
           </div>
 
           <div style={{ background: T.bgGold, borderRadius: 8, padding: 16, textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: T.gold, letterSpacing: 2, marginBottom: 8 }}>SUPER BOWL</div>
-            <GameCard game={data.superBowl} />
+            <div style={{ fontSize: 11, color: T.gold, letterSpacing: 2, marginBottom: 8 }}>GRIDIRON CUP</div>
+            <GameCard game={data.gridironCup} />
             <div style={{ fontSize: 16, fontWeight: 700, color: T.gold, marginTop: 8 }}>
-              🏆 {data.superBowl.winner.city} {data.superBowl.winner.name}
+              🏆 {data.gridironCup.winner.city} {data.gridironCup.winner.name}
             </div>
           </div>
         </>
