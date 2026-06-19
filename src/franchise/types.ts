@@ -14,7 +14,7 @@ export interface Contract {
   guaranteed_pct: number;
   contract_id: number;
   morale?: number;
-  franchise_tagged?: number; // 0=none, 1=franchise tag, 2=transition tag
+  franchise_tagged?: number;
 }
 
 export interface PracticePlayer {
@@ -57,3 +57,18 @@ export interface RosterSpots {
 }
 
 export type Decision = 'pending' | 'resigned' | 'walking';
+
+export interface Coach {
+  id: number;
+  team_id: number | null;
+  role: 'HC' | 'OC' | 'DC' | 'ST';
+  first_name: string;
+  last_name: string;
+  overall_rating: number;
+  offense_rating: number;
+  defense_rating: number;
+  development_rating: number;
+  experience: number;
+  salary: number;
+  years_remaining: number;
+}
