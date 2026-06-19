@@ -13,8 +13,10 @@ import { rendererConfig } from './webpack.renderer.config';
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
-  },
+  asar: true,
+  name: 'Gridiron Dynasty',
+  appBundleId: 'com.gridiron.dynasty',
+},
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({}),
