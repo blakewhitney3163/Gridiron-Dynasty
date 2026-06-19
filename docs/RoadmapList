@@ -13,6 +13,101 @@ In-Game Narrative / Play-by-Play — text play-by-play during simulation.
   Stats-only output today limits immersion significantly.
 
 ================================================================================
+GAMEPLAY DEPTH — OOTP-Tier Features
+================================================================================
+Features that would bring the game to a competitive level with top sports sims.
+
+NARRATIVE & STAKES
+────────────────────────────────────────────────────────────────────────────────
+Owner Goals / Season Expectations — owner sets win targets, budget compliance,
+  and development mandates each season. Missing targets affects job security and
+  future flexibility. Creates urgency beyond just winning the championship.
+
+Team Chemistry / Locker Room System — team-level morale modifier on top of
+  individual player morale. Winning streaks boost it, losing streaks tank it,
+  star players leaving damages it. Affects sim ratings for the entire roster.
+
+Player Personality Archetypes — leadership, work ethic, and coachability
+  ratings per player beyond dev trait. Affects development speed, locker room
+  health, and contract negotiation behavior. Ties into coaching and morale.
+
+Player Retirement Control — players announce retirement intentions before the
+  offseason ends. User can attempt to convince them to return for one more year
+  with a contract offer. Currently auto-retirement with no player input.
+
+ROSTER / PLAYER MANAGEMENT
+────────────────────────────────────────────────────────────────────────────────
+Injury History / Injury-Prone Trait — track career injury history per player.
+  Players with repeated injuries accumulate an injury-prone flag that increases
+  in-game injury probability and lowers market value. Builds on existing injury
+  system.
+
+Scouting Department — hire scouts with regional specialties that improve
+  draft prospect accuracy over time. Builds directly on the existing combine
+  measurables and 25-point scouting system.
+
+SIMULATION & SCHEDULE
+────────────────────────────────────────────────────────────────────────────────
+Realistic Schedule Generation — division-based scheduling with proper
+  home/away splits and divisional game weighting. Current schedule is fully
+  random, making standings feel arbitrary.
+
+Multi-Season Batch Simulation — "Sim N seasons" with a progress bar. Critical
+  for dynasty feel — users should be able to fast-forward through rebuilds.
+
+LEAGUE & FINANCIALS
+────────────────────────────────────────────────────────────────────────────────
+Financial System Beyond Cap — market size per team affecting revenue, stadium
+  attendance, and owner budget. Even a simplified version (large market vs.
+  small market affecting cap floor and FA appeal) adds a meaningful meta layer.
+
+Commissioner / Full Control Mode — control all 32 teams, edit any roster, and
+  simulate full seasons hands-free. Standard in sports sims at this level.
+
+================================================================================
+SCALABILITY & CODE HEALTH
+================================================================================
+Issues to address before the codebase gets significantly larger.
+
+HIGH PRIORITY
+────────────────────────────────────────────────────────────────────────────────
+Batch getTeamRatings() DB Queries — currently fires ~10 individual queries per
+  team per game (players + 3 coaching + 4-6 scheme). At 288+ regular season
+  games this is ~5,760 extra queries per season. Fix: consolidate into 1-2
+  joined queries per team using a single DB call.
+
+Realistic Schedule Generation — also a gameplay concern (see above). Random
+  matchups produce unrealistic standings and division races.
+
+IMPORTANT — Fix before next major feature
+────────────────────────────────────────────────────────────────────────────────
+Split simulateGame.ts — currently 694 lines and growing with every sim feature.
+  Should be split into src/sim/ratings.ts, src/sim/stats.ts, and
+  src/sim/scoring.ts before hitting 1,000+ lines.
+
+Reduce `any` in IPC Handlers — most handler callbacks use `any` extensively.
+  Needs a shared types/ipc.ts file with typed request/response interfaces as
+  the feature set grows.
+
+Split preload.ts — currently 200+ lines and growing with every feature.
+  Should be split into domain groups (contracts, draft, schemes, coaching)
+  that are merged into the final contextBridge call.
+
+MAINTENANCE — Address before extended dynasty saves become common
+────────────────────────────────────────────────────────────────────────────────
+News Events Archiving — every transaction, game, and injury fires a news event
+  with no cleanup strategy. After 10+ seasons the table becomes very large.
+  Needs a per-season archive limit or pruning strategy.
+
+career_stats_history Growth — accumulates every season for every player.
+  Grows fast with retirements and new draft classes each year. Needs index
+  review and potential pruning after 5+ seasons.
+
+Startup Migration Check Consolidation — currently runs multiple individual
+  PRAGMA table_info checks for 30+ columns on every launch. Should consolidate
+  into a single schema version check rather than column existence checks.
+
+================================================================================
 COMPLETED ITEMS
 ================================================================================
 
@@ -147,26 +242,6 @@ Code Signing + Auto-Update — Electron apps without code signing trigger OS
 Windows Build Verification — better-sqlite3 is a native module that must be
   built per platform. Needs a GitHub Actions CI workflow that builds and
   tests on Windows before Steam submission.
-
-IMPORTANT — Fix before growing the codebase further
-────────────────────────────────────────────────────────────────────────────────
-Reduce `any` in IPC Handlers — most handler callbacks use `any` extensively.
-  Needs typed request/response interfaces as the feature set grows.
-
-Realistic Schedule Generation — current schedule is random matchups. Needs
-  division-based scheduling (home/away splits, divisional games weighted).
-
-FUTURE DEPTH — Required to compete with OOTP-tier games
-────────────────────────────────────────────────────────────────────────────────
-Sim Speed Control — fast / slow / pause controls while simulation runs in
-  background. Standard expectation in the genre.
-
-Multi-Season Batch Simulation — "Sim 5 seasons" with a progress bar.
-
-Per-Team Franchise History — records, retired numbers, dynasty timeline per
-  team. Partial today (champions only).
-
-League Expansion / Relocation — add teams, move teams, custom identities.
 
 ================================================================================
 PREVIOUSLY COMPLETED (June 18, 2026 and earlier)
