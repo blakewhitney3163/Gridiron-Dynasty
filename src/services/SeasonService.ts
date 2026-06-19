@@ -237,7 +237,7 @@ export async function advanceSeason(): Promise<AdvanceSeasonResult> {
     if (isElite) {
       logNewsEvent({
         eventType: 'contract_demand',
-        category:  'offseason',
+        category:  'transactions',
         headline:  `${row.first_name} ${row.last_name} Seeking Contract Extension`,
         detail:    `${pos} · ${row.overall_rating} OVR · Enters the offseason in the final year of their deal.`,
         playerId:  row.id,
