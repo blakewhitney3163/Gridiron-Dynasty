@@ -108,14 +108,15 @@ export function registerDraftHandlers(): void {
       else if (i < 128) ovr = Math.floor(Math.random() * 5) + 61;
       else if (i < 160) ovr = Math.floor(Math.random() * 5) + 59;
       else if (i < 224) ovr = Math.floor(Math.random() * 5) + 57;
-      else              ovr = Math.floor(Math.random() * 6) + 52;
+            else              ovr = Math.floor(Math.random() * 6) + 52;
 
-      const combine = generateCombine(pos, ovr);
+      const position = POS_POOL[Math.floor(Math.random() * POS_POOL.length)];
+      const combine = generateCombine(position, ovr);
       prospects.push({
         season,
         first_name: FIRST[Math.floor(Math.random() * FIRST.length)],
         last_name: LAST[Math.floor(Math.random() * LAST.length)],
-        position: pos,
+        position: position,
         overall_rating: ovr,
         dev_trait: getDevTrait(ovr),
         age: Math.random() < 0.6 ? 21 : Math.random() < 0.6 ? 22 : 23,
