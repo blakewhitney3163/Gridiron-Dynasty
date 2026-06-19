@@ -51,15 +51,57 @@ export default function OffseasonChecklist({
         <button onClick={() => onNavigate('franchise')} style={linkBtn('→ Franchise', 'franchise')}>→ Franchise</button>
       </div>
 
-      {/* Free Agency */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
-        <span style={{ color: T.textDim, fontSize: 12, marginTop: 1 }}>OPT</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ color: T.textPrimary, fontSize: 13, fontWeight: 600 }}>Free Agency <span style={{ color: T.textDim, fontWeight: 400, fontSize: 11 }}>OPTIONAL</span></div>
-          <div style={{ color: T.textMuted, fontSize: 11, marginTop: 3 }}>Sign replacements for departing players</div>
-        </div>
-        <button onClick={() => onNavigate('franchise')} style={linkBtn('→ Free Agents', 'franchise')}>→ Free Agents</button>
+      {/* Roster limit warning */}
+{rosterSize > 53 && (
+  <div style={{ display: 'flex', gap: 12, padding: '10px 14px', borderRadius: 6,
+    background: '#2a0a0a', border: '1px solid #e57373', marginBottom: 8 }}>
+    <span style={{ color: '#e57373', fontSize: 18, lineHeight: 1 }}>✗</span>
+    <div style={{ flex: 1 }}>
+      <div style={{ color: '#e57373', fontWeight: 700, fontSize: 12, letterSpacing: 0.5 }}>
+        ROSTER OVER LIMIT — Cut {rosterSize - 53} player{rosterSize - 53 !== 1 ? 's' : ''} before advancing
       </div>
+      <div style={{ color: '#888', fontSize: 11, marginTop: 2 }}>
+        Active roster must be 53 or fewer
+      </div>
+    </div>
+    <button onClick={() => onNavigate('franchise')}
+      style={{ padding: '4px 12px', background: '#3a0a0a', border: '1px solid #e57373',
+        borderRadius: 3, color: '#e57373', fontSize: 10, cursor: 'pointer' }}>
+      → Cut Players
+    </button>
+  </div>
+)}
+
+{/* Free Agency */}
+<div style={{ display: 'flex', gap: 12, padding: '10px 14px', borderRadius: 6,
+  background: faOpen ? '#0a1a0a' : '#141414',
+  border: `1px solid ${faOpen ? '#2a4a2a' : '#222'}` }}>
+  <span style={{ color: faOpen ? '#4caf50' : '#FF8740', fontSize: 18, lineHeight: 1 }}>
+    {faOpen ? '✓' : '○'}
+  </span>
+  <div style={{ flex: 1 }}>
+    <div style={{ color: '#ccc', fontWeight: 600, fontSize: 12 }}>
+      Free Agency {faOpen ? '— Open' : '— Not Yet Open'}
+    </div>
+    <div style={{ color: '#555', fontSize: 11, marginTop: 2 }}>
+      {faOpen
+        ? 'Expired contracts processed — FAs available to sign'
+        : 'Open free agency to release expired contracts and populate the FA pool'}
+    </div>
+  </div>
+  {faOpen
+    ? <button onClick={() => onNavigate('franchise')}
+        style={{ padding: '4px 12px', background: '#0a1a0a', border: '1px solid #2a4a2a',
+          borderRadius: 3, color: '#4caf50', fontSize: 10, cursor: 'pointer' }}>
+        → Free Agents
+      </button>
+    : <button onClick={onOpenFreeAgency}
+        style={{ padding: '4px 14px', background: '#FF8740', border: 'none',
+          borderRadius: 3, color: '#000', fontSize: 10, fontWeight: 'bold', cursor: 'pointer' }}>
+        OPEN FREE AGENCY
+      </button>
+  }
+</div>
 
       {/* Draft */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0' }}>
