@@ -1,6 +1,5 @@
 import Database from 'better-sqlite3';
 
-// ─── Lazy DB singleton ────────────────────────────────────────────────────────
 let _db: Database.Database | null = null;
 
 export const db = new Proxy({} as Database.Database, {
@@ -25,7 +24,6 @@ export function initDatabase(dbPath: string): void {
   _db.pragma('journal_mode = WAL');
   _db.pragma('busy_timeout = 5000');
 
-  // ── Base Schema ─────────────────────────────────────────────────────────────
   _db.exec(`
     CREATE TABLE IF NOT EXISTS teams (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -311,13 +309,12 @@ export function initDatabase(dbPath: string): void {
     );
   `);
 
-  // ── Indexes ──────────────────────────────────────────────────────────────────
+  // ── Safe indexes (no season-dependent ones here) ──────────────────────────
   _db.exec(`
     CREATE INDEX IF NOT EXISTS idx_stats_game_id ON stats(game_id);
     CREATE INDEX IF NOT EXISTS idx_stats_player_id ON stats(player_id);
     CREATE INDEX IF NOT EXISTS idx_stats_team_id ON stats(team_id);
     CREATE INDEX IF NOT EXISTS idx_stats_team_game ON stats(team_id, game_id);
-    CREATE INDEX IF NOT EXISTS idx_stats_season_playoff ON stats(season, is_playoff);
     CREATE INDEX IF NOT EXISTS idx_games_season ON games(season);
     CREATE INDEX IF NOT EXISTS idx_games_season_sim ON games(season, is_simulated);
     CREATE INDEX IF NOT EXISTS idx_games_season_week ON games(season, week, is_playoff);
@@ -332,8 +329,7 @@ export function initDatabase(dbPath: string): void {
     CREATE INDEX IF NOT EXISTS idx_players_status ON players(roster_status);
   `);
 
-  // ── Runtime Column Migrations (safe on any DB version) ───────────────────────
-  // Stats table
+  // ── Stats column migrations — runs first so season index below is safe ────
   const statCols = (_db.prepare('PRAGMA table_info(stats)').all() as any[]).map((c: any) => c.name);
   const statMigrations: [string, string][] = [
     ['season', 'INTEGER'],
@@ -358,7 +354,10 @@ export function initDatabase(dbPath: string): void {
       _db.prepare(`ALTER TABLE stats ADD COLUMN ${col} ${type}`).run();
   }
 
-  // Games table
+  // Now safe to create the season-dependent index
+  _db.exec(`CREATE INDEX IF NOT EXISTS idx_stats_season_playoff ON stats(season, is_playoff);`);
+
+  // ── Games column migrations ───────────────────────────────────────────────
   const gameCols = (_db.prepare('PRAGMA table_info(games)').all() as any[]).map((c: any) => c.name);
   const gameColMigrations: [string, string][] = [
     ['home_q1', 'INTEGER DEFAULT 0'], ['home_q2', 'INTEGER DEFAULT 0'],
@@ -372,7 +371,7 @@ export function initDatabase(dbPath: string): void {
       _db.prepare(`ALTER TABLE games ADD COLUMN ${col} ${type}`).run();
   }
 
-  // Players table
+  // ── Players column migrations ─────────────────────────────────────────────
   const playerCols: any[] = _db.prepare('PRAGMA table_info(players)').all() as any[];
   const playerColNames = playerCols.map((c: any) => c.name);
 
@@ -438,19 +437,19 @@ export function initDatabase(dbPath: string): void {
       _db.prepare(`ALTER TABLE players ADD COLUMN ${col} INTEGER DEFAULT 0`).run();
   }
 
-  // Contracts table
+  // ── Contracts column migrations ───────────────────────────────────────────
   const contractCols = (_db.prepare('PRAGMA table_info(contracts)').all() as any[]).map((c: any) => c.name);
   if (!contractCols.includes('guaranteed_amount'))
     _db.prepare('ALTER TABLE contracts ADD COLUMN guaranteed_amount REAL DEFAULT 0').run();
   if (!contractCols.includes('guaranteed_pct'))
     _db.prepare('ALTER TABLE contracts ADD COLUMN guaranteed_pct REAL DEFAULT 0').run();
 
-  // Draft prospects table
+  // ── Draft prospects column migrations ─────────────────────────────────────
   const prospectCols = (_db.prepare('PRAGMA table_info(draft_prospects)').all() as any[]).map((c: any) => c.name);
   if (!prospectCols.includes('scouted'))
     _db.prepare('ALTER TABLE draft_prospects ADD COLUMN scouted INTEGER DEFAULT 0').run();
 
-  // ── Roster Trimming ──────────────────────────────────────────────────────────
+  // ── Roster trimming ───────────────────────────────────────────────────────
   const ACTIVE_LIMIT = 53;
   const PS_LIMIT = 16;
   const oversizedTeams = _db.prepare(
@@ -472,7 +471,7 @@ export function initDatabase(dbPath: string): void {
     })();
   }
 
-  // ── Bootstrap Defaults ───────────────────────────────────────────────────────
+  // ── Bootstrap defaults ────────────────────────────────────────────────────
   if (!_db.prepare("SELECT value FROM settings WHERE key = 'current_season'").get())
     _db.prepare("INSERT INTO settings (key, value) VALUES ('current_season', '2025')").run();
 
@@ -552,7 +551,7 @@ const MIGRATIONS: Migration[] = [
   },
   {
     version: 3,
-    description: 'Add franchise_tagged flag to players for Franchise Tag / Transition Tag system',
+    description: 'Add franchise_tagged flag to players',
     up: () => {
       const cols = (db.prepare('PRAGMA table_info(players)').all() as any[]).map((c: any) => c.name);
       if (!cols.includes('franchise_tagged'))
@@ -561,7 +560,7 @@ const MIGRATIONS: Migration[] = [
   },
   {
     version: 4,
-    description: 'Add dead_cap_entries table for tracking dead cap from mid-contract releases',
+    description: 'Add dead_cap_entries table',
     up: () => {
       db.exec(`
         CREATE TABLE IF NOT EXISTS dead_cap_entries (
@@ -578,7 +577,7 @@ const MIGRATIONS: Migration[] = [
   },
   {
     version: 5,
-    description: 'Add coaching_staff table for Coaching Staff System',
+    description: 'Add coaching_staff table',
     up: () => {
       db.exec(`
         CREATE TABLE IF NOT EXISTS coaching_staff (
@@ -612,7 +611,7 @@ const MIGRATIONS: Migration[] = [
   },
   {
     version: 7,
-    description: 'Add team_schemes table for Offensive and Defensive Schemes system',
+    description: 'Add team_schemes table',
     up: () => {
       db.exec(`
         CREATE TABLE IF NOT EXISTS team_schemes (
