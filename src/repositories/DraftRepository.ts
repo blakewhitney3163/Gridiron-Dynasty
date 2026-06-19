@@ -9,6 +9,11 @@ type ProspectInsert = {
   overall_rating: number;
   dev_trait: string;
   age: number;
+  forty_time: number;
+  bench_press: number;
+  vertical_jump: number;
+  broad_jump: number;
+  cone_time: number;
 };
 
 class DraftRepository {
@@ -32,8 +37,15 @@ class DraftRepository {
     return (db.prepare('SELECT COUNT(*) as c FROM draft_prospects WHERE season = ? AND scouted = 1').get(season) as any).c;
   }
 
-  insertClass(prospects: ProspectInsert[]): void {
-    const ins = db.prepare(`INSERT INTO draft_prospects (season, first_name, last_name, position, overall_rating, dev_trait, age) VALUES (@season, @first_name, @last_name, @position, @overall_rating, @dev_trait, @age)`);
+    insertClass(prospects: ProspectInsert[]): void {
+    const ins = db.prepare(`
+      INSERT INTO draft_prospects
+        (season, first_name, last_name, position, overall_rating, dev_trait, age,
+         forty_time, bench_press, vertical_jump, broad_jump, cone_time)
+      VALUES
+        (@season, @first_name, @last_name, @position, @overall_rating, @dev_trait, @age,
+         @forty_time, @bench_press, @vertical_jump, @broad_jump, @cone_time)
+    `);
     const run = db.transaction(() => { for (const p of prospects) ins.run(p); });
     run();
   }
