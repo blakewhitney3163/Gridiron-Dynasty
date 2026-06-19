@@ -1,8 +1,8 @@
 {
-  "name": "nflsimulator",
-  "productName": "nflsimulator",
+  "name": "gridiron-dynasty",
+  "productName": "Gridiron Dynasty",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "A professional football dynasty simulator",
   "main": ".webpack/main",
   "private": true,
   "scripts": {
