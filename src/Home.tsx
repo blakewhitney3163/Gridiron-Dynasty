@@ -4,12 +4,13 @@ import {
   Matchup, BoxScoreData, StandingEntry, Champion, SeedEntry,
   PlayoffGame, InjuredPlayer,
 } from './home/types';
-import SeasonHeader from './home/SeasonHeader';
+import SeasonHeader       from './home/SeasonHeader';
 import OffseasonChecklist from './home/OffseasonChecklist';
-import WeeklySchedule from './home/WeeklySchedule';
-import Sidebar from './home/Sidebar';
-import PlayoffSeedingsView from './home/PlayoffSeedingsView';
-import PlayoffResultsView from './home/PlayoffResultsView';
+import WeeklySchedule     from './home/WeeklySchedule';
+import Sidebar            from './home/Sidebar';
+import PlayoffSeedingsView  from './home/PlayoffSeedingsView';
+import PlayoffResultsView   from './home/PlayoffResultsView';
+import SeasonAwardsView     from './home/SeasonAwardsView';
 import { useGameStore } from './store/gameStore';
 
 declare const window: any;
@@ -22,32 +23,33 @@ interface Props {
 export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const { userTeam, currentSeason, setPlayoffsComplete, incrementSimCount } = useGameStore();
 
-  const [loading, setLoading] = useState(true);
-  const [hasSchedule, setHasSchedule] = useState(false);
-  const [currentWeek, setCurrentWeek] = useState<number | null>(null);
-  const [viewWeek, setViewWeek] = useState(1);
-  const [matchups, setMatchups] = useState<Matchup[]>([]);
-  const [simulating, setSimulating] = useState(false);
-  const [simulatingGameId, setSimulatingGameId] = useState<number | null>(null);
-  const [generatingSchedule, setGeneratingSchedule] = useState(false);
-  const [boxScore, setBoxScore] = useState<BoxScoreData | null>(null);
-  const [boxScoreLoading, setBoxScoreLoading] = useState(false);
-  const [topAFC, setTopAFC] = useState<StandingEntry[]>([]);
-  const [topNFC, setTopNFC] = useState<StandingEntry[]>([]);
-  const [champions, setChampions] = useState<Champion[]>([]);
-  const [confirming, setConfirming] = useState(false);
-  const [advancing, setAdvancing] = useState(false);
-  const [playoffSeeds, setPlayoffSeeds] = useState<{ afc: SeedEntry[]; nfc: SeedEntry[] } | null>(null);
-  const [playoffResults, setPlayoffResults] = useState<PlayoffGame[] | null>(null);
-  const [simulatingPlayoffs, setSimulatingPlayoffs] = useState(false);
-  const [userRecord, setUserRecord] = useState<{ wins: number; losses: number } | null>(null);
-  const [pendingResigns, setPendingResigns] = useState(0);
-  const [draftComplete, setDraftComplete] = useState(false);
-  const [draftGenerated, setDraftGenerated] = useState(false);
-  const [injuryReport, setInjuryReport] = useState<InjuredPlayer[]>([]);
-  const [retiredPlayers, setRetiredPlayers] = useState<{ name: string; position: string; age: number; ovr: number }[]>([]);
-  const [statLeaders, setStatLeaders] = useState<any>(null);
-  const [psAlert, setPSAlert] = useState<string | null>(null);
+  const [loading,             setLoading]             = useState(true);
+  const [hasSchedule,         setHasSchedule]         = useState(false);
+  const [currentWeek,         setCurrentWeek]         = useState<number | null>(null);
+  const [viewWeek,            setViewWeek]            = useState(1);
+  const [matchups,            setMatchups]            = useState<Matchup[]>([]);
+  const [simulating,          setSimulating]          = useState(false);
+  const [simulatingGameId,    setSimulatingGameId]    = useState<number | null>(null);
+  const [generatingSchedule,  setGeneratingSchedule]  = useState(false);
+  const [boxScore,            setBoxScore]            = useState<BoxScoreData | null>(null);
+  const [boxScoreLoading,     setBoxScoreLoading]     = useState(false);
+  const [topAFC,              setTopAFC]              = useState<StandingEntry[]>([]);
+  const [topNFC,              setTopNFC]              = useState<StandingEntry[]>([]);
+  const [champions,           setChampions]           = useState<Champion[]>([]);
+  const [confirming,          setConfirming]          = useState(false);
+  const [advancing,           setAdvancing]           = useState(false);
+  const [playoffSeeds,        setPlayoffSeeds]        = useState<{ afc: SeedEntry[]; nfc: SeedEntry[] } | null>(null);
+  const [playoffResults,      setPlayoffResults]      = useState<PlayoffGame[] | null>(null);
+  const [simulatingPlayoffs,  setSimulatingPlayoffs]  = useState(false);
+  const [userRecord,          setUserRecord]          = useState<{ wins: number; losses: number } | null>(null);
+  const [pendingResigns,      setPendingResigns]      = useState(0);
+  const [draftComplete,       setDraftComplete]       = useState(false);
+  const [draftGenerated,      setDraftGenerated]      = useState(false);
+  const [injuryReport,        setInjuryReport]        = useState<InjuredPlayer[]>([]);
+  const [retiredPlayers,      setRetiredPlayers]      = useState<{ name: string; position: string; age: number; ovr: number }[]>([]);
+  const [statLeaders,         setStatLeaders]         = useState<any>(null);
+  const [psAlert,             setPSAlert]             = useState<string | null>(null);
+  const [seasonAwards,        setSeasonAwards]        = useState<any>(null);
 
   useEffect(() => {
     if (!userTeam) return;
@@ -56,6 +58,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setLoading(true);
       setBoxScore(null); setConfirming(false); setPlayoffSeeds(null);
       setPlayoffResults(null); setUserRecord(null); setInjuryReport([]);
+      setSeasonAwards(null);
 
       const [status, dashboard, champs, standings, offseason, injuries, leaders] = await Promise.all([
         window.api.getCurrentWeek(),
@@ -68,7 +71,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       ]);
       if (cancelled) return;
 
-      const seasonDone = status.hasSchedule && status.currentWeek === null;
+      const seasonDone    = status.hasSchedule && status.currentWeek === null;
       const champForSeason = champs.find((c: Champion) => c.season === currentSeason);
 
       setHasSchedule(status.hasSchedule);
@@ -96,8 +99,17 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         const [seeds, weekData] = await Promise.all([window.api.getPlayoffSeeds(), window.api.getWeekMatchups(18)]);
         if (!cancelled) { setPlayoffSeeds(seeds); setMatchups(weekData); setViewWeek(18); }
       } else if (seasonDone && champForSeason) {
-        const [results, weekData] = await Promise.all([window.api.getPlayoffs(currentSeason), window.api.getWeekMatchups(18)]);
-        if (!cancelled) { setPlayoffResults(results); setMatchups(weekData); setViewWeek(18); }
+        const [results, weekData, awards] = await Promise.all([
+          window.api.getPlayoffs(currentSeason),
+          window.api.getWeekMatchups(18),
+          window.api.getSeasonAwards(currentSeason),
+        ]);
+        if (!cancelled) {
+          setPlayoffResults(results);
+          setMatchups(weekData);
+          setViewWeek(18);
+          setSeasonAwards(awards);
+        }
       }
 
       if (!cancelled) setLoading(false);
@@ -135,7 +147,8 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     const mine = standings.find((t: any) => t.id === userTeam.id);
     if (mine) setUserRecord({ wins: mine.wins, losses: mine.losses });
     setMatchups(await window.api.getWeekMatchups(viewWeek));
-    if (weekResult?.userPSOpenSpots > 0) setPSAlert(`Practice squad has ${weekResult.userPSOpenSpots} open spot${weekResult.userPSOpenSpots !== 1 ? 's' : ''}. Sign free agents in Franchise → Practice Squad tab.`);
+    if (weekResult?.userPSOpenSpots > 0)
+      setPSAlert(`Practice squad has ${weekResult.userPSOpenSpots} open spot${weekResult.userPSOpenSpots !== 1 ? 's' : ''}. Sign free agents in Franchise → Practice Squad tab.`);
     if (status.currentWeek === null && status.hasSchedule) {
       const seeds = await window.api.getPlayoffSeeds();
       setPlayoffSeeds(seeds);
@@ -160,7 +173,8 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     const mine = standings.find((t: any) => t.id === userTeam.id);
     if (mine) setUserRecord({ wins: mine.wins, losses: mine.losses });
     setMatchups(await window.api.getWeekMatchups(viewWeek));
-    if (result.userPSOpenSpots > 0) setPSAlert(`Practice squad has ${result.userPSOpenSpots} open spot${result.userPSOpenSpots !== 1 ? 's' : ''}. Sign free agents in Franchise → Practice Squad tab.`);
+    if (result.userPSOpenSpots > 0)
+      setPSAlert(`Practice squad has ${result.userPSOpenSpots} open spot${result.userPSOpenSpots !== 1 ? 's' : ''}. Sign free agents in Franchise → Practice Squad tab.`);
     if (result.weekComplete) {
       setStatLeaders(await window.api.getStats(currentSeason));
       if (status.currentWeek === null && status.hasSchedule) {
@@ -175,9 +189,14 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const handleSimulatePlayoffs = async () => {
     setSimulatingPlayoffs(true);
     await window.api.simulatePlayoffs(currentSeason);
-    const [champs, results] = await Promise.all([window.api.getChampions(), window.api.getPlayoffs(currentSeason)]);
+    const [champs, results, awards] = await Promise.all([
+      window.api.getChampions(),
+      window.api.getPlayoffs(currentSeason),
+      window.api.getSeasonAwards(currentSeason),
+    ]);
     setChampions(champs); setPlayoffResults(results); setPlayoffSeeds(null);
     setPlayoffsComplete(true);
+    setSeasonAwards(awards);
     await refreshOffseasonStatus();
     setSimulatingPlayoffs(false);
   };
@@ -203,11 +222,12 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     onSeasonAdvance(result.nextSeason);
   };
 
-  const allWeeksDone = hasSchedule && currentWeek === null;
-  const currentChampion = champions.find(c => c.season === currentSeason);
+  const allWeeksDone      = hasSchedule && currentWeek === null;
+  const currentChampion   = champions.find(c => c.season === currentSeason);
   const isPlayoffsComplete = !!currentChampion;
 
-  if (loading || !userTeam) return <div style={{ padding: 24, color: T.textDim }}>Loading...</div>;
+  if (loading || !userTeam)
+    return <div style={{ padding: 24, color: T.textDim }}>Loading...</div>;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, padding: '20px 24px', maxWidth: 1400, margin: '0 auto' }}>
@@ -255,10 +275,10 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
             <div style={{ fontSize: 12 }}>Click "Start {currentSeason} Season" to generate all 18 weeks.</div>
           </div>
         ) : allWeeksDone && isPlayoffsComplete ? (
-          <PlayoffResultsView
-            results={playoffResults}
-            champion={currentChampion}
-          />
+          <>
+            <PlayoffResultsView results={playoffResults} champion={currentChampion} />
+            <SeasonAwardsView awards={seasonAwards} season={currentSeason} />
+          </>
         ) : allWeeksDone && !isPlayoffsComplete ? (
           <PlayoffSeedingsView seeds={playoffSeeds} />
         ) : (
