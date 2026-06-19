@@ -44,3 +44,43 @@ export function preScoutTier(id: number, ovr: number): { label: string; color: s
   if (n >= 63) return { label: 'Day 3',        color: '#4FC3F7' };
   return            { label: 'Priority FA',  color: T.textMuted };
 }
+// ─── Combine Utilities ────────────────────────────────────────────────────────
+
+/** Primary combine stat label for a given position. */
+export const COMBINE_PRIMARY: Record<string, string> = {
+  QB: 'forty_time', RB: 'forty_time', WR: 'forty_time',
+  TE: 'bench_press', OL: 'bench_press', DL: 'bench_press',
+  LB: 'forty_time', CB: 'forty_time', S: 'forty_time', K: 'bench_press',
+};
+
+/** Color for a forty time (lower is better). */
+export function fortyColor(t: number): string {
+  if (t <= 4.38) return '#FFD700';
+  if (t <= 4.50) return '#4caf50';
+  if (t <= 4.65) return '#FF8740';
+  return T.textMuted;
+}
+
+/** Color for bench press reps (higher is better). */
+export function benchColor(reps: number): string {
+  if (reps >= 28) return '#FFD700';
+  if (reps >= 22) return '#4caf50';
+  if (reps >= 15) return '#FF8740';
+  return T.textMuted;
+}
+
+/** Color for vertical jump (higher is better). */
+export function vertColor(inches: number): string {
+  if (inches >= 40) return '#FFD700';
+  if (inches >= 36) return '#4caf50';
+  if (inches >= 32) return '#FF8740';
+  return T.textMuted;
+}
+
+/** Color for cone time (lower is better). */
+export function coneColor(t: number): string {
+  if (t <= 6.80) return '#FFD700';
+  if (t <= 7.10) return '#4caf50';
+  if (t <= 7.40) return '#FF8740';
+  return T.textMuted;
+}
