@@ -3,15 +3,6 @@ Last Updated: June 19, 2026
 Repository: https://github.com/blakewhitney3163/Gridiron-Dynasty
 ================================================================================
 
-TIER 1 — Core experience improvements
-────────────────────────────────────────────────────────────────────────────────
-Surface Trade Offers on Main Screen — incoming CPU trade proposals visible
-  from the Home tab alongside news. Also expose a place for users to update
-  their own team status (Buyer / Seller / etc.) directly from the home screen.
-
-Cleaner Pick Selection in Trades — make the draft pick trading UI more
-  discoverable. Current flow is functional but not obvious.
-
 TIER 2 — Strategic depth
 ────────────────────────────────────────────────────────────────────────────────
 Contract Negotiation Depth — multi-year offer counters, holdout mechanic,
@@ -40,20 +31,30 @@ In-Game Narrative / Play-by-Play — text play-by-play during simulation.
 COMPLETED ITEMS
 ================================================================================
 
+[DONE June 19, 2026] Surface Trade Offers on Main Screen — incoming CPU trade
+  proposals now surface on the Home tab as a green-bordered notification card.
+  Shows the offering team, what they want, what you receive (player + optional
+  pick), and net value diff. Accept and Decline buttons work directly from Home
+  without navigating to the Trades tab. "Full Details →" navigates to Trades.
+  Also added a Trade Status widget to the Home sidebar showing the user team's
+  current buy/sell posture (Contender/Buyer/Seller/Rebuilding/Neutral) with
+  quick-click override buttons. Implemented via TradeOfferCard.tsx (new),
+  Sidebar.tsx (new Trade Status block), and Home.tsx (new state + handlers).
+
 [DONE June 19, 2026] Meet the Team Screen — orientation screen shown after
   team selection on new dynasties. Displays team grade, offense/defense OVR,
-  cap space, top 10 players with dev trait badges, team needs, roster
-  snapshot, and getting-started tips. Transitions to main game via
-  "BEGIN DYNASTY →" button. Implemented in MeetTheTeam.tsx, wired into
-  App.tsx as the 'meet-team' screen state after setup completes.
+  cap space, top 10 players with dev trait badges, team needs, roster snapshot,
+  and getting-started tips. Transitions to main game via "BEGIN DYNASTY →"
+  button. Implemented in MeetTheTeam.tsx, wired into App.tsx as the
+  'meet-team' screen state after setup completes.
 
 [DONE June 19, 2026] Franchise Tag + Tender System — Franchise Tag (FT,
   ~135% of fair market) and Transition Tag (TT, ~110%) designations in the
   Offseason tab. One of each per team per offseason. Tag Usage banner shows
   Available/Used status. Applying a tag auto-resolves the player's re-sign
-  decision. Remove Tag releases the player to FA. Backed by
-  franchise_tagged column on players table (migration v3), applyFranchiseTag
-  / removeFranchiseTag in ContractService, IPC handlers, and preload exposure.
+  decision. Remove Tag releases the player to FA. Backed by franchise_tagged
+  column on players table (migration v3), applyFranchiseTag /
+  removeFranchiseTag in ContractService, IPC handlers, and preload exposure.
 
 [DONE June 19, 2026] Player Morale System — morale column on players table
   (default 75, range 0–100). Updated seasonally based on win%, contract
@@ -62,45 +63,34 @@ COMPLETED ITEMS
   via applyMoraleModifier — every game's getTeamRatings call applies a
   per-player (morale − 75) × 0.001 multiplier before averaging team strength.
 
-[DONE June 19, 2026] Morale Bar on Franchise Player Cards — colored progress
-  bar with numeric morale value displayed under each player's name in the
-  Active Roster tab.
-
 [DONE June 18, 2026] Season Awards — MVP, Offensive Player of the Year,
   Defensive Player of the Year, Offensive Rookie of the Year, Defensive
-  Rookie of the Year, and Coach of the Year computed at season end.
-  Displayed in SeasonAwardsView.tsx panel on the Home tab after playoffs.
-  MVP and DPOY winners also generate news feed events.
+  Rookie of the Year, and Coach of the Year computed at season end. Displayed
+  in SeasonAwardsView.tsx on the Home tab after playoffs. MVP and DPOY winners
+  also generate news feed events.
 
-[DONE June 18, 2026] Practice Squad Accelerated Development — PS players
-  aged 23 or younger receive OVR gains each season (up to +3 bonus on top
-  of normal progression). Rewards intentional roster building through the
-  practice squad.
+[DONE June 18, 2026] Practice Squad Accelerated Development — PS players aged
+  23 or younger receive OVR gains each season (up to +3 bonus on top of normal
+  progression). Rewards intentional roster building through the practice squad.
 
 [DONE June 18, 2026] Contract Demand News Events — elite players (OVR 85+)
   entering their final contract year automatically generate a news event
   demanding a new deal, adding urgency to offseason planning.
 
-[DONE June 18, 2026] Retirement + HOF News Events — retirements and Hall
-  of Fame inductions now generate news feed events at season end, keeping
-  the news center populated with meaningful long-form story beats.
+[DONE June 18, 2026] Retirement + HOF News Events — retirements and Hall of
+  Fame inductions now generate news feed events at season end.
 
 [DONE June 18, 2026] Multiple Save Files — save picker at launch, lazy DB
   init via Proxy pattern, full save create / load / delete UI.
 
 [DONE June 18, 2026] OL Ratings in Teams / Depth Chart — getRatingCols now
-  returns PBK / RBK / STR / AWR for all OL positions. runblocking and
-  passblocking added to Player interface and get-roster SELECT.
+  returns PBK / RBK / STR / AWR for all OL positions.
 
-[DONE] Player Editor — manually edit player ratings, position, age, dev
-  trait. Inline edit mode in PlayerProfile.tsx with position-specific
-  attribute sliders (range 40–99), backed by edit-player IPC handler with
-  column allowlist in settingsHandlers.ts.
+[DONE] Player Editor — inline edit mode in PlayerProfile.tsx with
+  position-specific attribute sliders, backed by edit-player IPC handler.
 
 [DONE] Playoff UI Update — bracket-style visual for the playoff tree with
-  game scores, seeds, and champion display. Implemented in Playoffs.tsx with
-  layout constants, SVG connector lines, and full Wild Card through
-  Gridiron Cup bracket rendering.
+  game scores, seeds, and champion display in Playoffs.tsx.
 
 ================================================================================
 COMMERCIAL / SCALABILITY TRACK
