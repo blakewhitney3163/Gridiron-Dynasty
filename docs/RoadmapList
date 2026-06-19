@@ -1,10 +1,12 @@
-NFL SIMULATOR — ROADMAP
+GRIDIRON DYNASTY — ROADMAP
 Last Updated: June 18, 2026
 Repository: https://github.com/blakewhitney3163/NFLSimulator
 ================================================================================
 
-When you first start the dynasty - a meet the team screen - roster - overall ratings - best players etc Surface trade offers on main screen (same with news) Also be able to update own team status
-Place for users to select picks to trade that’s more obvious
+When you first start the dynasty - a meet the team screen - roster - overall
+ratings - best players etc. Surface trade offers on main screen (same with
+news). Also be able to update own team status.
+Place for users to select picks to trade that's more obvious.
 
 TIER 2 — Adds strategic depth
 ────────────────────────────────────────────────────────────────────────────────
@@ -32,15 +34,16 @@ Team Editor — edit team name, city, colors, conference/division.
 Playoff UI Update — bracket-style visual for the playoff tree with game
   scores, seeds, and champion display.
 
-Multiple Save Files — essential for a long franchise game.
+[DONE June 18, 2026] Multiple Save Files — save picker at launch, lazy DB
+  init via Proxy pattern, full save create/load/delete UI.
 
-Historical Mode — load real NFL rosters from a specific year and simulate
-  forward from that point.
+Historical Records Import — CSV import UI for users to load their own
+  historical records/benchmarks dataset into the dynasty.
 
 League Customization — expansion teams, relocation, custom team names.
 
 ================================================================================
-KNOWN BUGS
+KNOWN BUGS / FIXED
 ================================================================================
 [FIXED June 18, 2026] OL ratings in Teams / Depth Chart — getRatingCols now
   returns PBK / RBK / STR / AWR for all OL positions. runblocking and
@@ -57,42 +60,42 @@ BLOCKING — Must fix before distribution
 [FIXED June 18, 2026] DB Indexes — idx_stats_game_id, idx_stats_player_id,
   idx_stats_team_id, idx_stats_team_game, idx_games_season, and
   idx_games_season_sim added to database.ts via CREATE INDEX IF NOT EXISTS.
-  Safe on existing saves; idempotent on every subsequent launch.
 
-Migration Versioning — The current ALTER TABLE ADD COLUMN pattern works but
-  is fragile. A schema change on a 5-season save can break it with no recovery
-  path. Add a schema_version key to the settings table and a numbered migration
-  runner so existing saves upgrade cleanly on launch.
+[FIXED June 18, 2026] Migration Versioning — schema_version tracked in
+  settings; numbered migration runner upgrades existing saves on launch.
 
-Multiple Save Files — The DB path (nfl-simulator.db) is hardcoded in
-  database.ts. Customers expect multiple dynasties. Needs a save picker at
-  launch that swaps the active DB file path before the database module loads.
+[FIXED June 18, 2026] Multiple Save Files — DB path no longer hardcoded;
+  save picker at launch swaps active DB file before database module loads.
 
-Background Simulation — simulateGame runs synchronously on the Electron main
-  thread. Simulating a full season or multiple seasons freezes the UI. Needs
-  a worker thread or queue so sim runs in the background and the UI stays
-  responsive — table stakes for a "sim to end of season" feature.
+[FIXED June 18, 2026] Background Simulation — simulateGame runs in a worker
+  thread. UI stays responsive during full-season sim.
+
+[FIXED June 18, 2026] Full IP Cleanup — all real NFL data removed:
+  Madden ratings CSV, OTC contracts, career stats CSVs, historical records
+  CSVs. Replaced with fictional player generator (53-man rosters + 176 FAs).
+  Championship renamed Super Bowl → Gridiron Cup. All NFL trademark
+  references removed from UI. App renamed to Gridiron Dynasty.
 
 Code Signing + Auto-Update — Electron apps without code signing trigger OS
-  security warnings (macOS Gatekeeper, Windows SmartScreen) that will tank
-  reviews. Needs electron-builder code signing and electron-updater wired up
-  before any public distribution.
+  security warnings (macOS Gatekeeper, Windows SmartScreen). Needs
+  electron-builder code signing and electron-updater before public distribution.
 
-Windows Build Verification — The app is developed on macOS. better-sqlite3
-  is a native module that must be built per platform. Windows path separators,
-  file dialogs, and native module binaries all need explicit testing. Most
-  desktop gaming customers are on Windows.
+Windows Build Verification — better-sqlite3 is a native module that must be
+  built per platform. Needs a GitHub Actions CI workflow that builds and
+  tests on Windows before Steam submission.
 
 IMPORTANT — Fix before growing the codebase further
+────────────────────────────────────────────────────────────────────────────────
+[FIXED June 18, 2026] Automated Tests — comprehensive Vitest suite covering
+  simulation helpers, game sim logic, season progression, trade value,
+  contract acceptance, milestones, CPU GM logic, and team stats.
 
-Automated Tests — Zero test coverage. The simulation engine, CPU GM logic,
-  and trade evaluator are exactly the kind of business logic that needs
-  regression tests. One bad season advance bug can corrupt a long-running
-  save silently.
+CSV Import System — users need a way to import custom rosters, historical
+  records benchmarks, and player data. Required to re-enable the Records
+  benchmarks feature now that built-in NFL data is removed.
 
-Reduce `any` in IPC Handlers — Most handler callbacks use `any` extensively,
-  effectively turning off TypeScript for the data layer. Needs typed request/
-  response interfaces as the feature set grows.
+Reduce `any` in IPC Handlers — Most handler callbacks use `any` extensively.
+  Needs typed request/response interfaces as the feature set grows.
 
 FUTURE DEPTH — Required to compete with OOTP-tier games
 ────────────────────────────────────────────────────────────────────────────────
@@ -114,6 +117,6 @@ Player Morale / Personality — Affects re-sign decisions, locker room culture,
 In-Game Narrative / Play-by-Play — Text play-by-play during simulation.
   Stats-only output today limits immersion significantly.
 
-Franchise Tag + Tender System — Standard NFL roster mechanic missing today.
+Franchise Tag + Tender System — Standard franchise mechanic missing today.
 
 League Expansion / Relocation — Add teams, move teams, custom identities.
