@@ -5,7 +5,7 @@ import { settingsRepo, playerRepo, contractRepo } from '../repositories';
 import {
   calcFairMarket, signFreeAgent, resignPlayer, promoteFromPS, cpuFASigning,
   signFreeAgentToPS, extendPlayer, restructurePlayer, releasePlayer,
-  getOffseasonStatus, applyFranchiseTag, removeFranchiseTag,
+  getOffseasonStatus, applyFranchiseTag, removeFranchiseTag, acceptCounterOffer,
 } from '../services/ContractService';
 import { logNewsEvent } from '../helpers/logNewsEvent';
 import { db } from '../database';
@@ -106,4 +106,16 @@ export function registerContractHandlers(): void {
 
   ipcMain.handle('remove-franchise-tag', (_event: any, playerId: number) =>
     removeFranchiseTag(playerId));
+
+    ipcMain.handle('accept-counter-offer', (_event: any, { playerId, years, salary }: { playerId: number; years: number; salary: number }) =>
+    acceptCounterOffer(playerId, years, salary));
+
+  ipcMain.handle('get-dead-cap', (_event: any, teamId: number) => {
+    const { getCurrentSeason } = require('../helpers/getCurrentSeason');
+    const season = getCurrentSeason();
+    return {
+      amount: contractRepo.getDeadCap(teamId, season),
+      entries: contractRepo.getDeadCapEntries(teamId, season),
+    };
+  });
 }
