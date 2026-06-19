@@ -5,7 +5,7 @@ import { TradeResult } from '../types';
 import { settingsRepo, playerRepo, contractRepo, pickRepo } from '../repositories';
 import {
   calcPlayerTradeValue, calcPickTradeValue,
-  getTeamTradeProfile, proposeTrade, getCpuTradeOffer,
+  getTeamTradeProfile, getTeamNeeds, proposeTrade, getCpuTradeOffer,
 } from '../services/TradeService';
 import { logNewsEvent } from '../helpers/logNewsEvent';
 
@@ -42,21 +42,14 @@ export function registerTradeHandlers(): void {
   ipcMain.handle('propose-trade', (_event: any, { myPlayerIds, theirPlayerIds, theirTeamId, myPickIds = [], theirPickIds = [] }: {
     myPlayerIds: number[]; theirPlayerIds: number[]; theirTeamId: number;
     myPickIds?: number[]; theirPickIds?: number[];
-  }): Promise<any> => {
+  }): Promise<TradeResult> => {
     const myTeamId = settingsRepo.getUserTeamId();
     if (!myTeamId) return { accepted: false, reason: 'No franchise selected.' } as any;
 
-    // Capture labels before the trade executes
     const myTeamName    = getTeamName(myTeamId);
     const theirTeamName = getTeamName(theirTeamId);
-    const sentLabels    = [
-      ...myPlayerIds.map(getPlayerLabel),
-      ...myPickIds.map(getPickLabel),
-    ];
-    const receivedLabels = [
-      ...theirPlayerIds.map(getPlayerLabel),
-      ...theirPickIds.map(getPickLabel),
-    ];
+    const sentLabels     = [...myPlayerIds.map(getPlayerLabel),    ...myPickIds.map(getPickLabel)];
+    const receivedLabels = [...theirPlayerIds.map(getPlayerLabel), ...theirPickIds.map(getPickLabel)];
 
     const result = proposeTrade({
       myTeamId, theirTeamId, myPlayerIds, theirPlayerIds, myPickIds, theirPickIds,
@@ -69,7 +62,7 @@ export function registerTradeHandlers(): void {
         title: `Trade: ${myTeamName} and ${theirTeamName} make a deal`,
         body: [
           receivedLabels.length ? `${myTeamName} receives: ${receivedLabels.join(', ')}` : null,
-          sentLabels.length     ? `${theirTeamName} receives: ${sentLabels.join(', ')}` : null,
+          sentLabels.length     ? `${theirTeamName} receives: ${sentLabels.join(', ')}`   : null,
         ].filter(Boolean).join(' | '),
       });
     }
@@ -92,11 +85,10 @@ export function registerTradeHandlers(): void {
     const myTeamId = settingsRepo.getUserTeamId();
     if (!myTeamId) return { success: false };
 
-    // Capture labels before the transaction moves players
     const myTeamName    = getTeamName(myTeamId);
     const theirTeamName = getTeamName(theirTeamId);
-    const sentLabel     = getPlayerLabel(myPlayerId);
-    const receivedParts = [getPlayerLabel(theirPlayerId)];
+    const sentLabel      = getPlayerLabel(myPlayerId);
+    const receivedParts  = [getPlayerLabel(theirPlayerId)];
     if (theirPickId) receivedParts.push(getPickLabel(theirPickId));
 
     db.transaction(() => {
@@ -120,22 +112,6 @@ export function registerTradeHandlers(): void {
     return { success: true };
   });
 
-  ipcMain.handle('get-team-needs', (_: any, teamId: number) => {
-    const TARGETS: Record<string, { min: number; ideal: number; topN: number; minOvr: number }> = {
-      QB: { min: 2, ideal: 3, topN: 1, minOvr: 72 }, RB: { min: 3, ideal: 4, topN: 2, minOvr: 70 },
-      WR: { min: 4, ideal: 5, topN: 3, minOvr: 70 }, TE: { min: 2, ideal: 3, topN: 1, minOvr: 68 },
-      OL: { min: 6, ideal: 8, topN: 5, minOvr: 68 }, DL: { min: 4, ideal: 6, topN: 4, minOvr: 68 },
-      LB: { min: 3, ideal: 5, topN: 3, minOvr: 68 }, CB: { min: 3, ideal: 5, topN: 2, minOvr: 68 },
-      S:  { min: 2, ideal: 3, topN: 2, minOvr: 68 }, K:  { min: 1, ideal: 1, topN: 1, minOvr: 60 },
-    };
-    const roster = playerRepo.getByTeam(teamId, 'active');
-    const needs: { position: string; severity: 'critical' | 'depth' }[] = [];
-    for (const [pos, t] of Object.entries(TARGETS)) {
-      const posPlayers = roster.filter((p: any) => p.position === pos);
-      if (posPlayers.length < t.min) { needs.push({ position: pos, severity: 'critical' }); continue; }
-      const topAvg = posPlayers.slice(0, t.topN).reduce((s: number, p: any) => s + p.overall_rating, 0) / posPlayers.slice(0, t.topN).length;
-      if (posPlayers.length < t.ideal || topAvg < t.minOvr) needs.push({ position: pos, severity: 'depth' });
-    }
-    return needs;
-  });
+  ipcMain.handle('get-team-needs', (_: any, teamId: number) =>
+    getTeamNeeds(teamId).map(pos => ({ position: pos, severity: 'depth' as const })));
 }
