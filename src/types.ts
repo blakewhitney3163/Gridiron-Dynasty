@@ -35,7 +35,8 @@ export interface Player {
   weeks_out?: number;
   injury_type?: string | null;
   waived_by_team_id?: number | null;
-  waiver_placed_week?: number | null;
+    waiver_placed_week?: number | null;
+  morale?: number;
 }
 
 export interface Team {
