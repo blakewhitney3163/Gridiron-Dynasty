@@ -75,10 +75,16 @@ function getFaOverall(): number {
 
 function devTrait(ovr: number): string {
   const r = Math.random();
-  if (ovr >= 90) return r < 0.40 ? 'X-Factor' : r < 0.80 ? 'Superstar' : r < 0.98 ? 'Star' : 'Normal';
-  if (ovr >= 80) return r < 0.05 ? 'X-Factor' : r < 0.30 ? 'Superstar' : r < 0.75 ? 'Star' : 'Normal';
-  if (ovr >= 70) return r < 0.01 ? 'X-Factor' : r < 0.09 ? 'Superstar' : r < 0.44 ? 'Star' : 'Normal';
-  return r < 0.002 ? 'X-Factor' : r < 0.022 ? 'Superstar' : r < 0.202 ? 'Star' : 'Normal';
+  // OVR 90+: ~5% XF, ~20% SS, ~60% Star, ~15% Normal
+  if (ovr >= 90) return r < 0.05 ? 'X-Factor' : r < 0.25 ? 'Superstar' : r < 0.85 ? 'Star' : 'Normal';
+  // OVR 85-89: ~2% XF, ~12% SS, ~60% Star, ~26% Normal
+  if (ovr >= 85) return r < 0.02 ? 'X-Factor' : r < 0.14 ? 'Superstar' : r < 0.74 ? 'Star' : 'Normal';
+  // OVR 80-84: ~0.5% XF, ~5% SS, ~45% Star, ~49.5% Normal
+  if (ovr >= 80) return r < 0.005 ? 'X-Factor' : r < 0.055 ? 'Superstar' : r < 0.505 ? 'Star' : 'Normal';
+  // OVR 70-79: ~0.1% XF, ~1% SS, ~20% Star, ~79% Normal
+  if (ovr >= 70) return r < 0.001 ? 'X-Factor' : r < 0.011 ? 'Superstar' : r < 0.211 ? 'Star' : 'Normal';
+  // Below 70: no elite traits
+  return r < 0.04 ? 'Star' : 'Normal';
 }
 
 // ─── Age by Role ─────────────────────────────────────────────────────────────
