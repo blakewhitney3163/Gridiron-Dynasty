@@ -71,7 +71,7 @@ export default function Teams() {
 
   return (
     <div style={{ display: 'flex', height: '100%', gap: 0 }}>
-      <TeamSidebar teams={teams} selectedTeam={selectedTeam} onSelect={handleSelectTeam} />
+    <TeamSidebar teams={teams} selectedTeam={selectedTeam} onSelectTeam={handleSelectTeam} />
 
       {!selectedTeam ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.textSecondary }}>
@@ -79,8 +79,8 @@ export default function Teams() {
         </div>
       ) : (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px 8px', borderBottom: `1px solid ${T.border}` }}>
-            <div style={{ color: T.text, fontSize: 18, fontWeight: 700 }}>
+          <div style={{ padding: '16px 20px 8px', borderBottom: `1px solid ${T.borderMid}` }}>
+            <div style={{ color: T.textPrimary, fontSize: 18, fontWeight: 700 }}>
               {selectedTeam.city} {selectedTeam.name}
             </div>
             <div style={{ color: T.textSecondary, fontSize: 12 }}>
@@ -92,7 +92,7 @@ export default function Teams() {
             <PlayerList
               availablePositions={availablePositions}
               selectedPosition={selectedPosition}
-              onSelectPosition={(pos) => { setSelectedPosition(pos); setSelectedPlayer(null); }}
+              setSelectedPosition={(pos) => { setSelectedPosition(pos); setSelectedPlayer(null); }}
               filteredPlayers={filteredPlayers}
               ratingCols={ratingCols}
               selectedPlayer={selectedPlayer}
