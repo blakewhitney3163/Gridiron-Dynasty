@@ -300,11 +300,13 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         {/* Incoming trade offer */}
         {cpuOffer && !offerHandled && (
           <TradeOfferCard
-            offer={cpuOffer}
-            onAccept={handleAcceptOffer}
-            onDecline={handleDeclineOffer}
-            onViewDetails={() => onNavigate('trades')}
-          />
+  offer={cpuOffer}
+  currentSeason={currentSeason}
+  working={offerWorking}
+  onAccept={handleAcceptOffer}
+  onDecline={handleDeclineOffer}
+  onViewDetails={() => onNavigate('trades')}
+/>
         )}
 
         {allWeeksDone && isPlayoffsComplete && (
@@ -333,7 +335,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
               onNavigate={onNavigate}
               onOpenFreeAgency={handleOpenFreeAgency}
             />
-            <PlayoffResultsView results={playoffResults} season={currentSeason} />
+            <PlayoffResultsView results={playoffResults} champion={currentChampion} />
           </>
         ) : allWeeksDone && !isPlayoffsComplete ? (
           <PlayoffSeedingsView
@@ -344,7 +346,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         ) : (
           <WeeklySchedule
             matchups={matchups}
-            currentWeek={currentWeek}
             viewWeek={viewWeek}
             simulating={simulating}
             simulatingGameId={simulatingGameId}
