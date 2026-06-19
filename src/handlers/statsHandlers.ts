@@ -7,16 +7,26 @@ import { POSITION_TO_GROUP } from '../constants';
 // ─── Depth Chart Helper ───────────────────────────────────────────────────────
 
 function initDepthChart(teamId: number) {
+  // Auto-migrate old flat OL/DL groups to specific position groups
+  const hasOldGroups = (db.prepare(
+    "SELECT COUNT(*) as cnt FROM depth_chart WHERE team_id = ? AND position_group IN ('OL','DL')"
+  ).get(teamId) as any).cnt > 0;
+  if (hasOldGroups) {
+    db.prepare('DELETE FROM depth_chart WHERE team_id = ?').run(teamId);
+  }
+
   const existing = (db.prepare('SELECT COUNT(*) as count FROM depth_chart WHERE team_id = ?').get(teamId) as any).count;
   if (existing > 0) return;
+
   const players = db.prepare(`
     SELECT id, position, position_label FROM players
     WHERE team_id = ? AND roster_status = 'active'
     ORDER BY overall_rating DESC
   `).all(teamId) as any[];
+
   const insert = db.prepare('INSERT OR IGNORE INTO depth_chart (team_id, player_id, position_group, slot) VALUES (?, ?, ?, ?)');
   const groupSlots: Record<string, number> = {};
-  const run = db.transaction(() => {
+  db.transaction(() => {
     for (const p of players) {
       const pos = p.position_label || p.position;
       const group = POSITION_TO_GROUP[pos];
@@ -24,8 +34,7 @@ function initDepthChart(teamId: number) {
       groupSlots[group] = (groupSlots[group] ?? 0) + 1;
       insert.run(teamId, p.id, group, groupSlots[group]);
     }
-  });
-  run();
+  })();
 }
 
 // ─── Register Handlers ────────────────────────────────────────────────────────
