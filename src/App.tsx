@@ -62,7 +62,6 @@ export default function App() {
     advanceSeason,
   } = useGameStore();
 
-  // ── Called after a save file is opened in SavePicker ─────────────────────
   const handleSaveLoaded = async () => {
     setScreen('loading');
     const [season, team, offseason, diff] = await Promise.all([
@@ -98,9 +97,9 @@ export default function App() {
   };
 
   const runSetup = async () => {
-    markStep('Importing real NFL contracts from OTC...', false);
+    markStep('Importing contracts...', false);
     await window.api.importOtcContracts();
-    markStep('Importing real NFL contracts from OTC...', true);
+    markStep('Importing contracts...', true);
 
     markStep('Building player career histories...', false);
     await window.api.importNflverseStats();
@@ -141,8 +140,8 @@ export default function App() {
     ? [...BASE_TABS.filter(t => t.id !== 'news'), { id: 'draft' as Tab, label: '⚡ Draft' }, { id: 'news' as Tab, label: '📰 News' }]
     : BASE_TABS;
 
-  const isMounted  = (id: Tab) => mountedTabs.has(id);
-  const tabStyle   = (id: Tab): React.CSSProperties => activeTab === id ? {} : { display: 'none' };
+  const isMounted = (id: Tab) => mountedTabs.has(id);
+  const tabStyle  = (id: Tab): React.CSSProperties => activeTab === id ? {} : { display: 'none' };
 
   // ── Save Picker ───────────────────────────────────────────────────────────
   if (screen === 'save-picker') {
@@ -157,10 +156,10 @@ export default function App() {
   if (screen === 'start') {
     return (
       <div style={{ minHeight: '100vh', background: T.bgPage, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace' }}>
-        <div style={{ marginBottom: 8, fontSize: 10, letterSpacing: 6, color: T.textDim }}>PRESENTED BY</div>
-        <div style={{ fontSize: 48, fontWeight: 900, letterSpacing: 8, color: '#4FC3F7', marginBottom: 4 }}>NFL</div>
-        <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: 4, color: T.textMuted, marginBottom: 48 }}>SIMULATOR</div>
-        <div style={{ fontSize: 11, letterSpacing: 3, color: T.textDim, marginBottom: 24 }}>DYNASTY MODE</div>
+        <div style={{ marginBottom: 8, fontSize: 10, letterSpacing: 6, color: T.textDim }}>DYNASTY SIMULATOR</div>
+        <div style={{ fontSize: 48, fontWeight: 900, letterSpacing: 8, color: '#4FC3F7', marginBottom: 4 }}>GRIDIRON</div>
+        <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: 4, color: T.textMuted, marginBottom: 48 }}>DYNASTY</div>
+        <div style={{ fontSize: 11, letterSpacing: 3, color: T.textDim, marginBottom: 24 }}>FRANCHISE MODE</div>
         <button
           onClick={() => setScreen('team-select')}
           style={{ padding: '16px 24px', fontSize: 13, fontWeight: 'bold', letterSpacing: 3, background: '#4caf50', color: '#000', border: 'none', borderRadius: 4, cursor: 'pointer', fontFamily: 'monospace', marginBottom: 12 }}
@@ -196,7 +195,7 @@ export default function App() {
   if (screen === 'setup') {
     return (
       <div style={{ minHeight: '100vh', background: T.bgPage, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace' }}>
-        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: 4, color: '#4FC3F7', marginBottom: 8 }}>NFL SIMULATOR</div>
+        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: 4, color: '#4FC3F7', marginBottom: 8 }}>GRIDIRON DYNASTY</div>
         {userTeam && (
           <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 32 }}>
             {userTeam.city} {userTeam.name}
@@ -216,7 +215,7 @@ export default function App() {
     );
   }
 
-  // ── Loading / no user ─────────────────────────────────────────────────────
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (screen === 'loading' || !userTeam) {
     return (
       <div style={{ minHeight: '100vh', background: T.bgPage, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4FC3F7', fontFamily: 'monospace', fontSize: 13, letterSpacing: 4 }}>
@@ -231,7 +230,7 @@ export default function App() {
 
       {/* Top bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: `1px solid ${T.bgCard}`, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 14, fontWeight: 900, letterSpacing: 4, color: '#4FC3F7' }}>NFL</span>
+        <span style={{ fontSize: 14, fontWeight: 900, letterSpacing: 4, color: '#4FC3F7' }}>GID</span>
         <span style={{ color: T.borderFaint }}>|</span>
         <span style={{ fontSize: 12, color: T.textMuted, fontWeight: 'bold' }}>{userTeam.city} {userTeam.name}</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -288,16 +287,13 @@ export default function App() {
         ))}
       </div>
 
-      {/* Tab content — each tab mounts once on first visit and stays mounted */}
+      {/* Tab content — keep-alive pattern */}
       <div style={{ flex: 1, overflow: 'auto' }}>
         <Suspense fallback={<TabFallback />}>
 
           {isMounted('home') && (
             <div style={tabStyle('home')}>
-              <Home
-                onTabChange={tab => handleTabChange(tab as Tab)}
-                onSeasonAdvance={handleSeasonAdvance}
-              />
+              <Home onTabChange={tab => handleTabChange(tab as Tab)} onSeasonAdvance={handleSeasonAdvance} />
             </div>
           )}
           {isMounted('standings') && (
