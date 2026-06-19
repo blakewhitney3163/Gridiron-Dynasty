@@ -50,6 +50,9 @@ export default function Franchise() {
   const [cpuFaResult, setCpuFaResult] = useState<CpuFaResult | null>(null);
   const [cpuFaDone, setCpuFaDone] = useState(false);
 
+    // Tag decisions
+  const [tagWorking, setTagWorking] = useState(false);
+
   useEffect(() => { loadData(); loadTeamNeeds(); }, [userTeam.id]);
   useEffect(() => {
     if (activeTab === 'fa') loadFreeAgents();
@@ -197,6 +200,40 @@ export default function Franchise() {
     setWorking(false);
   };
 
+    const handleApplyTag = async (playerId: number, tagType: 'franchise' | 'transition') => {
+    if (tagWorking) return;
+    setTagWorking(true);
+    const result = await window.api.applyFranchiseTag({ playerId, tagType });
+    if (!result.success) {
+      showToast(result.reason ?? 'Could not apply tag.', 'error');
+      setTagWorking(false);
+      return;
+    }
+    const player = expiringPlayers.find(p => p.id === playerId);
+    const label = tagType === 'franchise' ? 'Franchise Tag' : 'Transition Tag';
+    setPlayerDecisions(prev => ({ ...prev, [playerId]: 'resigned' }));
+    showToast(`${player?.first_name} ${player?.last_name} received the ${label}!`, 'success');
+    await loadExpiringContracts();
+    await loadData();
+    setTagWorking(false);
+  };
+
+  const handleRemoveTag = async (playerId: number) => {
+    if (tagWorking) return;
+    setTagWorking(true);
+    const result = await window.api.removeFranchiseTag(playerId);
+    if (!result.success) {
+      showToast(result.reason ?? 'Could not remove tag.', 'error');
+      setTagWorking(false);
+      return;
+    }
+    const player = expiringPlayers.find(p => p.id === playerId);
+    showToast(`${player?.first_name} ${player?.last_name} tag removed — player released to FA.`, 'error');
+    await loadExpiringContracts();
+    await loadData();
+    setTagWorking(false);
+  };
+
   const expiringCount = contracts.filter(c => c.years_remaining === 1).length;
   const capPct = cap ? (cap.used_cap / cap.total_cap) * 100 : 0;
   const capColor = capPct > 100 ? '#e57373' : capPct > 90 ? '#FF8740' : '#4caf50';
@@ -301,18 +338,29 @@ export default function Franchise() {
       )}
 
       {activeTab === 'offseason' && (
-        <OffseasonTab
-          expiringPlayers={expiringPlayers} cap={cap}
-          playerDecisions={playerDecisions} setPlayerDecisions={setPlayerDecisions}
-          resigningId={resigningId} setResigningId={setResigningId}
-          resignYears={resignYears} setResignYears={setResignYears}
-          resignSalary={resignSalary} setResignSalary={setResignSalary}
-          cpuFaResult={cpuFaResult} cpuFaDone={cpuFaDone}
-          setCpuFaDone={setCpuFaDone} setCpuFaResult={setCpuFaResult}
-          handleResign={handleResign} handleLetWalk={handleLetWalk} handleCpuFa={handleCpuFa}
-          working={working}
-        />
-      )}
+  <OffseasonTab
+    expiringPlayers={expiringPlayers}
+    cap={cap}
+    playerDecisions={playerDecisions}
+    setPlayerDecisions={setPlayerDecisions}
+    resigningId={resigningId}
+    setResigningId={setResigningId}
+    resignYears={resignYears}
+    setResignYears={setResignYears}
+    resignSalary={resignSalary}
+    setResignSalary={setResignSalary}
+    cpuFaResult={cpuFaResult}
+    cpuFaDone={cpuFaDone}
+    setCpuFaDone={setCpuFaDone}
+    setCpuFaResult={setCpuFaResult}
+    handleResign={handleResign}
+    handleLetWalk={handleLetWalk}
+    handleCpuFa={handleCpuFa}
+    handleApplyTag={handleApplyTag}
+    handleRemoveTag={handleRemoveTag}
+    working={working || tagWorking}
+  />
+)}
 
     </div>
   );
