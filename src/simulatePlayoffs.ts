@@ -31,9 +31,9 @@ export function simulatePlayoffs(season = 2024): void {
     console.log(`\n ${conf} CHAMPION: ${champion.city} ${champion.name}`);
   }
 
-  console.log('\n=== SUPER BOWL ===');
+  console.log('\n=== GRIDIRON CUP ===');
   const afcChamp = simulateSingleGame(seeds.AFC[0], seeds.AFC[1]);
   const nfcChamp = simulateSingleGame(seeds.NFC[0], seeds.NFC[1]);
-  const sbWinner = simulateSingleGame(afcChamp, nfcChamp);
-  console.log(`\n SUPER BOWL CHAMPION: ${sbWinner.city} ${sbWinner.name}`);
+  const cupWinner = simulateSingleGame(afcChamp, nfcChamp);
+  console.log(`\n GRIDIRON CUP CHAMPION: ${cupWinner.city} ${cupWinner.name}`);
 }
