@@ -131,7 +131,7 @@ export default function ActiveRosterTab({
                     </span>
                   )}
                   {grade && (
-                    <span style={{ background: grade.bg, color: grade.color, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3 }}>
+                    <span style={{ background: `${grade.color}22`, color: grade.color, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3 }}>
                       {grade.label}
                     </span>
                   )}
