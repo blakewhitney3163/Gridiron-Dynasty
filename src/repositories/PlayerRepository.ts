@@ -27,22 +27,20 @@ class PlayerRepository {
   }
 
   getFreeAgents(position?: string, limit: number = 200): any[] {
-  if (position && position !== 'ALL') {
-    return db.prepare(`
-      SELECT id, first_name, last_name, position, position_label,
-             overall_rating, age, dev_trait
-      FROM players
-      WHERE is_free_agent = 1
-        AND (position = ? OR position_label = ?)
-      ORDER BY overall_rating DESC LIMIT ?
-    `).all(position, position, limit);
-  }
-  return db.prepare(`
+  const base = `
     SELECT id, first_name, last_name, position, position_label,
-           overall_rating, age, dev_trait
-    FROM players WHERE is_free_agent = 1
-    ORDER BY overall_rating DESC LIMIT ?
-  `).all(limit);
+    overall_rating, age, dev_trait
+    FROM players
+    WHERE (is_free_agent = 1 OR roster_status = 'free_agent')
+    AND roster_status != 'waivers'
+    AND roster_status != 'retired'
+    AND team_id IS NULL
+  `;
+  if (position && position !== 'ALL') {
+    return db.prepare(`${base} AND (position = ? OR position_label = ?) ORDER BY overall_rating DESC LIMIT ?`)
+      .all(position, position, limit);
+  }
+  return db.prepare(`${base} ORDER BY overall_rating DESC LIMIT ?`).all(limit);
 }
 
   getOnWaivers(userTeamId?: number): any[] {
