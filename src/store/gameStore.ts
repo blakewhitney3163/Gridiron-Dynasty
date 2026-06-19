@@ -14,12 +14,14 @@ interface GameState {
   userTeam: UserTeam | null;
   playoffsComplete: boolean;
   difficulty: 'easy' | 'normal' | 'hard';
+  simCount: number;
 
   setCurrentSeason: (season: number) => void;
   setUserTeam: (team: UserTeam | null) => void;
   setPlayoffsComplete: (complete: boolean) => void;
   setDifficulty: (d: 'easy' | 'normal' | 'hard') => void;
   advanceSeason: (nextSeason: number) => void;
+  incrementSimCount: () => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -27,6 +29,7 @@ export const useGameStore = create<GameState>((set) => ({
   userTeam: null,
   playoffsComplete: false,
   difficulty: 'normal',
+  simCount: 0,
 
   setCurrentSeason: (currentSeason) => set({ currentSeason }),
   setUserTeam: (userTeam) => set({ userTeam }),
@@ -34,4 +37,5 @@ export const useGameStore = create<GameState>((set) => ({
   setDifficulty: (difficulty) => set({ difficulty }),
   advanceSeason: (nextSeason) =>
     set({ currentSeason: nextSeason, playoffsComplete: false }),
+  incrementSimCount: () => set((s) => ({ simCount: s.simCount + 1 })),
 }));
