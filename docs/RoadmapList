@@ -3,11 +3,6 @@ Last Updated: June 19, 2026
 Repository: https://github.com/blakewhitney3163/Gridiron-Dynasty
 ================================================================================
 
-TIER 2 — Strategic depth
-────────────────────────────────────────────────────────────────────────────────
-Schemes — offensive and defensive scheme selection that shapes team identity
-  and influences sim output (run-heavy, pass-heavy, zone vs. man, etc.).
-
 TIER 3 — Polish & replayability
 ────────────────────────────────────────────────────────────────────────────────
 Team Editor — edit team name, city, colors, conference/division.
@@ -20,6 +15,21 @@ In-Game Narrative / Play-by-Play — text play-by-play during simulation.
 ================================================================================
 COMPLETED ITEMS
 ================================================================================
+
+[DONE June 19, 2026] Schemes System — offensive and defensive scheme selection
+  for every team. 5 offensive schemes (West Coast, Air Raid, Power Run, Spread,
+  Run & Gun) and 5 defensive schemes (4-3, 3-4, Zone Cover 2, Man Press, Blitz
+  Heavy). Each scheme applies a rating modifier in every simulated game based on
+  how well the team's current roster fits the scheme's key positions (e.g. Air
+  Raid rewards elite WRs; Power Run rewards a strong RB and OL; Blitz Heavy
+  rewards pass_rush rating on DL/LB). Fit displayed as a color-coded rating
+  adjustment on every scheme card (+2.5 green = Great Fit, 0-1.5 orange =
+  Decent Fit, negative red = Poor Fit). All 32 CPU teams receive randomly
+  assigned schemes at first launch via seedTeamSchemes(). User can change
+  offense and defense scheme independently at any time from the SCHEMES tab in
+  Franchise. Backed by team_schemes table (migration v7), schemeHandlers.ts
+  (get-team-scheme / get-scheme-options / set-team-scheme IPC), and
+  getSchemeModifiers() wired into simulateGame.ts getTeamRatings().
 
 [DONE June 19, 2026] Draft Combine / Deeper Scouting — five physical combine
   measurables added to every draft prospect: 40-yard dash, bench press reps,
