@@ -247,5 +247,17 @@ getScoutCount: () =>
 
   importCustomPlayers: () =>
     ipcRenderer.invoke('import-custom-players'),
+    editPlayer: (payload: {
+    playerId: number;
+    overall_rating?: number;
+    age?: number;
+    dev_trait?: string;
+    speed?: number; strength?: number; awareness?: number;
+    throw_accuracy?: number; throw_power?: number;
+    catching?: number; route_running?: number;
+    tackle_rating?: number; coverage?: number; pass_rush?: number;
+    kickpower?: number; kickaccuracy?: number;
+    runblocking?: number; passblocking?: number;
+  }) => ipcRenderer.invoke('edit-player', payload),
 
 });
