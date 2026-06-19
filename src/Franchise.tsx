@@ -7,6 +7,7 @@ import PracticeSquadTab from './franchise/PracticeSquadTab';
 import FreeAgentsTab from './franchise/FreeAgentsTab';
 import OffseasonTab from './franchise/OffseasonTab';
 import CoachingTab from './franchise/CoachingTab';
+import SchemesTab from './franchise/SchemesTab';
 
 declare const window: any;
 interface CpuFaResult { totalSigned: number; teamsActive: number; }
@@ -14,18 +15,18 @@ interface CpuFaResult { totalSigned: number; teamsActive: number; }
 export default function Franchise() {
   const { userTeam, currentSeason, playoffsComplete } = useGameStore();
   if (!userTeam) return null;
+
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [practiceSquad, setPracticeSquad] = useState<PracticePlayer[]>([]);
   const [freeAgents, setFreeAgents] = useState<FreeAgent[]>([]);
   const [expiringPlayers, setExpiringPlayers] = useState<Contract[]>([]);
   const [cap, setCap] = useState<CapSummary | null>(null);
   const [rosterSpots, setRosterSpots] = useState<RosterSpots | null>(null);
-  const [activeTab, setActiveTab] = useState<'roster' | 'ps' | 'fa' | 'offseason' | 'coaching'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'ps' | 'fa' | 'offseason' | 'coaching' | 'schemes'>('roster');
   const [working, setWorking] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [teamNeeds, setTeamNeeds] = useState<string[]>([]);
 
-  // Roster tab state
   const [posFilter, setPosFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<'salary' | 'years' | 'ovr' | 'age'>('salary');
   const [rosterSearch, setRosterSearch] = useState('');
@@ -34,7 +35,6 @@ export default function Franchise() {
   const [extendSalary, setExtendSalary] = useState('');
   const [releasingId, setReleasingId] = useState<number | null>(null);
 
-  // FA tab state
   const [faPos, setFaPos] = useState('ALL');
   const [faSortBy, setFaSortBy] = useState<'ovr' | 'age' | 'value'>('ovr');
   const [faSearch, setFaSearch] = useState('');
@@ -43,18 +43,16 @@ export default function Franchise() {
   const [signSalary, setSignSalary] = useState('');
   const [psSigningId, setPsSigningId] = useState<number | null>(null);
 
-  // Offseason tab state
   const [resigningId, setResigningId] = useState<number | null>(null);
   const [resignYears, setResignYears] = useState(3);
   const [resignSalary, setResignSalary] = useState('');
   const [playerDecisions, setPlayerDecisions] = useState<Record<number, Decision>>({});
   const [cpuFaResult, setCpuFaResult] = useState<CpuFaResult | null>(null);
   const [cpuFaDone, setCpuFaDone] = useState(false);
-    const [pendingCounters, setPendingCounters] = useState<Record<number, { salary: number; years: number }>>({});
+  const [pendingCounters, setPendingCounters] = useState<Record<number, { salary: number; years: number }>>({});
   const [deadCap, setDeadCap] = useState<{ amount: number; entries: any[] } | null>(null);
   const [staff, setStaff] = useState<Coach[]>([]);
 
-    // Tag decisions
   const [tagWorking, setTagWorking] = useState(false);
 
   useEffect(() => { loadData(); loadTeamNeeds(); }, [userTeam.id]);
@@ -71,19 +69,19 @@ export default function Franchise() {
     setTimeout(() => setToast(null), 4000);
   };
 
-    const loadData = async () => {
-  const [c, s, ps, spots, dc, staffData] = await Promise.all([
-    window.api.getTeamContracts(userTeam.id),
-    window.api.getCapSummary(userTeam.id),
-    window.api.getPracticeSquad(userTeam.id),
-    window.api.getRosterSpots(userTeam.id),
-    window.api.getDeadCap(userTeam.id),
-    window.api.getCoachingStaff(userTeam.id),
-  ]);
-  setContracts(c); setCap(s); setPracticeSquad(ps); setRosterSpots(spots);
-  setDeadCap(dc ?? null);
-  setStaff(staffData ?? []);
-};
+  const loadData = async () => {
+    const [c, s, ps, spots, dc, staffData] = await Promise.all([
+      window.api.getTeamContracts(userTeam.id),
+      window.api.getCapSummary(userTeam.id),
+      window.api.getPracticeSquad(userTeam.id),
+      window.api.getRosterSpots(userTeam.id),
+      window.api.getDeadCap(userTeam.id),
+      window.api.getCoachingStaff(userTeam.id),
+    ]);
+    setContracts(c); setCap(s); setPracticeSquad(ps); setRosterSpots(spots);
+    setDeadCap(dc ?? null);
+    setStaff(staffData ?? []);
+  };
 
   const loadFreeAgents = async () => {
     const fa = await window.api.getFreeAgents(faPos === 'ALL' ? undefined : faPos);
@@ -166,7 +164,7 @@ export default function Franchise() {
     setPsSigningId(null);
   };
 
-    const handleResign = async () => {
+  const handleResign = async () => {
     if (!resigningId || working) return;
     const salary = parseFloat(resignSalary);
     if (isNaN(salary) || salary <= 0) return;
@@ -175,7 +173,6 @@ export default function Franchise() {
     const result = await window.api.resignPlayer({ playerId: resigningId, years: resignYears, salary });
     if (!result.success) {
       if (result.counterOffer) {
-        // Player countered — store and show the counter panel
         setPendingCounters(prev => ({ ...prev, [resigningId]: result.counterOffer! }));
         setResigningId(null);
         showToast(`${player?.first_name} ${player?.last_name} counters at $${result.counterOffer.salary.toFixed(1)}M/yr`, 'error');
@@ -192,7 +189,7 @@ export default function Franchise() {
     setWorking(false);
   };
 
-    const handleAcceptCounter = async (playerId: number, salary: number, years: number) => {
+  const handleAcceptCounter = async (playerId: number, salary: number, years: number) => {
     if (working) return;
     const player = expiringPlayers.find(p => p.id === playerId);
     setWorking(true);
@@ -233,7 +230,7 @@ export default function Franchise() {
     setWorking(false);
   };
 
-    const handleApplyTag = async (playerId: number, tagType: 'franchise' | 'transition') => {
+  const handleApplyTag = async (playerId: number, tagType: 'franchise' | 'transition') => {
     if (tagWorking) return;
     setTagWorking(true);
     const result = await window.api.applyFranchiseTag({ playerId, tagType });
@@ -272,68 +269,79 @@ export default function Franchise() {
   const capColor = capPct > 100 ? '#e57373' : capPct > 90 ? '#FF8740' : '#4caf50';
   const totalGuaranteed = contracts.reduce((s, c) => s + (c.guaranteed_amount ?? 0), 0);
 
+  const tabs = [
+    { key: 'roster'   as const, label: `ACTIVE ROSTER (${contracts.length})`, warn: false },
+    { key: 'ps'       as const, label: `PRACTICE SQUAD (${practiceSquad.length})`, warn: false },
+    { key: 'fa'       as const, label: 'FREE AGENTS', warn: false },
+    { key: 'coaching' as const, label: 'COACHING STAFF', warn: false },
+    { key: 'schemes'  as const, label: 'SCHEMES', warn: false },
+    ...(playoffsComplete ? [{ key: 'offseason' as const, label: expiringCount > 0 ? `OFFSEASON ⚠ ${expiringCount}` : 'OFFSEASON', warn: expiringCount > 0 }] : []),
+  ];
+
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 900, margin: '0 auto' }}>
+    <div style={{ padding: '16px 20px', maxWidth: 1100, margin: '0 auto' }}>
 
       {toast && (
         <div style={{
-          position: 'fixed', top: 20, right: 24, zIndex: 1000,
-          background: toast.type === 'error' ? '#2a0a0a' : '#0a2a0a',
+          position: 'fixed', top: 16, right: 16, zIndex: 9999,
+          background: toast.type === 'error' ? '#1a0000' : '#001a00',
           border: `1px solid ${toast.type === 'error' ? '#e57373' : '#4caf50'}`,
-          borderRadius: 6, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10,
-          color: toast.type === 'error' ? '#e57373' : '#4caf50', fontSize: 13, maxWidth: 380,
+          color: toast.type === 'error' ? '#e57373' : '#4caf50',
+          padding: '10px 16px', borderRadius: 6, fontSize: 12,
+          display: 'flex', alignItems: 'center', gap: 10, maxWidth: 400,
         }}>
-          <span style={{ fontWeight: 'bold' }}>{toast.type === 'error' ? '✗' : '✓'}</span>
-          <span>{toast.message}</span>
+          <span>{toast.type === 'error' ? '✗' : '✓'}</span>
+          <span style={{ flex: 1 }}>{toast.message}</span>
           <button onClick={() => setToast(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, opacity: 0.6 }}>×</button>
         </div>
       )}
 
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ color: '#fff', fontSize: 20, fontWeight: 700, margin: 0 }}>Franchise Management</h1>
-        <p style={{ color: '#444', fontSize: 12, margin: '2px 0 0' }}>{userTeam.city} {userTeam.name} · {currentSeason} Season</p>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>Franchise Management</div>
+        <div style={{ fontSize: 11, color: '#555' }}>{userTeam.city} {userTeam.name} · {currentSeason} Season</div>
       </div>
 
       {cap && (
-        <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-            <span style={{ color: '#444', fontSize: 10, letterSpacing: 1, fontWeight: 700 }}>SALARY CAP</span>
-            <span style={{ color: capColor, fontSize: 14, fontWeight: 700 }}>{fmtSalary(cap.used_cap)} used</span>
-            <span style={{ color: '#333', fontSize: 12 }}>/</span>
-            <span style={{ color: '#555', fontSize: 12 }}>{fmtSalary(cap.total_cap)} cap</span>
-            <span style={{ marginLeft: 'auto', color: cap.available_cap < 0 ? '#e57373' : '#4caf50', fontWeight: 700, fontSize: 13 }}>
-              {cap.available_cap < 0 ? '⚠ OVER CAP ' : ''}{fmtSalary(cap.available_cap)}{cap.available_cap >= 0 ? ' available' : ''}
-            </span>
+        <div style={{
+          background: '#111', border: '1px solid #222', borderRadius: 6,
+          padding: '10px 14px', marginBottom: 14,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 9, color: '#555', letterSpacing: 1, marginBottom: 2 }}>SALARY CAP</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ color: capColor, fontWeight: 'bold', fontSize: 14 }}>{fmtSalary(cap.used_cap)}</span>
+                <span style={{ color: '#333' }}>used /</span>
+                <span style={{ color: '#fff', fontSize: 12 }}>{fmtSalary(cap.total_cap)} cap</span>
+              </div>
+              <div style={{ fontSize: 10, color: cap.available_cap < 0 ? '#e57373' : '#4caf50', marginTop: 2 }}>
+                {cap.available_cap < 0 ? '⚠ OVER CAP ' : ''}{fmtSalary(cap.available_cap)}{cap.available_cap >= 0 ? ' available' : ''}
+              </div>
+            </div>
+            <div style={{ width: 120, height: 4, background: '#222', borderRadius: 2 }}>
+              <div style={{ width: `${Math.min(100, capPct)}%`, height: '100%', background: capColor, borderRadius: 2 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginLeft: 'auto', fontSize: 10, color: '#555' }}>
+              <span>Guaranteed on books: {fmtSalary(totalGuaranteed)}</span>
+              {expiringCount > 0 && <span style={{ color: '#FF8740' }}>⚠ {expiringCount} expiring this offseason</span>}
+              {rosterSpots && <span>{rosterSpots.active}/53 active · {rosterSpots.ps}/16 PS</span>}
+            </div>
           </div>
-          <div style={{ background: '#1a1a1a', borderRadius: 4, height: 6, overflow: 'hidden' }}>
-            <div style={{ background: capColor, height: '100%', width: `${Math.min(capPct, 100)}%`, transition: 'width 0.3s' }} />
-          </div>
-          <div style={{ display: 'flex', gap: 16, marginTop: 6, fontSize: 11, color: '#444' }}>
-            <span>Guaranteed on books: {fmtSalary(totalGuaranteed)}</span>
-            {expiringCount > 0 && <span style={{ color: '#FF8740' }}>⚠ {expiringCount} expiring this offseason</span>}
-            {rosterSpots && <span>{rosterSpots.active}/53 active · {rosterSpots.ps}/16 PS</span>}
-          </div>
-            {deadCap && deadCap.amount > 0 && (
-    <span style={{ color: '#e57373' }}>
-      💀 Dead cap: {fmtSalary(deadCap.amount)}
-      {deadCap.entries.length > 0 && (
-        <span style={{ fontSize: 9, color: '#555', marginLeft: 4 }}>
-          ({deadCap.entries.map((e: any) => `${e.player_name} ${fmtSalary(e.amount)}`).join(', ')})
-        </span>
-      )}
-    </span>
-  )}
+          {deadCap && deadCap.amount > 0 && (
+            <div style={{ marginTop: 8, fontSize: 10, color: '#e57373' }}>
+              💀 Dead cap: {fmtSalary(deadCap.amount)}
+              {deadCap.entries.length > 0 && (
+                <span style={{ color: '#555', marginLeft: 6 }}>
+                  ({deadCap.entries.map((e: any) => `${e.player_name} ${fmtSalary(e.amount)}`).join(', ')})
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
-        {([
-          { key: 'roster',   label: `ACTIVE ROSTER (${contracts.length})`,                        warn: false },
-          { key: 'ps',       label: `PRACTICE SQUAD (${practiceSquad.length})`,                   warn: false },
-          { key: 'fa',       label: 'FREE AGENTS',                                                 warn: false },
-      { key: 'coaching' as const, label: 'COACHING STAFF', warn: false },
-          ...(playoffsComplete ? [{ key: 'offseason' as const, label: expiringCount > 0 ? `OFFSEASON ⚠ ${expiringCount}` : 'OFFSEASON', warn: expiringCount > 0 }] : []),
-        ] as const).map(tab => (
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 16 }}>
+        {tabs.map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
             padding: '5px 16px', fontSize: 11, letterSpacing: 1, cursor: 'pointer', borderRadius: 4,
             background: activeTab === tab.key ? '#FF8740' : (tab.warn ? '#1a1000' : '#111'),
@@ -354,21 +362,25 @@ export default function Franchise() {
           extendYears={extendYears} setExtendYears={setExtendYears}
           extendSalary={extendSalary} setExtendSalary={setExtendSalary}
           releasingId={releasingId} setReleasingId={setReleasingId}
-          handleExtend={handleExtend} handleRelease={handleRelease}
-          working={working}
+          working={working} onExtend={handleExtend} onRelease={handleRelease}
+          teamNeeds={teamNeeds}
         />
       )}
 
       {activeTab === 'ps' && (
         <PracticeSquadTab
-          practiceSquad={practiceSquad} rosterSpots={rosterSpots}
-          showToast={showToast} loadData={loadData}
+          practiceSquad={practiceSquad}
+          onPromote={async (id) => {
+            const result = await window.api.promoteFromPs(id);
+            if (result.success) { showToast('Player promoted to active roster.', 'success'); await loadData(); }
+            else showToast(result.reason ?? 'Could not promote.', 'error');
+          }}
         />
       )}
 
       {activeTab === 'fa' && (
         <FreeAgentsTab
-          freeAgents={freeAgents} cap={cap} rosterSpots={rosterSpots} teamNeeds={teamNeeds}
+          freeAgents={freeAgents} cap={cap}
           faPos={faPos} setFaPos={setFaPos}
           faSortBy={faSortBy} setFaSortBy={setFaSortBy}
           faSearch={faSearch} setFaSearch={setFaSearch}
@@ -376,46 +388,44 @@ export default function Franchise() {
           signYears={signYears} setSignYears={setSignYears}
           signSalary={signSalary} setSignSalary={setSignSalary}
           psSigningId={psSigningId}
-          handleSign={handleSign} handleSignToPs={handleSignToPs}
-          working={working}
+          working={working} onSign={handleSign} onSignToPs={handleSignToPs}
         />
       )}
 
-        {activeTab === 'offseason' && (
-    <OffseasonTab
-      expiringPlayers={expiringPlayers}
-      cap={cap}
-      playerDecisions={playerDecisions}
-      setPlayerDecisions={setPlayerDecisions}
-      resigningId={resigningId}
-      setResigningId={setResigningId}
-      resignYears={resignYears}
-      setResignYears={setResignYears}
-      resignSalary={resignSalary}
-      setResignSalary={setResignSalary}
-      cpuFaResult={cpuFaResult}
-      cpuFaDone={cpuFaDone}
-      setCpuFaDone={setCpuFaDone}
-      setCpuFaResult={setCpuFaResult}
-      handleResign={handleResign}
-      handleLetWalk={handleLetWalk}
-      handleCpuFa={handleCpuFa}
-      handleApplyTag={handleApplyTag}
-      handleRemoveTag={handleRemoveTag}
-      pendingCounters={pendingCounters}
-      handleAcceptCounter={handleAcceptCounter}
-      handleDeclineCounter={handleDeclineCounter}
-      working={working || tagWorking}
-    />
-  )}
+      {activeTab === 'offseason' && (
+        <OffseasonTab
+          expiringPlayers={expiringPlayers} playerDecisions={playerDecisions}
+          pendingCounters={pendingCounters}
+          cap={cap} working={working} tagWorking={tagWorking}
+          resigningId={resigningId} setResigningId={setResigningId}
+          resignYears={resignYears} setResignYears={setResignYears}
+          resignSalary={resignSalary} setResignSalary={setResignSalary}
+          cpuFaDone={cpuFaDone} cpuFaResult={cpuFaResult}
+          onResign={handleResign}
+          onAcceptCounter={handleAcceptCounter}
+          onDeclineCounter={handleDeclineCounter}
+          onCpuFa={handleCpuFa}
+          onApplyTag={handleApplyTag}
+          onRemoveTag={handleRemoveTag}
+        />
+      )}
+
       {activeTab === 'coaching' && (
-  <CoachingTab
-    teamId={userTeam.id}
-    staff={staff}
-    onRefresh={loadData}
-    showToast={showToast}
-  />
-)}
+        <CoachingTab
+          teamId={userTeam.id}
+          staff={staff}
+          onStaffChange={loadData}
+          onToast={showToast}
+        />
+      )}
+
+      {activeTab === 'schemes' && (
+        <SchemesTab
+          teamId={userTeam.id}
+          teamName={`${userTeam.city} ${userTeam.name}`}
+          onToast={showToast}
+        />
+      )}
 
     </div>
   );
