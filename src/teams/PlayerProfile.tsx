@@ -276,7 +276,7 @@ export default function PlayerProfile({
         padding: '14px 16px 12px', borderBottom: `1px solid ${T.borderMid}`,
       }}>
         <div>
-          <div style={{ olor: T.textPrimary, fontSize: 16, fontWeight: 700 }}>
+          <div style={{ color: T.textPrimary, fontSize: 16, fontWeight: 700 }}>
             {player.first_name} {player.last_name}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
