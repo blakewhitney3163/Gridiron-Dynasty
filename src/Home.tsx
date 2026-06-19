@@ -20,7 +20,7 @@ interface Props {
 }
 
 export default function Home({ onSeasonAdvance, onNavigate }: Props) {
-  const { userTeam, currentSeason, setPlayoffsComplete } = useGameStore();
+  const { userTeam, currentSeason, setPlayoffsComplete, incrementSimCount } = useGameStore();
 
   const [loading, setLoading] = useState(true);
   const [hasSchedule, setHasSchedule] = useState(false);
@@ -142,6 +142,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setMatchups(await window.api.getWeekMatchups(18)); setViewWeek(18);
     }
     setStatLeaders(await window.api.getStats(currentSeason));
+    incrementSimCount();
     setSimulating(false);
   };
 
@@ -167,6 +168,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         setMatchups(await window.api.getWeekMatchups(18)); setViewWeek(18);
       }
     }
+    incrementSimCount();
     setSimulatingGameId(null);
   };
 
