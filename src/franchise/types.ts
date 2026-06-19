@@ -13,6 +13,7 @@ export interface Contract {
   guaranteed_amount: number;
   guaranteed_pct: number;
   contract_id: number;
+  morale?: number;
 }
 
 export interface PracticePlayer {
