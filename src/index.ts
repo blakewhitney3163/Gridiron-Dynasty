@@ -129,6 +129,7 @@ registerStatsHandlers();
 registerSeasonHandlers();
 registerNewsHandlers();
 registerImportHandlers();
+registerCoachingHandlers();
 
 // ─── App Lifecycle ────────────────────────────────────────────────────────────
 
