@@ -6,6 +6,52 @@ import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { playerRepo, contractRepo, pickRepo, draftRepo } from '../repositories';
 import { logNewsEvent } from '../helpers/logNewsEvent';
 
+function generateCombine(position: string, ovr: number): {
+  forty_time: number; bench_press: number; vertical_jump: number;
+  broad_jump: number; cone_time: number;
+} {
+  const noise = (range: number) => (Math.random() - 0.5) * range;
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const f = (ovr - 50) / 50; // 0 at OVR 50, 1 at OVR 100
+
+  const speedPos = ['WR', 'CB', 'RB', 'S'];
+  const bigPos   = ['OL'];
+  const bigDef   = ['DL'];
+
+  // 40-yard dash — lower is better (4.22–5.40)
+  let forty = 5.10 - f * 0.65 + noise(0.28);
+  if (speedPos.includes(position)) forty -= 0.18;
+  if (bigPos.includes(position))   forty += 0.30;
+  if (bigDef.includes(position))   forty += 0.18;
+  const forty_time = Math.round(clamp(forty, 4.22, 5.40) * 100) / 100;
+
+  // Bench press — reps (5–35)
+  let bench = 16 + f * 12 + noise(9);
+  if (bigPos.includes(position) || bigDef.includes(position)) bench += 7;
+  if (['WR', 'QB', 'K'].includes(position)) bench -= 5;
+  const bench_press = Math.round(clamp(bench, 5, 35));
+
+  // Vertical jump — inches (24–45)
+  let vert = 32 + f * 10 + noise(7);
+  if (['WR', 'CB', 'S', 'RB'].includes(position)) vert += 3;
+  if (bigPos.includes(position)) vert -= 5;
+  const vertical_jump = Math.round(clamp(vert, 24, 45) * 10) / 10;
+
+  // Broad jump — inches (96–142)
+  let broad = 114 + f * 20 + noise(14);
+  if (['WR', 'CB', 'RB'].includes(position)) broad += 5;
+  if (bigPos.includes(position)) broad -= 10;
+  const broad_jump = Math.round(clamp(broad, 96, 142));
+
+  // 3-cone drill — lower is better (6.50–8.20)
+  let cone = 7.90 - f * 0.90 + noise(0.45);
+  if (['CB', 'LB', 'WR', 'RB'].includes(position)) cone -= 0.22;
+  if (bigPos.includes(position)) cone += 0.35;
+  const cone_time = Math.round(clamp(cone, 6.50, 8.20) * 100) / 100;
+
+  return { forty_time, bench_press, vertical_jump, broad_jump, cone_time };
+}
+
 function ordinal(n: number): string {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
@@ -64,14 +110,16 @@ export function registerDraftHandlers(): void {
       else if (i < 224) ovr = Math.floor(Math.random() * 5) + 57;
       else              ovr = Math.floor(Math.random() * 6) + 52;
 
+      const combine = generateCombine(pos, ovr);
       prospects.push({
         season,
         first_name: FIRST[Math.floor(Math.random() * FIRST.length)],
         last_name: LAST[Math.floor(Math.random() * LAST.length)],
-        position: POS_POOL[Math.floor(Math.random() * POS_POOL.length)],
+        position: pos,
         overall_rating: ovr,
         dev_trait: getDevTrait(ovr),
         age: Math.random() < 0.6 ? 21 : Math.random() < 0.6 ? 22 : 23,
+        ...combine,
       });
     }
 
