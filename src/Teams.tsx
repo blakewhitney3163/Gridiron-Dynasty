@@ -58,6 +58,11 @@ export default function Teams() {
     window.api.getPlayerCareerStats(player.id).then((stats: CareerSeasonStats[]) => setCareerStats(stats));
   };
 
+  const handleSavePlayer = (updated: Player) => {
+    setSelectedPlayer(updated);
+    setRoster(prev => prev.map(p => p.id === updated.id ? updated : p));
+  };
+
   const availablePositions = getAvailablePositions(roster);
   const filteredPlayers = roster
     .filter(p => (p.position_label || p.position) === selectedPosition)
@@ -65,20 +70,20 @@ export default function Teams() {
   const ratingCols = getRatingCols(selectedPosition);
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-      <TeamSidebar teams={teams} selectedTeam={selectedTeam} onSelectTeam={handleSelectTeam} />
+    <div style={{ display: 'flex', height: '100%', gap: 0 }}>
+      <TeamSidebar teams={teams} selectedTeam={selectedTeam} onSelect={handleSelectTeam} />
 
       {!selectedTeam ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.textDim }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.textSecondary }}>
           Select a team to view their roster
         </div>
       ) : (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ padding: '14px 20px', borderBottom: `1px solid ${T.borderFaint}` }}>
-            <h2 style={{ color: T.textPrimary, fontSize: 18, fontWeight: 700, margin: '0 0 2px' }}>
+          <div style={{ padding: '16px 20px 8px', borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ color: T.text, fontSize: 18, fontWeight: 700 }}>
               {selectedTeam.city} {selectedTeam.name}
-            </h2>
-            <div style={{ color: T.textDim, fontSize: 12 }}>
+            </div>
+            <div style={{ color: T.textSecondary, fontSize: 12 }}>
               {selectedTeam.conference} — {selectedTeam.division}
             </div>
           </div>
@@ -87,7 +92,7 @@ export default function Teams() {
             <PlayerList
               availablePositions={availablePositions}
               selectedPosition={selectedPosition}
-              setSelectedPosition={(pos) => { setSelectedPosition(pos); setSelectedPlayer(null); }}
+              onSelectPosition={(pos) => { setSelectedPosition(pos); setSelectedPlayer(null); }}
               filteredPlayers={filteredPlayers}
               ratingCols={ratingCols}
               selectedPlayer={selectedPlayer}
@@ -101,6 +106,7 @@ export default function Teams() {
                 statsView={statsView}
                 setStatsView={setStatsView}
                 onClose={() => setSelectedPlayer(null)}
+                onSave={handleSavePlayer}
               />
             )}
           </div>
