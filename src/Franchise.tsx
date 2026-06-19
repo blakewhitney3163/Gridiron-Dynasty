@@ -363,7 +363,6 @@ export default function Franchise() {
           extendSalary={extendSalary} setExtendSalary={setExtendSalary}
           releasingId={releasingId} setReleasingId={setReleasingId}
           working={working} handleExtend={handleExtend} handleRelease={handleRelease}
-          teamNeeds={teamNeeds}
         />
       )}
 
@@ -378,7 +377,7 @@ export default function Franchise() {
 
       {activeTab === 'fa' && (
         <FreeAgentsTab
-          freeAgents={freeAgents} cap={cap}
+          freeAgents={freeAgents} cap={cap} rosterSpots={rosterSpots} teamNeeds={teamNeeds}
           faPos={faPos} setFaPos={setFaPos}
           faSortBy={faSortBy} setFaSortBy={setFaSortBy}
           faSearch={faSearch} setFaSearch={setFaSearch}
@@ -399,12 +398,13 @@ export default function Franchise() {
           resignYears={resignYears} setResignYears={setResignYears}
           resignSalary={resignSalary} setResignSalary={setResignSalary}
           cpuFaDone={cpuFaDone} cpuFaResult={cpuFaResult}
-          onResign={handleResign}
-          onAcceptCounter={handleAcceptCounter}
-          onDeclineCounter={handleDeclineCounter}
-          onCpuFa={handleCpuFa}
-          onApplyTag={handleApplyTag}
-          onRemoveTag={handleRemoveTag}
+                    handleResign={handleResign}
+          handleAcceptCounter={handleAcceptCounter}
+          handleDeclineCounter={handleDeclineCounter}
+          handleCpuFa={handleCpuFa}
+          handleApplyTag={handleApplyTag}
+          handleRemoveTag={handleRemoveTag}
+          handleLetWalk={handleLetWalk}
         />
       )}
 
