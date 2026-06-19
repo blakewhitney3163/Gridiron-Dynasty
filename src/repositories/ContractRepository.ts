@@ -32,17 +32,18 @@ class ContractRepository {
   }
 
   getExpiring(teamId: number): any[] {
-    return db.prepare(`
-      SELECT p.id, p.first_name, p.last_name, p.position, p.position_label,
-             p.overall_rating, p.age, p.dev_trait,
-             c.annual_salary, c.years_remaining, c.years_total,
-             c.guaranteed_amount, c.guaranteed_pct, c.id as contract_id
-      FROM contracts c
-      JOIN players p ON c.player_id = p.id
-      WHERE c.team_id = ? AND p.roster_status = 'active' AND c.years_remaining = 1
-      ORDER BY c.annual_salary DESC
-    `).all(teamId);
-  }
+  return db.prepare(`
+    SELECT p.id, p.first_name, p.last_name, p.position, p.position_label,
+           p.overall_rating, p.age, p.dev_trait,
+           COALESCE(p.franchise_tagged, 0) as franchise_tagged,
+           c.annual_salary, c.years_remaining, c.years_total,
+           c.guaranteed_amount, c.guaranteed_pct, c.id as contract_id
+    FROM contracts c
+    JOIN players p ON c.player_id = p.id
+    WHERE c.team_id = ? AND p.roster_status = 'active' AND c.years_remaining = 1
+    ORDER BY c.annual_salary DESC
+  `).all(teamId);
+}
 
   countExpiring(teamId: number): number {
     return (db.prepare(`
