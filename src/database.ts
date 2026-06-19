@@ -121,7 +121,7 @@ export function initDatabase(dbPath: string): void {
       is_drafted INTEGER DEFAULT 0,
       draft_round INTEGER,
       draft_pick INTEGER,
-      drafted_by_team_id INTEGER
+      drafted_by_team_id INTEGER,
           forty_time REAL,
     bench_press INTEGER,
     vertical_jump REAL,
@@ -273,7 +273,7 @@ export function initDatabase(dbPath: string): void {
       experience INTEGER NOT NULL DEFAULT 5,
       salary REAL NOT NULL DEFAULT 1.5,
       years_remaining INTEGER NOT NULL DEFAULT 2
-    )
+    );
     CREATE TABLE IF NOT EXISTS team_schemes (
   team_id INTEGER PRIMARY KEY,
   offense_scheme TEXT NOT NULL DEFAULT 'West Coast',
