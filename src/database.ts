@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { SALARY_CAP } from './constants';
 
 let _db: Database.Database | null = null;
 let _dbPath: string | null = null;
@@ -444,36 +445,66 @@ const TRAIT_GUARANTEE: Record<string, [number, number]> = {
 
 export function generateContracts(): void {
   db.prepare('DELETE FROM contracts').run();
+
   const activePlayers = db.prepare(
     "SELECT id, overall_rating, age, position, dev_trait, team_id FROM players WHERE team_id IS NOT NULL AND roster_status = 'active'"
   ).all() as any[];
+
   const psPlayers = db.prepare(
     "SELECT id, team_id FROM players WHERE team_id IS NOT NULL AND roster_status = 'practice_squad'"
   ).all() as any[];
+
   const insertContract = db.prepare(`
     INSERT INTO contracts (player_id, team_id, years_total, years_remaining, annual_salary, guaranteed_amount, guaranteed_pct)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
+
+  // Build per-player contract data
+  interface PendingContract {
+    id: number; team_id: number; salary: number;
+    yearsTotal: number; yearsRemaining: number; guaranteedPct: number;
+  }
+
+  const pending: PendingContract[] = [];
+  const teamTotals = new Map<number, number>();
+
+  for (const p of activePlayers) {
+    const fairMarket = bootstrapFairMarket(p.position, p.overall_rating);
+    const contractFactor = 0.65 + Math.random() * 0.30;
+    const salary = Math.max(1.0, Math.round(fairMarket * contractFactor * (TRAIT_PREMIUM[p.dev_trait] ?? 1.0) * 10) / 10);
+    const yearsTotal =
+      p.age <= 24 ? (Math.random() < 0.5 ? 5 : 4) :
+      p.age <= 27 ? (Math.random() < 0.4 ? 5 : Math.random() < 0.6 ? 4 : 3) :
+      p.age <= 30 ? (Math.random() < 0.4 ? 4 : Math.random() < 0.6 ? 3 : 2) :
+      p.age <= 33 ? (Math.random() < 0.4 ? 3 : Math.random() < 0.5 ? 2 : 1) :
+      (Math.random() < 0.3 ? 2 : 1);
+    const yearsRemaining = Math.floor(Math.random() * yearsTotal) + 1;
+    const [gMin, gMax] = TRAIT_GUARANTEE[p.dev_trait] ?? [10, 35];
+    const guaranteedPct = Math.round(gMin + Math.random() * (gMax - gMin));
+    pending.push({ id: p.id, team_id: p.team_id, salary, yearsTotal, yearsRemaining, guaranteedPct });
+    teamTotals.set(p.team_id, (teamTotals.get(p.team_id) ?? 0) + salary);
+  }
+
+  // Scale down any team that's over 95% of the cap
+  const CAP_TARGET = SALARY_CAP * 0.95;
+  for (const contract of pending) {
+    const total = teamTotals.get(contract.team_id) ?? 0;
+    if (total > CAP_TARGET) {
+      contract.salary = Math.max(1.0, Math.round(contract.salary * (CAP_TARGET / total) * 10) / 10);
+    }
+  }
+
   db.transaction(() => {
-    for (const p of activePlayers) {
-      const fairMarket = bootstrapFairMarket(p.position, p.overall_rating);
-      // Generate salary at 65-95% of fair market (reflecting existing team contract discounts)
-      const contractFactor = 0.65 + Math.random() * 0.30;
-      const salary = Math.max(1.0, Math.round(fairMarket * contractFactor * (TRAIT_PREMIUM[p.dev_trait] ?? 1.0) * 10) / 10);
-      const yearsTotal =
-        p.age <= 24 ? (Math.random() < 0.5 ? 5 : 4) :
-        p.age <= 27 ? (Math.random() < 0.4 ? 5 : Math.random() < 0.6 ? 4 : 3) :
-        p.age <= 30 ? (Math.random() < 0.4 ? 4 : Math.random() < 0.6 ? 3 : 2) :
-        p.age <= 33 ? (Math.random() < 0.4 ? 3 : Math.random() < 0.5 ? 2 : 1) :
-        (Math.random() < 0.3 ? 2 : 1);
-      const yearsRemaining = Math.floor(Math.random() * yearsTotal) + 1;
-      const [gMin, gMax] = TRAIT_GUARANTEE[p.dev_trait] ?? [10, 35];
-      const guaranteedPct = Math.round(gMin + Math.random() * (gMax - gMin));
-      insertContract.run(p.id, p.team_id, yearsTotal, yearsRemaining, salary,
-        Math.round(salary * yearsTotal * (guaranteedPct / 100) * 10) / 10, guaranteedPct);
+    for (const c of pending) {
+      insertContract.run(
+        c.id, c.team_id, c.yearsTotal, c.yearsRemaining, c.salary,
+        Math.round(c.salary * c.yearsTotal * (c.guaranteedPct / 100) * 10) / 10,
+        c.guaranteedPct
+      );
     }
     for (const p of psPlayers) insertContract.run(p.id, p.team_id, 1, 1, 1.165, 0, 0);
   })();
+
   console.log(`Contracts generated: ${activePlayers.length} active + ${psPlayers.length} PS`);
 }
 
