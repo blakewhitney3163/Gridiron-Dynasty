@@ -363,29 +363,37 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       </div>
 
       <Sidebar
-        userTeam={userTeam}
-        currentSeason={currentSeason}
-        userRecord={userRecord}
-        hasSchedule={hasSchedule}
-        allWeeksDone={allWeeksDone}
-        isPlayoffsComplete={isPlayoffsComplete}
-        generatingSchedule={generatingSchedule}
-        confirming={confirming}
-        advancing={advancing}
-        topAFC={topAFC}
-        topNFC={topNFC}
-        champions={champions}
-        statLeaders={statLeaders}
-        injuryReport={injuryReport}
-        retiredPlayers={retiredPlayers}
-        userTradeStatus={userTradeStatus}
-        settingStatus={settingStatus}
-        onGenerateSchedule={handleGenerateSchedule}
-        onConfirm={() => setConfirming(true)}
-        onCancelConfirm={() => setConfirming(false)}
-        onAdvance={handleAdvance}
-        onSetTradeStatus={handleSetTradeStatus}
-      />
+  userTeam={userTeam}
+  currentSeason={currentSeason}
+  userRecord={userRecord}
+  hasSchedule={hasSchedule}
+  allWeeksDone={allWeeksDone}
+  isPlayoffsComplete={isPlayoffsComplete}
+  currentWeek={currentWeek}
+  matchups={matchups}
+  simulating={simulating}
+  simulatingPlayoffs={simulatingPlayoffs}
+  generatingSchedule={generatingSchedule}
+  advancing={advancing}
+  confirming={confirming}
+  pendingResigns={pendingResigns}
+  retiredPlayers={retiredPlayers}
+  setRetiredPlayers={setRetiredPlayers}
+  injuryReport={injuryReport}
+  topAFC={topAFC}
+  topNFC={topNFC}
+  champions={champions}
+  statLeaders={statLeaders}
+  userTradeStatus={userTradeStatus}
+  settingStatus={settingStatus}
+  onGenerateSchedule={handleGenerateSchedule}
+  onSimulateWeek={handleSimulateWeek}
+  onSimulatePlayoffs={handleSimulatePlayoffs}
+  onConfirm={() => setConfirming(true)}
+  onCancelConfirm={() => setConfirming(false)}
+  onAdvance={handleAdvance}
+  onSetTradeStatus={handleSetTradeStatus}
+/>
     </div>
   );
 }
