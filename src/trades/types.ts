@@ -14,6 +14,7 @@ export interface Player {
   overall_rating: number;
   age: number;
   dev_trait: string;
+  salary?: number;
 }
 
 export interface DraftPick {
