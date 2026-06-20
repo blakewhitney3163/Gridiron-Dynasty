@@ -49,10 +49,12 @@ export function fmtSalary(m: number): string {
 export function interpolateMarket(pos: string, ovr: number): number {
   // Map granular positions to market rate group
   const posGroup: Record<string, string> = {
-    LT: 'OL', LG: 'OL', C: 'OL', RG: 'OL', RT: 'OL',
-    DE: 'DL', DT: 'DL',
-    MLB: 'LB', OLB: 'LB',
-  };
+  HB: 'RB', FB: 'RB',
+  LT: 'OL', LG: 'OL', C: 'OL', RG: 'OL', RT: 'OL',
+  DE: 'DL', DT: 'DL', LE: 'DL', RE: 'DL', IDL: 'DL',
+  MLB: 'LB', OLB: 'LB',
+  FS: 'S', SS: 'S',
+};
   const rates = MARKET_RATES[posGroup[pos] ?? pos] ?? MARKET_RATES['LB'];
   let base = rates[rates.length - 1][1];
   for (let i = 0; i < rates.length - 1; i++) {
