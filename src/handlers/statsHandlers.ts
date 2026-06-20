@@ -7,8 +7,8 @@ import { getFranchiseRecords } from '../services/StatsService';
 
 function initDepthChart(teamId: number) {
   const hasOldGroups = (db.prepare(
-    "SELECT COUNT(*) as cnt FROM depth_chart WHERE team_id = ? AND position_group IN ('OL','DL','LB')"
-  ).get(teamId) as any).cnt > 0;
+  "SELECT COUNT(*) as cnt FROM depth_chart WHERE team_id = ? AND position_group IN ('OL','DL','LB','S')"
+).get(teamId) as any).cnt > 0;
   if (hasOldGroups) {
     db.prepare('DELETE FROM depth_chart WHERE team_id = ?').run(teamId);
   }
