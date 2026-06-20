@@ -59,6 +59,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [offerWorking, setOfferWorking] = useState(false);
   const [userTradeStatus, setUserTradeStatus] = useState<any>(null);
   const [settingStatus, setSettingStatus] = useState(false);
+  const [franchiseHealth, setFranchiseHealth] = useState<any>(null);
 
   useEffect(() => {
     if (!userTeam) return;
@@ -69,18 +70,19 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setPlayoffResults(null); setUserRecord(null); setInjuryReport([]);
       setSeasonAwards(null);
 
-      const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffer, tradeStatus, spots] = await Promise.all([
-        window.api.getCurrentWeek(),
-        window.api.getDashboard(currentSeason),
-        window.api.getChampions(),
-        window.api.getStandings(currentSeason),
-        window.api.getOffseasonStatus(),
-        window.api.getInjuryReport(userTeam.id),
-        window.api.getStats(currentSeason),
-        window.api.getCpuTradeOffer(),
-        window.api.getTeamStatus(userTeam.id),
-        window.api.getRosterSpots(userTeam.id),
-      ]);
+      const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffer, tradeStatus, spots, health] = await Promise.all([
+  window.api.getCurrentWeek(),
+  window.api.getDashboard(currentSeason),
+  window.api.getChampions(),
+  window.api.getStandings(currentSeason),
+  window.api.getOffseasonStatus(),
+  window.api.getInjuryReport(userTeam.id),
+  window.api.getStats(currentSeason),
+  window.api.getCpuTradeOffer(),
+  window.api.getTeamStatus(userTeam.id),
+  window.api.getRosterSpots(userTeam.id),
+  window.api.getFranchiseHealth(userTeam.id),
+]);
       if (cancelled) return;
 
       const seasonDone = status.hasSchedule && status.currentWeek === null;
@@ -101,6 +103,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setCpuOffer(tradeOffer ?? null);
       setOfferHandled(false);
       setUserTradeStatus(tradeStatus ?? null);
+      setFranchiseHealth(health ?? null);
 
       if (offseason.playoffsComplete) setPlayoffsComplete(true);
 
@@ -187,6 +190,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     if (!userTeam) return;
     setSimulatingGameId(gameId);
     const result = await window.api.simulateOneGame(gameId);
+    setFranchiseHealth(await window.api.getFranchiseHealth(userTeam.id));
     if (!result?.success) { setSimulatingGameId(null); return; }
     const [status, dashboard, standings, injuries] = await Promise.all([
       window.api.getCurrentWeek(), window.api.getDashboard(currentSeason),
@@ -358,6 +362,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   onViewWeek={handleViewWeek}
   onBoxScore={handleBoxScore}
   onDismissAlert={() => setPSAlert(null)}
+  franchiseHealth={franchiseHealth}
 />
         )}
       </div>
