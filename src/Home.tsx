@@ -356,7 +356,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                       opacity: (simulating || !!simulatingGameId) ? 0.5 : 1,
                     }}
                   >
-                    {simulating ? 'Simulating Week...' : '▶ Sim Full Week'}
+                    {simulating ? 'Simulating Week...' : '▶ Sim Rest of Week'}
                   </button>
                 </div>
               </>
