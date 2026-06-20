@@ -50,20 +50,14 @@ SIMULATION & SCHEDULE
 ────────────────────────────────────────────────────────────────────────────────
 Realistic Schedule Generation — division-based scheduling with proper
   home/away splits and divisional game weighting. Current schedule is fully
-  random, making standings feel arbitrary.
+  random, making standings feel arbitrary. Also flagged as a scalability
+  concern — random matchups produce unrealistic standings and division races.
 
 Multi-Season Batch Simulation — "Sim N seasons" with a progress bar. Critical
   for dynasty feel — users should be able to fast-forward through rebuilds.
 
 LEAGUE & FINANCIALS
 ────────────────────────────────────────────────────────────────────────────────
-Franchise & League Records — best single-season and career performances by
-  team (franchise records) and across the entire league (all-time records).
-  Requires adding team_id to career_stats_history (migration) and a records
-  query layer. Data is already preserved — this is purely a UI + query build.
-  Examples: Packers single-season passing yards record, all-time league sacks
-  leader, team rushing TD record holder.
-
 Financial System Beyond Cap — market size per team affecting revenue, stadium
   attendance, and owner budget. Even a simplified version (large market vs.
   small market affecting cap floor and FA appeal) adds a meaningful meta layer.
@@ -82,8 +76,7 @@ HIGH PRIORITY
   1-2 joined queries per team per game, reducing per-season DB calls from
   ~5,760 down to ~1,700.
 
-Realistic Schedule Generation — also a gameplay concern (see above). Random
-  matchups produce unrealistic standings and division races.
+Realistic Schedule Generation — see SIMULATION & SCHEDULE above.
 
 IMPORTANT — Fix before next major feature
 ────────────────────────────────────────────────────────────────────────────────
@@ -104,32 +97,33 @@ MAINTENANCE — Address before extended dynasty saves become common
 ────────────────────────────────────────────────────────────────────────────────
 [DONE June 20, 2026] Startup Migration Check Consolidation — all PRAGMA
   table_info column checks removed from initDatabase(). Consolidated into
-  versioned migration v8. CURRENT_SCHEMA_VERSION bumped to 8.
+  versioned migration runner. CURRENT_SCHEMA_VERSION now at 9. Old migration
+  blocks (v2–v8) removed once all saves were past those versions.
 
 [DONE June 20, 2026] News Events Archiving — DELETE fired on every season
   advance in advanceSeason(). Keeps last 3 seasons in news_events, prunes
   everything older. Uses existing idx_news_season_week index.
 
-Raw Stats Table Pruning — the stats table (individual game rows) grows at
-  ~170K rows/season and is the largest table in the save file. career_stats_history
-  already archives all per-season aggregates at season-end, so raw stats rows
-  older than 2 seasons can be safely deleted after archival. Implement as an
-  additional DELETE in advanceSeason() after the career_stats_history INSERT:
-    DELETE FROM stats WHERE season < current - 1
-  This keeps the current and prior season for in-app stat lookups while
-  preventing multi-season saves from bloating.
+[DONE June 20, 2026] Raw Stats Table Pruning — DELETE FROM stats WHERE
+  season < current - 1 fires in advanceSeason() after career_stats_history
+  INSERT. Keeps current + prior season for in-app lookups; older data already
+  captured in career_stats_history aggregates.
 
-career_stats_history team_id Column — currently stores player stats per season
-  with no team context. Needed before Franchise Records can be built. Requires:
-  1. Migration to add team_id INTEGER to career_stats_history.
-  2. Update the season-end INSERT in advanceSeason() to populate team_id by
-     joining through the stats table (stats → games is not needed; players.team_id
-     at time of archival is sufficient for most cases).
-  Prerequisite for the Franchise & League Records feature above.
+[DONE June 20, 2026] career_stats_history team_id Column — migration v9 adds
+  team_id INTEGER to career_stats_history with idx_career_stats_team index.
+  Season-end INSERT updated to capture MAX(s.team_id) per player per season.
 
 ================================================================================
 COMPLETED ITEMS
 ================================================================================
+
+[DONE June 20, 2026] Franchise & League Records — Franchise Records tab added
+  to Records screen. Queries career_stats_history filtered by team_id for
+  single-season franchise bests across all 8 stat categories. Team selector
+  defaults to user's team. Reuses existing LeaderboardTable component. League
+  all-time and season records were already live; franchise records complete
+  the set. Backed by getFranchiseRecords() in StatsService, get-franchise-records
+  IPC handler, and FranchiseRecords.tsx component.
 
 [DONE June 20, 2026] Trade Balance Fix — Overhauled calcPlayerTradeValue() in
   TradeService.ts with position weighting (QB: 1.4, WR/TE/CB/DL: 1.1–1.15,
