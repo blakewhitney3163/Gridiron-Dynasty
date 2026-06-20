@@ -98,3 +98,51 @@ export function getTeamPlayerStats(teamId: number, season: number): any[] {
     GROUP BY p.id
   `).all(season, teamId);
 }
+export function getFranchiseRecords(teamId: number): {
+  passing: any[]; rushing: any[]; receiving: any[];
+  tds: any[]; passTds: any[]; tackles: any[]; sacks: any[]; defInts: any[];
+} {
+  const sel = `
+    SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
+      p.position, p.dev_trait, p.overall_rating, p.age,
+      t.city || ' ' || t.name AS team_name,
+      csh.season, csh.games as games_played,
+      csh.pass_yards, csh.pass_tds, csh.interceptions,
+      csh.completions, csh.pass_attempts,
+      csh.rush_yards, csh.rush_tds, csh.rush_attempts,
+      csh.rec_yards, csh.rec_tds, csh.receptions, 0 as targets,
+      csh.tackles, csh.assisted_tackles, csh.sacks, csh.tfl,
+      csh.def_interceptions, csh.pass_deflections, csh.forced_fumbles,
+      0 as is_historical
+    FROM career_stats_history csh
+    JOIN players p ON csh.player_id = p.id
+    LEFT JOIN teams t ON t.id = csh.team_id
+    WHERE csh.team_id = ?
+  `;
+
+  return {
+    passing:  db.prepare(`${sel} AND csh.pass_attempts > 0 ORDER BY csh.pass_yards DESC LIMIT 15`).all(teamId) as any[],
+    rushing:  db.prepare(`${sel} AND csh.rush_attempts > 0 ORDER BY csh.rush_yards DESC LIMIT 15`).all(teamId) as any[],
+    receiving: db.prepare(`${sel} AND csh.receptions > 0  ORDER BY csh.rec_yards  DESC LIMIT 15`).all(teamId) as any[],
+    tds: db.prepare(`
+      SELECT p.id as player_id, p.first_name || ' ' || p.last_name AS player_name,
+        p.position, p.dev_trait, p.overall_rating, p.age,
+        t.city || ' ' || t.name AS team_name,
+        csh.season, csh.games as games_played,
+        csh.pass_yards, csh.pass_tds, csh.interceptions, csh.completions, csh.pass_attempts,
+        csh.rush_yards, csh.rush_tds, csh.rush_attempts,
+        csh.rec_yards, csh.rec_tds, csh.receptions, 0 as targets,
+        csh.tackles, csh.assisted_tackles, csh.sacks, csh.tfl,
+        csh.def_interceptions, csh.pass_deflections, csh.forced_fumbles, 0 as is_historical
+      FROM career_stats_history csh
+      JOIN players p ON csh.player_id = p.id
+      LEFT JOIN teams t ON t.id = csh.team_id
+      WHERE csh.team_id = ? AND (csh.rush_tds + csh.rec_tds) > 0
+      ORDER BY (csh.rush_tds + csh.rec_tds) DESC LIMIT 15
+    `).all(teamId) as any[],
+    passTds:  db.prepare(`${sel} AND csh.pass_attempts > 0 ORDER BY csh.pass_tds DESC LIMIT 15`).all(teamId) as any[],
+    tackles:  db.prepare(`${sel} AND csh.tackles > 0       ORDER BY csh.tackles DESC LIMIT 15`).all(teamId) as any[],
+    sacks:    db.prepare(`${sel} AND csh.sacks > 0         ORDER BY csh.sacks DESC LIMIT 15`).all(teamId) as any[],
+    defInts:  db.prepare(`${sel} AND (csh.def_interceptions > 0 OR csh.pass_deflections > 0) ORDER BY csh.def_interceptions DESC, csh.pass_deflections DESC LIMIT 15`).all(teamId) as any[],
+  };
+}
