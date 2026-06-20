@@ -31,6 +31,14 @@ export function openDatabase(dbPath: string): void {
   _db.pragma('busy_timeout = 5000');
 }
 
+export function closeDatabase(): void {
+  if (_db) {
+    try { _db.close(); } catch (_) {}
+    _db = null;
+    _dbPath = null;
+  }
+}
+
 export function initDatabase(dbPath: string): void {
   _dbPath = dbPath;
   openDatabase(dbPath);
@@ -391,12 +399,45 @@ export function initDatabase(dbPath: string): void {
 
 // ─── Contract Generation ──────────────────────────────────────────────────────
 
-const SAL_RANGES: Record<string, [number, number]> = {
-  QB: [1.0, 42], WR: [1.0, 28], DL: [1.0, 32], LB: [1.0, 18],
-  CB: [1.0, 22], TE: [1.0, 16], OL: [1.0, 22], S: [1.0, 18],
-  RB: [1.0, 16], K: [1.0, 4],
+// Market rate table — aligned with ContractService MARKET_RATE_TABLE
+const CONTRACT_MARKET_RATES: Record<string, [number, number][]> = {
+  QB: [[99,65],[93,50],[88,35],[83,20],[78,10],[73,4],[70,1.5]],
+  WR: [[99,45],[93,35],[88,25],[83,16],[78,8],[73,3],[70,1.5]],
+  DL: [[99,38],[93,30],[88,22],[83,14],[78,7],[73,3],[70,1.5]],
+  CB: [[99,32],[93,25],[88,18],[83,11],[78,5],[73,2.5],[70,1.5]],
+  OL: [[99,36],[93,30],[88,24],[83,18],[78,9],[73,3],[70,1.5]],
+  LB: [[99,26],[93,20],[88,15],[83,9],[78,4.5],[73,2],[70,1.5]],
+  TE: [[99,24],[93,19],[88,14],[83,8],[78,4],[73,2],[70,1.5]],
+  S:  [[99,22],[93,17],[88,12],[83,7],[78,3.5],[73,1.8],[70,1.5]],
+  RB: [[99,18],[93,14],[88,10],[83,6],[78,3],[73,1.5],[70,1.2]],
+  K:  [[99,8],[93,6],[88,5],[83,4],[78,3],[73,2],[70,1]],
 };
-const TRAIT_PREMIUM: Record<string, number> = { Normal: 1.0, Star: 1.15, Superstar: 1.3, 'X-Factor': 1.5 };
+
+const CONTRACT_POS_GROUP: Record<string, string> = {
+  HB: 'RB', FB: 'RB',
+  LT: 'OL', LG: 'OL', C: 'OL', RG: 'OL', RT: 'OL',
+  DE: 'DL', DT: 'DL', LE: 'DL', RE: 'DL', IDL: 'DL',
+  MLB: 'LB', OLB: 'LB', LOLB: 'LB', ROLB: 'LB', MIKE: 'LB', WILL: 'LB',
+  FS: 'S', SS: 'S',
+};
+
+function bootstrapFairMarket(pos: string, ovr: number): number {
+  const group = CONTRACT_POS_GROUP[pos] ?? pos;
+  const rates = CONTRACT_MARKET_RATES[group] ?? CONTRACT_MARKET_RATES['LB'];
+  let base = rates[rates.length - 1][1];
+  for (let i = 0; i < rates.length - 1; i++) {
+    const [highOvr, highSal] = rates[i];
+    const [lowOvr, lowSal] = rates[i + 1];
+    if (ovr >= lowOvr) {
+      const t = (ovr - lowOvr) / (highOvr - lowOvr);
+      base = lowSal + t * (highSal - lowSal);
+      break;
+    }
+  }
+  return base;
+}
+
+const TRAIT_PREMIUM: Record<string, number> = { Normal: 1.0, Star: 1.1, Superstar: 1.25, 'X-Factor': 1.45 };
 const TRAIT_GUARANTEE: Record<string, [number, number]> = {
   Normal: [10, 35], Star: [25, 50], Superstar: [40, 65], 'X-Factor': [55, 85],
 };
@@ -415,9 +456,10 @@ export function generateContracts(): void {
   `);
   db.transaction(() => {
     for (const p of activePlayers) {
-      const [minSal, maxSal] = SAL_RANGES[p.position] ?? [1.0, 15];
-      const ovrFactor = Math.pow(Math.max(0, (p.overall_rating - 70)) / 29, 2.5);
-      const salary = Math.round((minSal + ovrFactor * (maxSal - minSal)) * (TRAIT_PREMIUM[p.dev_trait] ?? 1.0) * 10) / 10;
+      const fairMarket = bootstrapFairMarket(p.position, p.overall_rating);
+      // Generate salary at 65-95% of fair market (reflecting existing team contract discounts)
+      const contractFactor = 0.65 + Math.random() * 0.30;
+      const salary = Math.max(1.0, Math.round(fairMarket * contractFactor * (TRAIT_PREMIUM[p.dev_trait] ?? 1.0) * 10) / 10);
       const yearsTotal =
         p.age <= 24 ? (Math.random() < 0.5 ? 5 : 4) :
         p.age <= 27 ? (Math.random() < 0.4 ? 5 : Math.random() < 0.6 ? 4 : 3) :
@@ -437,22 +479,31 @@ export function generateContracts(): void {
 
 // ─── Migration Versioning ─────────────────────────────────────────────────────
 
-const CURRENT_SCHEMA_VERSION = 9;
+const CURRENT_SCHEMA_VERSION = 1;
 
 interface Migration { version: number; description: string; up: () => void; }
 
-const MIGRATIONS: Migration[] = [
   {
-    version: 9,
-    description: 'Add team_id to career_stats_history for franchise records',
+    version: 10,
+    description: 'Recalibrate contract salaries to market-rate scale',
     up: () => {
-      const cols = (db.prepare('PRAGMA table_info(career_stats_history)').all() as any[]).map((c: any) => c.name);
-      if (!cols.includes('team_id'))
-        db.prepare('ALTER TABLE career_stats_history ADD COLUMN team_id INTEGER').run();
-      db.exec('CREATE INDEX IF NOT EXISTS idx_career_stats_team ON career_stats_history(team_id)');
+      const players = db.prepare(`
+        SELECT p.id, p.overall_rating, p.position, p.dev_trait, c.years_total, c.years_remaining, c.guaranteed_pct
+        FROM contracts c JOIN players p ON c.player_id = p.id
+        WHERE p.roster_status = 'active'
+      `).all() as any[];
+      const updateContract = db.prepare(
+        'UPDATE contracts SET annual_salary = ?, guaranteed_amount = ? WHERE player_id = ?'
+      );
+      for (const p of players) {
+        const fairMarket = bootstrapFairMarket(p.position, p.overall_rating);
+        const contractFactor = 0.72 + Math.random() * 0.20;
+        const salary = Math.max(1.0, Math.round(fairMarket * contractFactor * (TRAIT_PREMIUM[p.dev_trait] ?? 1.0) * 10) / 10);
+        const gtd = Math.round(salary * p.years_total * ((p.guaranteed_pct ?? 20) / 100) * 10) / 10;
+        updateContract.run(salary, gtd, p.id);
+      }
     },
   },
-];
 
 function getSchemaVersion(): number {
   try {
