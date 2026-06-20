@@ -356,7 +356,6 @@ export function initDatabase(dbPath: string): void {
   CREATE INDEX IF NOT EXISTS idx_career_stats_season ON career_stats_history(player_id, season);
   CREATE INDEX IF NOT EXISTS idx_news_season_cat ON news_events(season, category);
   `);
-  `);
 
   // ── Roster trimming ───────────────────────────────────────────────────────
   const ACTIVE_LIMIT = 53;
