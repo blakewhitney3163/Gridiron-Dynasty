@@ -149,14 +149,18 @@ export function proposeTrade(params: {
   };
 }
 
-export function getCpuTradeOffer(userTeamId: number): any | null {
+export function getCpuTradeOffers(userTeamId: number): any[] {
   const season = getCurrentSeason();
   const currentWeek = gameRepo.getCurrentWeek(season);
-  if (!currentWeek || currentWeek > 8) return null;
+  if (!currentWeek || currentWeek > 8) return [];
+  if (currentWeek < 2) return [];
+
+  // ~35% chance of any offers on a given check
+  if (Math.random() > 0.35) return [];
 
   const cpuTeams = db.prepare(`SELECT id, city, name FROM teams WHERE id != ? ORDER BY RANDOM()`).all(userTeamId) as any[];
 
-    const userPlayersAll = db.prepare(`
+  const userPlayersAll = db.prepare(`
     SELECT p.id, p.first_name, p.last_name, p.position, p.position_label,
            p.overall_rating, p.age, p.dev_trait,
            c.annual_salary AS salary
@@ -188,7 +192,12 @@ export function getCpuTradeOffer(userTeamId: number): any | null {
     ORDER BY p.overall_rating DESC
   `);
 
+  const offers: any[] = [];
+  const MAX_OFFERS = 3;
+  const claimedUserPlayerIds = new Set<number>();
+
   for (const cpuTeam of cpuTeams.slice(0, 15)) {
+    if (offers.length >= MAX_OFFERS) break;
     const { status } = getTeamTradeProfile(cpuTeam.id);
 
     if (status === 'Buyer' || status === 'Contender') {
@@ -196,6 +205,7 @@ export function getCpuTradeOffer(userTeamId: number): any | null {
       if (cpuNeeds.length === 0) continue;
 
       const wanted = userPlayersAll.find((p: any) =>
+        !claimedUserPlayerIds.has(p.id) &&
         cpuNeeds.includes(p.position) && p.overall_rating >= 75 && p.dev_trait !== 'X-Factor'
       );
       if (!wanted) continue;
@@ -220,12 +230,14 @@ export function getCpuTradeOffer(userTeamId: number): any | null {
         }) ?? null;
       }
 
-      return {
+      claimedUserPlayerIds.add(wanted.id);
+      offers.push({
         fromTeamId: cpuTeam.id, fromTeamName: `${cpuTeam.city} ${cpuTeam.name}`,
         requestedPlayer: wanted, requestedValue,
         offeredPlayer: offerPlayer, offeredPick,
         offerValue: offerValue + (offeredPick ? calcPickTradeValue(offeredPick.round, offeredPick.season) : 0),
-      };
+      });
+      continue;
     }
 
     if (status === 'Seller' || status === 'Rebuilding') {
@@ -236,7 +248,7 @@ export function getCpuTradeOffer(userTeamId: number): any | null {
       const offerValue = calcPlayerTradeValue(offering.overall_rating, offering.age, offering.position, offering.dev_trait);
 
       const target = userPlayersAll.find((p: any) => {
-        if (p.age > 26) return false;
+        if (p.age > 26 || claimedUserPlayerIds.has(p.id)) return false;
         const v = calcPlayerTradeValue(p.overall_rating, p.age, p.position, p.dev_trait);
         return v >= offerValue * 0.70 && v <= offerValue * 0.95;
       });
@@ -252,15 +264,17 @@ export function getCpuTradeOffer(userTeamId: number): any | null {
         }) ?? null;
       }
 
-      return {
+      claimedUserPlayerIds.add(target.id);
+      offers.push({
         fromTeamId: cpuTeam.id, fromTeamName: `${cpuTeam.city} ${cpuTeam.name}`,
         requestedPlayer: target, requestedValue: targetValue,
         offeredPlayer: offering, offeredPick: bonusPick,
         offerValue: offerValue + (bonusPick ? calcPickTradeValue(bonusPick.round, bonusPick.season) : 0),
-      };
+      });
     }
   }
-  return null;
+
+  return offers;
 }
 
 export function runCpuTrades(userTeamId: number): number {
@@ -300,7 +314,7 @@ export function runCpuTrades(userTeamId: number): number {
   `);
 
   let tradesExecuted = 0;
-  const MAX_TRADES = 4;
+  const MAX_TRADES = 2;
 
   for (const buyer of buyers) {
     if (tradesExecuted >= MAX_TRADES) break;
@@ -339,7 +353,7 @@ export function runCpuTrades(userTeamId: number): number {
       const ratio = totalOfferValue / targetValue;
       if (ratio < 0.78 || ratio > 1.30) continue;
 
-      const acceptThreshold = seller.status === 'Rebuilding' ? 0.72 : 0.60;
+      const acceptThreshold = seller.status === 'Rebuilding' ? 0.60 : 0.72;
       if (Math.random() < acceptThreshold) continue;
 
       db.transaction(() => {
