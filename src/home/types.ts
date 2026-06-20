@@ -88,3 +88,16 @@ export interface UserTeam {
   name: string;
   abbreviation: string;
 }
+
+export interface PositionalGroupRating {
+  group: string;
+  avg_ovr: number;
+  count: number;
+}
+
+export interface FranchiseHealth {
+  offense_ovr: number;
+  defense_ovr: number;
+  overall_ovr: number;
+  groups: PositionalGroupRating[];
+}
