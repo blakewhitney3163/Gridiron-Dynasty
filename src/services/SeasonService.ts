@@ -154,6 +154,22 @@ export async function advanceSeason(): Promise<AdvanceSeasonResult> {
     }
   })();
 
+    // ── Prune old news events (keep last 3 seasons) ──────────────────────────
+  db.prepare('DELETE FROM news_events WHERE season < ?').run(next - 2);
+
+  // ── Prune career_stats_history (retired non-HOF players 4+ seasons old) ──
+  db.prepare(`
+    DELETE FROM career_stats_history
+    WHERE player_id IN (
+      SELECT csh.player_id FROM career_stats_history csh
+      JOIN players p ON p.id = csh.player_id
+      WHERE p.roster_status = 'retired'
+        AND p.id NOT IN (SELECT player_id FROM hall_of_fame)
+      GROUP BY csh.player_id
+      HAVING MAX(csh.season) < ?
+    )
+  `).run(current - 3);
+
   // ── Dev Trait Evolution ───────────────────────────────────────────────────
   const setTrait = db.prepare('UPDATE players SET dev_trait = ? WHERE id = ?');
   db.transaction(() => {
