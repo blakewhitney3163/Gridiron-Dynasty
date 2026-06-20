@@ -479,10 +479,21 @@ export function generateContracts(): void {
 
 // ─── Migration Versioning ─────────────────────────────────────────────────────
 
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 10;
 
 interface Migration { version: number; description: string; up: () => void; }
 
+const MIGRATIONS: Migration[] = [
+  {
+    version: 9,
+    description: 'Add team_id to career_stats_history for franchise records',
+    up: () => {
+      const cols = (db.prepare('PRAGMA table_info(career_stats_history)').all() as any[]).map((c: any) => c.name);
+      if (!cols.includes('team_id'))
+        db.prepare('ALTER TABLE career_stats_history ADD COLUMN team_id INTEGER').run();
+      db.exec('CREATE INDEX IF NOT EXISTS idx_career_stats_team ON career_stats_history(team_id)');
+    },
+  },
   {
     version: 10,
     description: 'Recalibrate contract salaries to market-rate scale',
@@ -504,6 +515,7 @@ interface Migration { version: number; description: string; up: () => void; }
       }
     },
   },
+];
 
 function getSchemaVersion(): number {
   try {
