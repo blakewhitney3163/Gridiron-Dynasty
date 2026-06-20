@@ -3,14 +3,6 @@ Last Updated: June 19, 2026
 Repository: https://github.com/blakewhitney3163/Gridiron-Dynasty
 ================================================================================
 
-The incoming trades are way too lopsided. I'm trading away a TE 76 over, value of 105 fora. 91 rtg OL + 25 1st round pick valued at 224
-Break out LBs on depth chart too
-Full edibility of all stats for players (use all columns - the attributes should impact rating and performance etc)
-Too many dev traits assigned out - let's ensure the ratio is logical.
-I want the home page to be the main place - maybe just show the players game to sim + the sim week button, any trade offers, stat leaders, any team changes/openings that are available. Also think the team status update area should just be on the franchise tab. Trying to make this cohesive and tell the story the user should follow.
-extensions feel too easy. I also can't type into the # when negotiating. I can only use the arrows to go up or down.
-Franchise Health Panel on Home — show the user team's offense OVR, defense OVR, overall team grade, and positional group breakdowns (QB, RB, WR/TE, OL, DL, LB, DB) directly on the Home page sidebar. Update live after each simulated week so the user can monitor roster health, injuries, and depth drops without navigating to Franchise.
-
 TIER 3 — Polish & replayability
 ────────────────────────────────────────────────────────────────────────────────
 Team Editor — edit team name, city, colors, conference/division.
@@ -19,13 +11,6 @@ League Customization — expansion teams, relocation, custom team names.
 
 In-Game Narrative / Play-by-Play — text play-by-play during simulation.
   Stats-only output today limits immersion significantly.
-
-Franchise Health Monitor — positional group OVR panel on the Home page sidebar
-  showing offense OVR, defense OVR, and 7 positional group grades (QB, RB,
-  WR/TE, OL, DL, LB, DB). Updates live after every simulated week reflecting
-  injuries, practice squad promotions, and roster moves. Color-coded (green
-  80+, orange 70–79, red <70) with letter grades so the user can see org
-  health at a glance without leaving the Home screen.
 
 ================================================================================
 GAMEPLAY DEPTH — OOTP-Tier Features
@@ -126,89 +111,108 @@ Startup Migration Check Consolidation — currently runs multiple individual
 COMPLETED ITEMS
 ================================================================================
 
+[DONE June 19, 2026] Trade Balance Fix — Overhauled calcPlayerTradeValue() in
+  TradeService.ts with position weighting (QB: 1.4, WR/TE/CB/DL: 1.1–1.15,
+  OL: 1.05, RB: 0.85), age curves (peak 24–26 at 1.25x, decline 33+ at 0.5x),
+  and dev trait multipliers (X-Factor: 1.5, Superstar: 1.3, Star: 1.15). CPU
+  trade offers now require offer value within 78–115% of requested player value
+  before generating. Lopsided deals (e.g. 76 OVR TE for 91 OVR OL + 1st round
+  pick) are now correctly rejected by the acceptance logic.
+
+[DONE June 19, 2026] LB Depth Chart Split — Linebackers broken into MLB
+  (Middle Linebacker) and OLB (Outside Linebacker) as separate position groups
+  in depthUtils.ts POSITION_GROUPS and GROUP_LABELS. generatePlayers.ts
+  POSITION_LABEL_POOLS assigns MLB/OLB labels at generation. franchise/utils.ts
+  POSITIONS filter also updated to reflect the split.
+
+[DONE June 19, 2026] Full Player Stat Editability — All 14 position-specific
+  attributes (speed, strength, awareness, throw_accuracy, throw_power,
+  catching, route_running, tackle_rating, coverage, pass_rush, kickpower,
+  kickaccuracy, runblocking, passblocking) plus OVR, age, and dev trait are
+  now editable via the inline EditPanel in PlayerProfile.tsx. Attributes
+  rendered as labeled sliders with color-coded values. Saved via editPlayer
+  IPC handler.
+
+[DONE June 19, 2026] Dev Trait Ratio Rebalanced — devTrait() in
+  generatePlayers.ts now uses a 5-tier OVR-based probability system. OVR 90+:
+  5% X-Factor, 20% Superstar, 60% Star, 15% Normal. OVR 85–89: 2% / 12% /
+  60% / 26%. OVR 80–84: 0.5% / 5% / 45% / 49.5%. OVR 70–79: 0.1% / 1% /
+  20% / 79%. Below 70: 4% Star, 96% Normal. Eliminates the previous
+  over-assignment of elite traits to average players.
+
+[DONE June 19, 2026] Home Page Redesign — Redesigned Home.tsx to focus on the
+  user's own game and sim controls. Main content shows: user's matchup card
+  with Sim My Game + Sim Full Week buttons, Roster Health panel (offense/
+  defense/overall OVR with positional group grades), Active Alerts (injuries,
+  practice squad openings). Sidebar handles league context (standings, stat
+  leaders, season controls). Removed WeeklySchedule.tsx and SeasonHeader.tsx
+  which were replaced by inline components. Tab navigation consolidated from
+  12+ tabs to 7 (Home, My Team, League, Trades, Draft, News, Import) using
+  MyTeam.tsx and League.tsx wrapper components.
+
+[DONE June 19, 2026] Contract Negotiation Fix — Salary input in OffseasonTab
+  changed from arrows-only to a free-text input field (type="text" with
+  onChange handler), allowing direct dollar amount entry. Contract acceptance
+  difficulty tuned via askingPrice() with age-based multipliers (1.04x premium
+  for players 26 and under, 0.92x discount for players 31+).
+
 [DONE June 19, 2026] Franchise Health Monitor — positional group OVR panel
-  on the Home page sidebar. Shows offense OVR, defense OVR, overall grade,
-  and 7 positional group tiles (QB, RB, WR/TE, OL, DL, LB, DB) with letter
-  grades. Color-coded green/orange/red. Updates live after every simulated
-  week via getFranchiseHealth() in PlayerRepository, get-franchise-health IPC
-  handler, preload exposure, and FranchiseHealth state in Home.tsx passed
-  as franchiseHealth prop to Sidebar.tsx.
+  on the Home page. Shows offense OVR, defense OVR, overall grade, and 7
+  positional group tiles (QB, RB, WR/TE, OL, DL, LB, DB) with letter grades.
+  Color-coded green/orange/red. Updates live after every simulated week via
+  getFranchiseHealth() in PlayerRepository, get-franchise-health IPC handler,
+  preload exposure, and FranchiseHealth state in Home.tsx.
 
 [DONE June 19, 2026] Schemes System — offensive and defensive scheme selection
   for every team. 5 offensive schemes (West Coast, Air Raid, Power Run, Spread,
   Run & Gun) and 5 defensive schemes (4-3, 3-4, Zone Cover 2, Man Press, Blitz
   Heavy). Each scheme applies a rating modifier in every simulated game based on
-  how well the team's current roster fits the scheme's key positions (e.g. Air
-  Raid rewards elite WRs; Power Run rewards a strong RB and OL; Blitz Heavy
-  rewards pass_rush rating on DL/LB). Fit displayed as a color-coded rating
-  adjustment on every scheme card (+2.5 green = Great Fit, 0-1.5 orange =
-  Decent Fit, negative red = Poor Fit). All 32 CPU teams receive randomly
-  assigned schemes at first launch via seedTeamSchemes(). User can change
-  offense and defense scheme independently at any time from the SCHEMES tab in
-  Franchise. Backed by team_schemes table (migration v7), schemeHandlers.ts
-  (get-team-scheme / get-scheme-options / set-team-scheme IPC), and
+  roster fit. All 32 CPU teams receive randomly assigned schemes at first
+  launch. Backed by team_schemes table (migration v7), schemeHandlers.ts, and
   getSchemeModifiers() wired into simulateGame.ts getTeamRatings().
 
 [DONE June 19, 2026] Draft Combine / Deeper Scouting — five physical combine
-  measurables added to every draft prospect: 40-yard dash, bench press reps,
-  vertical jump (inches), broad jump (inches), and 3-cone drill time. Stats
-  are generated per position at draft class creation with realistic noise and
-  position-specific distributions (e.g. OL/DL skew heavier on bench press,
-  skill positions skew faster on 40 time). Displayed as color-coded inline
-  badges beneath each prospect's name in ProspectBoard.tsx — gold for elite
-  marks, green for good, orange for below average. Color thresholds in
-  draftUtils.ts (fortyColor / benchColor / vertColor / coneColor). Stored in
-  draft_prospects via migration v6 (five REAL columns). Visible without
-  scouting — combine stats are public information that hints at athleticism
-  independent of the hidden OVR.
+  measurables per prospect: 40-yard dash, bench press reps, vertical jump,
+  broad jump, and 3-cone drill time. Color-coded badges in ProspectBoard.tsx.
+  Stored in draft_prospects via migration v6.
 
 [DONE June 19, 2026] Coaching Staff System — HC / OC / DC / ST coordinators
-  for every team, each with overall, offense, defense, and development ratings.
-  Hiring and firing coaches from a free-agent pool managed per role. OC's
-  offense_rating and DC's defense_rating directly modify team strength in every
-  game sim via getTeamRatings() (coordinator adds ±(rating−70)×0.15 to the
-  relevant side; HC adds ±(ovr−70)×0.05 to both). New COACHING STAFF tab in
-  Franchise shows 2×2 staff cards with primary rating badge, Dev rating, Exp,
-  and salary. "View Available Coaches" panel with role filter tabs and Hire
-  button. Backed by coaching_staff table (migration v5), CoachingRepository,
-  CoachingService (generateAllCoachingStaff seeds 32 teams + 16-coach pool),
-  coachingHandlers IPC, and preload exposure.
+  with overall, offense, defense, and development ratings. Coaching ratings
+  directly modify team strength in game sim. Backed by coaching_staff table
+  (migration v5), CoachingRepository, CoachingService, and coachingHandlers.
 
 [DONE June 19, 2026] Contract Negotiation Depth — multi-year offer counters,
   holdout mechanic, dead cap penalties on early releases.
 
 [DONE June 19, 2026] Surface Trade Offers on Main Screen — incoming CPU trade
-  proposals now surface on the Home tab as a green-bordered notification card.
+  proposals surface on the Home tab as a notification card.
 
-[DONE June 19, 2026] Meet the Team Screen — orientation screen shown after
-  team selection on new dynasties.
+[DONE June 19, 2026] Meet the Team Screen — orientation screen after team
+  selection on new dynasties.
 
-[DONE June 19, 2026] Franchise Tag + Tender System — Franchise Tag (FT,
-  ~135% of fair market) and Transition Tag (TT, ~110%) designations in the
-  Offseason tab.
+[DONE June 19, 2026] Franchise Tag + Tender System — Franchise Tag (~135% of
+  fair market) and Transition Tag (~110%) in the Offseason tab.
 
 [DONE June 19, 2026] Player Morale System — morale column on players table
   (default 75, range 0–100).
 
-[DONE June 18, 2026] Season Awards — MVP, Offensive Player of the Year,
-  Defensive Player of the Year, Offensive Rookie of the Year, Defensive
-  Rookie of the Year, and Coach of the Year.
+[DONE June 18, 2026] Season Awards — MVP, OPOY, DPOY, OROY, DROY, Coach of
+  the Year.
 
 [DONE June 18, 2026] Practice Squad Accelerated Development — PS players aged
-  23 or younger receive OVR gains each season (up to +3 bonus on top of normal
-  progression).
+  23 or younger receive OVR gains each season (up to +3 bonus).
 
 [DONE June 18, 2026] Contract Demand News Events — elite players (OVR 85+)
-  entering their final contract year automatically generate a news event.
+  entering final contract year generate a news event.
 
 [DONE June 18, 2026] Retirement + HOF News Events — retirements and Hall of
-  Fame inductions now generate news feed events at season end.
+  Fame inductions generate news feed events at season end.
 
 [DONE June 18, 2026] Multiple Save Files — save picker at launch, lazy DB
   init via Proxy pattern, full save create / load / delete UI.
 
-[DONE June 18, 2026] OL Ratings in Teams / Depth Chart — getRatingCols now
-  returns PBK / RBK / STR / AWR for all OL positions.
+[DONE June 18, 2026] OL Ratings in Teams / Depth Chart — getRatingCols returns
+  PBK / RBK / STR / AWR for all OL positions.
 
 [DONE] Player Editor — inline edit mode in PlayerProfile.tsx.
 
