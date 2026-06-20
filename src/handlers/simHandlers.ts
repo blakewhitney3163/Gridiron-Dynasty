@@ -341,20 +341,22 @@ export function registerSimHandlers(): void {
   });
 
   ipcMain.handle('simulate-week', async (_event: IpcEvent, week: number) => {
-    const season = getCurrentSeason();
-    const games = gameRepo.getPendingByWeek(season, week);
-    if (games.length === 0) return { week, season, gamesSimulated: 0 };
+  const season = getCurrentSeason();
+  const userTeamId = settingsRepo.getUserTeamId() ?? -1;
+  const games = gameRepo.getPendingByWeek(season, week)
+    .filter((g: any) => g.home_team_id !== userTeamId && g.away_team_id !== userTeamId);
+  if (games.length === 0) return { week, season, gamesSimulated: 0 };
 
-    return runSimWorker({
-      type: 'simulate-week',
-      week,
-      season,
-      games,
-      userTeamId: settingsRepo.getUserTeamId() ?? -1,
-      difficultyFactor: getDifficultyFactor(),
-      dbPath: getDbPath(),
-    });
+  return runSimWorker({
+    type: 'simulate-week',
+    week,
+    season,
+    games,
+    userTeamId,
+    difficultyFactor: getDifficultyFactor(),
+    dbPath: getDbPath(),
   });
+});
 
   ipcMain.handle('simulate-game', (_event: IpcEvent, gameId: number) => {
     const game = db.prepare(`SELECT * FROM games WHERE id = ?`).get(gameId) as any;
