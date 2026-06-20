@@ -100,22 +100,22 @@ export default function Franchise() {
   };
 
   const handleExtend = async (salary: string) => {
-  if (!extendingId || working) return;
-  const salaryNum = parseFloat(salary);
-  if (isNaN(salaryNum) || salaryNum <= 0) return;
-  const current = contracts.find(c => c.id === extendingId);
-  const capImpact = salaryNum - (current?.annual_salary ?? 0);
-  if (cap && capImpact > cap.available_cap + 0.1) {
-    showToast(`Not enough cap space. Need $${capImpact.toFixed(1)}M more.`, 'error');
-    return;
-  }
-  setWorking(true);
-  await window.api.extendPlayer({ playerId: extendingId, years: extendYears, salary: salaryNum });
-  setExtendingId(null);
-  showToast('Contract extended successfully.', 'success');
-  await loadData();
-  setWorking(false);
-};
+    if (!extendingId || working) return;
+    const salaryNum = parseFloat(salary);
+    if (isNaN(salaryNum) || salaryNum <= 0) return;
+    const current = contracts.find(c => c.id === extendingId);
+    const capImpact = salaryNum - (current?.annual_salary ?? 0);
+    if (cap && capImpact > cap.available_cap + 0.1) {
+      showToast(`Not enough cap space. Need $${capImpact.toFixed(1)}M more.`, 'error');
+      return;
+    }
+    setWorking(true);
+    await window.api.extendPlayer({ playerId: extendingId, years: extendYears, salary: salaryNum });
+    setExtendingId(null);
+    showToast('Contract extended successfully.', 'success');
+    await loadData();
+    setWorking(false);
+  };
 
   const handleRelease = async () => {
     if (!releasingId || working) return;
@@ -362,7 +362,6 @@ export default function Franchise() {
           rosterSearch={rosterSearch} setRosterSearch={setRosterSearch}
           extendingId={extendingId} setExtendingId={setExtendingId}
           extendYears={extendYears} setExtendYears={setExtendYears}
-          extendSalary={extendSalary} setExtendSalary={setExtendSalary}
           releasingId={releasingId} setReleasingId={setReleasingId}
           working={working} handleExtend={handleExtend} handleRelease={handleRelease}
         />
