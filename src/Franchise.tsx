@@ -281,7 +281,7 @@ export default function Franchise() {
   ];
 
   return (
-    <div style={{ padding: '16px 20px', maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ padding: '16px 20px', maxWidth: 1100, margin: '0 auto', height: '100%', overflowY: 'auto', boxSizing: 'border-box' }}>
 
       {toast && (
         <div style={{
