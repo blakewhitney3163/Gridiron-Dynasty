@@ -23,7 +23,6 @@ type ImportStatus = 'idle' | 'running' | 'done' | 'error';
 interface ImportState { status: ImportStatus; message: string; }
 const IDLE: ImportState = { status: 'idle', message: '' };
 
-// Maps legacy tab IDs (from onNavigate calls inside components) to new consolidated tabs
 const TAB_MAP: Record<string, Tab> = {
   franchise: 'myteam',
   depth:     'myteam',
@@ -251,7 +250,7 @@ export default function App() {
             onReset={() => setImportTeams(IDLE)}
           />
           <SetupImportCard
-            step="2" title="Custom Players" description="Import player names, positions, and ratings." warning="Replaces all generated rosters."
+            step="2" title="Custom Players" description="Import a full roster for every team." warning="Replaces all generated players."
             state={importPlayers}
             onImport={() => runImport(() => window.api.importCustomPlayers(), setImportPlayers)}
             onReset={() => setImportPlayers(IDLE)}
@@ -259,7 +258,11 @@ export default function App() {
         </div>
         <button
           onClick={() => setScreen('team-select')}
-          style={{ padding: '14px 32px', fontSize: 13, fontWeight: 'bold', letterSpacing: 3, background: '#4caf50', color: '#000', border: 'none', borderRadius: 4, cursor: 'pointer', fontFamily: 'monospace', marginTop: 8 }}
+          style={{
+            padding: '12px 28px', fontSize: 12, fontWeight: 'bold', letterSpacing: 2,
+            background: '#FF8740', color: '#000', border: 'none', borderRadius: 4,
+            cursor: 'pointer', fontFamily: 'monospace', marginTop: 8,
+          }}
         >
           CONTINUE TO TEAM SELECTION →
         </button>
@@ -408,7 +411,7 @@ export default function App() {
           )}
           {isMounted('trades') && (
             <div style={{ ...tabStyle('trades'), height: '100%' }}>
-              <Trades />
+              <Trades isActive={activeTab === 'trades'} />
             </div>
           )}
           {isMounted('news') && (
@@ -458,7 +461,6 @@ function SetupImportCard({ step, title, description, warning, state, onImport, o
       <div style={{ fontWeight: 700, color: '#fff', marginBottom: 6, fontSize: 14 }}>{title}</div>
       <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4, lineHeight: 1.5 }}>{description}</div>
       <div style={{ fontSize: 10, color: '#FF8740', marginBottom: 12 }}>⚠ {warning}</div>
-
       {state.status === 'idle' && (
         <button onClick={onImport} style={{ padding: '8px 16px', background: '#1a1a1a', border: `1px solid ${T.borderFaint}`, borderRadius: 4, color: T.textMuted, cursor: 'pointer', fontFamily: 'monospace', fontSize: 11 }}>
           SELECT CSV
