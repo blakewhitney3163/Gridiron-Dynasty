@@ -114,7 +114,7 @@ const createWindow = (): void => {
 
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
-  mainWindow.once('ready-to-show', () => {
+    mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     mainWindow.setAlwaysOnTop(true);
     mainWindow.focus();
@@ -122,10 +122,17 @@ const createWindow = (): void => {
     setTimeout(() => mainWindow.webContents.focus(), 100);
   });
 
+  mainWindow.on('focus', () => {
+    mainWindow.webContents.focus();
+  });
+
+  mainWindow.webContents.on('devtools-closed', () => {
+    mainWindow.webContents.focus();
+  });
+
   if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools();
   }
-};
 
 // ─── Register Handlers ────────────────────────────────────────────────────────
 
