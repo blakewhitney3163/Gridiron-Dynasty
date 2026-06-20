@@ -12,6 +12,15 @@ League Customization — expansion teams, relocation, custom team names.
 In-Game Narrative / Play-by-Play — text play-by-play during simulation.
   Stats-only output today limits immersion significantly.
 
+Preset Dynasty Templates — fictional franchise starter kits selectable at new
+  dynasty creation. Each template ships as a pre-built CSV compatible with the
+  existing CSV Import system: a roster of fictional players, team ratings,
+  historical records, and a league configuration. Examples: "Rebuild Mode"
+  (roster of 60–70 OVR players, tight cap), "Contender Window" (stacked but
+  aging roster), "Dynasty Peak" (league powerhouse with high expectations).
+  Lowers the barrier to entry and provides structured challenge modes without
+  requiring manual roster building.
+
 ================================================================================
 GAMEPLAY DEPTH — OOTP-Tier Features
 ================================================================================
@@ -42,12 +51,37 @@ Injury History / Injury-Prone Trait — track career injury history per player.
   in-game injury probability and lowers market value. Builds on existing injury
   system.
 
+Practice Squad Promotion Alerts — when a practice squad player's OVR surpasses
+  the corresponding starter's OVR on the active depth chart, surface an alert
+  on the Home page alongside existing injury alerts. Ties directly into the
+  existing PS accelerated development bonus (+3 OVR for players 23 and under)
+  and the current PS promotion UI. Prevents burying a better player on the PS
+  by accident.
+
+Draft Class Pre-Season Generation + In-Season Scouting — auto-generate the
+  full draft class at season start (Week 1) instead of waiting until the
+  offseason. Prospects are visible on the Draft board immediately but ratings
+  are hidden behind a scouting veil. Scouting points accumulate each week,
+  gradually revealing attributes via the existing 25-point scouting system.
+  By draft day, fully scouted prospects have accurate ratings; unscouted
+  prospects remain question marks. Mirrors real NFL scouting timelines and
+  significantly increases draft immersion.
+
 Scouting Department — hire scouts with regional specialties that improve
   draft prospect accuracy over time. Builds directly on the existing combine
   measurables and 25-point scouting system.
 
 SIMULATION & SCHEDULE
 ────────────────────────────────────────────────────────────────────────────────
+Position-Weighted Team Ratings — current sim averages OVR equally across all
+  offensive and defensive players. OL ratings are already included and do
+  affect team strength (and get an explicit bonus under Power Run scheme), but
+  in the flat average a great QB can mask a terrible OL. Enhance
+  computeTeamRatings() to weight positions by realistic impact: QB ~25%,
+  OL group ~20%, skill positions sharing the remainder. On defense, weight
+  DL/LB heavier in run defense contexts and CB/S heavier in pass defense.
+  Makes OL rebuilds and line depth feel distinctly different from WR corps
+  upgrades.
 
 Multi-Season Batch Simulation — "Sim N seasons" with a progress bar. Critical
   for dynasty feel — users should be able to fast-forward through rebuilds.
