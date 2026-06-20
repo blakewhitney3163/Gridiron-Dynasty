@@ -1,5 +1,5 @@
 GRIDIRON DYNASTY — ROADMAP
-Last Updated: June 19, 2026
+Last Updated: June 20, 2026
 Repository: https://github.com/blakewhitney3163/Gridiron-Dynasty
 ================================================================================
 
@@ -57,6 +57,13 @@ Multi-Season Batch Simulation — "Sim N seasons" with a progress bar. Critical
 
 LEAGUE & FINANCIALS
 ────────────────────────────────────────────────────────────────────────────────
+Franchise & League Records — best single-season and career performances by
+  team (franchise records) and across the entire league (all-time records).
+  Requires adding team_id to career_stats_history (migration) and a records
+  query layer. Data is already preserved — this is purely a UI + query build.
+  Examples: Packers single-season passing yards record, all-time league sacks
+  leader, team rushing TD record holder.
+
 Financial System Beyond Cap — market size per team affecting revenue, stadium
   attendance, and owner budget. Even a simplified version (large market vs.
   small market affecting cap floor and FA appeal) adds a meaningful meta layer.
@@ -71,47 +78,60 @@ Issues to address before the codebase gets significantly larger.
 
 HIGH PRIORITY
 ────────────────────────────────────────────────────────────────────────────────
-Batch getTeamRatings() DB Queries — currently fires ~10 individual queries per
-  team per game (players + 3 coaching + 4-6 scheme). At 288+ regular season
-  games this is ~5,760 extra queries per season. Fix: consolidate into 1-2
-  joined queries per team using a single DB call.
+[DONE June 20, 2026] Batch getTeamRatings() DB Queries — consolidated into
+  1-2 joined queries per team per game, reducing per-season DB calls from
+  ~5,760 down to ~1,700.
 
 Realistic Schedule Generation — also a gameplay concern (see above). Random
   matchups produce unrealistic standings and division races.
 
 IMPORTANT — Fix before next major feature
 ────────────────────────────────────────────────────────────────────────────────
-Split simulateGame.ts — currently 694 lines and growing with every sim feature.
-  Should be split into src/sim/ratings.ts, src/sim/stats.ts, and
-  src/sim/scoring.ts before hitting 1,000+ lines.
+[DONE June 20, 2026] Split simulateGame.ts — broken into src/sim/ratings.ts,
+  src/sim/stats.ts, src/sim/scoring.ts, and src/sim/types.ts. Thin orchestrator
+  simulateGame.ts imports and re-exports all modules.
 
-Reduce `any` in IPC Handlers — most handler callbacks use `any` extensively.
-  Needs a shared types/ipc.ts file with typed request/response interfaces as
-  the feature set grows.
+[DONE June 20, 2026] Reduce `any` in IPC Handlers — shared src/types/ipc.ts
+  created with typed DB row interfaces. All handler event params updated to
+  Electron.IpcMainInvokeEvent.
 
-Split preload.ts — currently 200+ lines and growing with every feature.
-  Should be split into domain groups (contracts, draft, schemes, coaching)
-  that are merged into the final contextBridge call.
+[DONE June 20, 2026] Split preload.ts — broken into 8 domain modules under
+  src/preload/ (core, season, roster, contracts, trades, draft, stats,
+  coaching). Minimal orchestrator merges all via spread and exposes via
+  contextBridge.
 
 MAINTENANCE — Address before extended dynasty saves become common
 ────────────────────────────────────────────────────────────────────────────────
-News Events Archiving — every transaction, game, and injury fires a news event
-  with no cleanup strategy. After 10+ seasons the table becomes very large.
-  Needs a per-season archive limit or pruning strategy.
+[DONE June 20, 2026] Startup Migration Check Consolidation — all PRAGMA
+  table_info column checks removed from initDatabase(). Consolidated into
+  versioned migration v8. CURRENT_SCHEMA_VERSION bumped to 8.
 
-career_stats_history Growth — accumulates every season for every player.
-  Grows fast with retirements and new draft classes each year. Needs index
-  review and potential pruning after 5+ seasons.
+[DONE June 20, 2026] News Events Archiving — DELETE fired on every season
+  advance in advanceSeason(). Keeps last 3 seasons in news_events, prunes
+  everything older. Uses existing idx_news_season_week index.
 
-Startup Migration Check Consolidation — currently runs multiple individual
-  PRAGMA table_info checks for 30+ columns on every launch. Should consolidate
-  into a single schema version check rather than column existence checks.
+Raw Stats Table Pruning — the stats table (individual game rows) grows at
+  ~170K rows/season and is the largest table in the save file. career_stats_history
+  already archives all per-season aggregates at season-end, so raw stats rows
+  older than 2 seasons can be safely deleted after archival. Implement as an
+  additional DELETE in advanceSeason() after the career_stats_history INSERT:
+    DELETE FROM stats WHERE season < current - 1
+  This keeps the current and prior season for in-app stat lookups while
+  preventing multi-season saves from bloating.
+
+career_stats_history team_id Column — currently stores player stats per season
+  with no team context. Needed before Franchise Records can be built. Requires:
+  1. Migration to add team_id INTEGER to career_stats_history.
+  2. Update the season-end INSERT in advanceSeason() to populate team_id by
+     joining through the stats table (stats → games is not needed; players.team_id
+     at time of archival is sufficient for most cases).
+  Prerequisite for the Franchise & League Records feature above.
 
 ================================================================================
 COMPLETED ITEMS
 ================================================================================
 
-[DONE June 19, 2026] Trade Balance Fix — Overhauled calcPlayerTradeValue() in
+[DONE June 20, 2026] Trade Balance Fix — Overhauled calcPlayerTradeValue() in
   TradeService.ts with position weighting (QB: 1.4, WR/TE/CB/DL: 1.1–1.15,
   OL: 1.05, RB: 0.85), age curves (peak 24–26 at 1.25x, decline 33+ at 0.5x),
   and dev trait multipliers (X-Factor: 1.5, Superstar: 1.3, Star: 1.15). CPU
