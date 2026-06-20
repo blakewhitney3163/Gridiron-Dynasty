@@ -218,9 +218,14 @@ export default function ActiveRosterTab({
                     <div style={{ color: '#444', fontSize: 10, letterSpacing: 1, marginBottom: 6 }}>ANNUAL SALARY (M)</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <span style={{ color: '#444' }}>$</span>
-                      <input type="text" inputMode="decimal" value={extendSalary} onChange={e => setExtendSalary(e.target.value)}
-                        placeholder="0.0"
-                        style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4, color: '#ccc', padding: '6px 10px', fontSize: 13, width: 80 }} />
+                      <input
+  type="text"
+  value={extendSalary}
+  autoFocus
+  onChange={e => setExtendSalary(e.target.value)}
+  onKeyDown={e => e.stopPropagation()}
+  placeholder="0.0"
+  style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4, color: '#ccc', padding: '6px 10px', fontSize: 13, width: 80 }} />
                       <span style={{ color: '#444' }}>M</span>
                     </div>
                   </div>
