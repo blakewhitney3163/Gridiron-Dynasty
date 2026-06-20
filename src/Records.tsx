@@ -5,6 +5,7 @@ import { CATEGORIES, columns } from './records/recordsUtils';
 import HallOfFame from './records/HallOfFame';
 import AwardsView from './records/AwardsView';
 import LeaderboardTable from './records/LeaderboardTable';
+import FranchiseRecords from './records/FranchiseRecords';
 import { useGameStore } from './store/gameStore';
 
 declare const window: any;
@@ -14,15 +15,10 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
     <button
       onClick={onClick}
       style={{
-        padding: '5px 16px',
-        fontSize: 11,
-        letterSpacing: 1,
-        cursor: 'pointer',
-        borderRadius: 4,
-        background: active ? '#FF8740' : '#111',
-        border: `1px solid ${active ? '#FF8740' : '#222'}`,
+        padding: '6px 14px', fontSize: 11, fontWeight: 700, letterSpacing: 1,
+        borderRadius: 4, cursor: 'pointer', border: 'none',
+        background: active ? '#FF8740' : 'transparent',
         color: active ? '#000' : '#555',
-        fontWeight: active ? 'bold' : 'normal',
       }}
     >
       {children}
@@ -31,16 +27,16 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 }
 
 export default function Records() {
-  const { currentSeason } = useGameStore();
-  const [mode, setMode] = useState<RecordMode>('alltime');
+  const { currentSeason, userTeam } = useGameStore();
+  const [mode, setMode]         = useState<RecordMode>('alltime');
   const [category, setCategory] = useState<StatCategory>('passing');
-  const [alltime, setAlltime] = useState<RecordsData | null>(null);
-  const [season, setSeason] = useState<RecordsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [awards, setAwards] = useState<SeasonAwards | null>(null);
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [hofData, setHofData] = useState<HofEntry[]>([]);
+  const [alltime, setAlltime]   = useState<RecordsData | null>(null);
+  const [season, setSeason]     = useState<RecordsData | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [awards, setAwards]     = useState<SeasonAwards | null>(null);
+  const [sortKey, setSortKey]   = useState<string | null>(null);
+  const [sortDir, setSortDir]   = useState<'asc' | 'desc'>('desc');
+  const [hofData, setHofData]   = useState<HofEntry[]>([]);
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,25 +75,26 @@ export default function Records() {
   };
 
   return (
-    <div style={{ padding: 24, fontFamily: 'monospace' }}>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: T.textPrimary, letterSpacing: 2 }}>
+    <div style={{ padding: 24, maxWidth: 1100, margin: '0 auto' }}>
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ color: T.text, fontSize: 20, fontWeight: 800, letterSpacing: 1, marginBottom: 4 }}>
           Historical Records
         </div>
-        <div style={{ fontSize: 11, color: T.textDim, marginTop: 4 }}>
+        <div style={{ color: '#555', fontSize: 12 }}>
           Dynasty records — set by your in-game players as history is made
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <TabBtn active={mode === 'alltime'} onClick={() => setMode('alltime')}>ALL-TIME LEADERS</TabBtn>
-        <TabBtn active={mode === 'season'} onClick={() => setMode('season')}>SEASON RECORDS</TabBtn>
-        <TabBtn active={mode === 'awards'} onClick={() => setMode('awards')}>SEASON AWARDS</TabBtn>
-        <TabBtn active={mode === 'hof'} onClick={() => setMode('hof')}>HALL OF FAME</TabBtn>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #222', paddingBottom: 8, flexWrap: 'wrap' }}>
+        <TabBtn active={mode === 'alltime'}    onClick={() => setMode('alltime')}>ALL-TIME LEADERS</TabBtn>
+        <TabBtn active={mode === 'season'}     onClick={() => setMode('season')}>SEASON RECORDS</TabBtn>
+        <TabBtn active={mode === 'franchise'}  onClick={() => setMode('franchise')}>FRANCHISE RECORDS</TabBtn>
+        <TabBtn active={mode === 'awards'}     onClick={() => setMode('awards')}>SEASON AWARDS</TabBtn>
+        <TabBtn active={mode === 'hof'}        onClick={() => setMode('hof')}>HALL OF FAME</TabBtn>
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           {importMsg && (
-            <span style={{ fontSize: 11, color: importMsg.startsWith('✓') ? '#4caf50' : '#e57373', fontFamily: 'monospace' }}>
+            <span style={{ fontSize: 11, color: importMsg.startsWith('✓') ? '#4caf50' : '#f44336' }}>
               {importMsg}
             </span>
           )}
@@ -118,14 +115,16 @@ export default function Records() {
         </div>
       </div>
 
-      {mode === 'hof' && <HallOfFame hofData={hofData} />}
-      
-      {mode !== 'awards' && mode !== 'hof' && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+      {mode === 'hof' && <HallOfFame data={hofData} />}
+
+      {mode === 'franchise' && (
+        <FranchiseRecords defaultTeamId={userTeam?.id} />
+      )}
+
+      {mode !== 'awards' && mode !== 'hof' && mode !== 'franchise' && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
           {CATEGORIES.map(c => (
-            <button
-              key={c.id}
-              onClick={() => setCategory(c.id)}
+            <button key={c.id} onClick={() => setCategory(c.id as StatCategory)}
               style={{
                 padding: '4px 10px', fontSize: 10, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
                 background: category === c.id ? '#FF8740' : '#111',
@@ -139,9 +138,9 @@ export default function Records() {
         </div>
       )}
 
-            {mode === 'awards' && <AwardsView awards={awards} currentSeason={currentSeason} />}
+      {mode === 'awards' && <AwardsView awards={awards} season={currentSeason} />}
 
-      {mode !== 'awards' && mode !== 'hof' && (
+      {mode !== 'awards' && mode !== 'hof' && mode !== 'franchise' && (
         <LeaderboardTable
           rows={rows}
           cols={cols}
