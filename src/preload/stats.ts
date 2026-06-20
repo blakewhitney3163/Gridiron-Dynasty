@@ -34,6 +34,9 @@ export const statsApi = {
   getSeasonRecords: () =>
     ipcRenderer.invoke('get-season-records'),
 
+  getFranchiseRecords: (teamId: number) =>
+    ipcRenderer.invoke('get-franchise-records', teamId),
+
   importHistoricalRecords: (recordType: 'alltime' | 'season') =>
     ipcRenderer.invoke('import-historical-records', recordType),
 
