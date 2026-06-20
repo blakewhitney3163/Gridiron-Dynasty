@@ -46,40 +46,40 @@ export function initDatabase(dbPath: string): void {
       division TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS players (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  first_name TEXT NOT NULL,
-  last_name TEXT NOT NULL,
-  position TEXT NOT NULL,
-  position_label TEXT,
-  age INTEGER NOT NULL,
-  overall_rating INTEGER NOT NULL,
-  speed INTEGER NOT NULL,
-  strength INTEGER NOT NULL,
-  awareness INTEGER NOT NULL,
-  throw_accuracy INTEGER DEFAULT 0,
-  throw_power INTEGER DEFAULT 0,
-  catching INTEGER DEFAULT 0,
-  route_running INTEGER DEFAULT 0,
-  tackle_rating INTEGER DEFAULT 0,
-  coverage INTEGER DEFAULT 0,
-  pass_rush INTEGER DEFAULT 0,
-  kickpower INTEGER DEFAULT 0,
-  kickaccuracy INTEGER DEFAULT 0,
-  runblocking INTEGER DEFAULT 0,
-  passblocking INTEGER DEFAULT 0,
-  team_id INTEGER,
-  is_free_agent INTEGER DEFAULT 0,
-  roster_status TEXT DEFAULT 'active',
-  franchise_tagged INTEGER DEFAULT 0,
-  dev_trait TEXT DEFAULT 'Normal',
-  injury_status TEXT DEFAULT 'healthy',
-  weeks_out INTEGER DEFAULT 0,
-  injury_type TEXT,
-  waived_by_team_id INTEGER,
-  waiver_placed_week INTEGER,
-  morale INTEGER DEFAULT 75,
-  FOREIGN KEY (team_id) REFERENCES teams(id)
-);
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      position TEXT NOT NULL,
+      position_label TEXT,
+      age INTEGER NOT NULL,
+      overall_rating INTEGER NOT NULL,
+      speed INTEGER NOT NULL,
+      strength INTEGER NOT NULL,
+      awareness INTEGER NOT NULL,
+      throw_accuracy INTEGER DEFAULT 0,
+      throw_power INTEGER DEFAULT 0,
+      catching INTEGER DEFAULT 0,
+      route_running INTEGER DEFAULT 0,
+      tackle_rating INTEGER DEFAULT 0,
+      coverage INTEGER DEFAULT 0,
+      pass_rush INTEGER DEFAULT 0,
+      kickpower INTEGER DEFAULT 0,
+      kickaccuracy INTEGER DEFAULT 0,
+      runblocking INTEGER DEFAULT 0,
+      passblocking INTEGER DEFAULT 0,
+      team_id INTEGER,
+      is_free_agent INTEGER DEFAULT 0,
+      roster_status TEXT DEFAULT 'active',
+      franchise_tagged INTEGER DEFAULT 0,
+      dev_trait TEXT DEFAULT 'Normal',
+      injury_status TEXT DEFAULT 'healthy',
+      weeks_out INTEGER DEFAULT 0,
+      injury_type TEXT,
+      waived_by_team_id INTEGER,
+      waiver_placed_week INTEGER,
+      morale INTEGER DEFAULT 75,
+      FOREIGN KEY (team_id) REFERENCES teams(id)
+    );
     CREATE TABLE IF NOT EXISTS games (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       season INTEGER NOT NULL,
@@ -216,6 +216,7 @@ export function initDatabase(dbPath: string): void {
       def_interceptions REAL DEFAULT 0,
       pass_deflections REAL DEFAULT 0,
       def_tds REAL DEFAULT 0,
+      team_id INTEGER,
       UNIQUE(player_id, season),
       FOREIGN KEY (player_id) REFERENCES players(id)
     );
@@ -334,7 +335,7 @@ export function initDatabase(dbPath: string): void {
     );
   `);
 
-  // ── Safe indexes (no season-dependent ones here) ──────────────────────────
+  // ── Safe indexes ───────────────────────────────────────────────────────────
   _db!.exec(`
     CREATE INDEX IF NOT EXISTS idx_stats_game_id ON stats(game_id);
     CREATE INDEX IF NOT EXISTS idx_stats_player_id ON stats(player_id);
@@ -351,10 +352,11 @@ export function initDatabase(dbPath: string): void {
     CREATE INDEX IF NOT EXISTS idx_picks_owner_season ON pick_assets(owner_team_id, season);
     CREATE INDEX IF NOT EXISTS idx_prospects_season ON draft_prospects(season);
     CREATE INDEX IF NOT EXISTS idx_players_team_status ON players(team_id, roster_status);
-      CREATE INDEX IF NOT EXISTS idx_players_status ON players(roster_status);
-  CREATE INDEX IF NOT EXISTS idx_stats_season_playoff ON stats(season, is_playoff);
-  CREATE INDEX IF NOT EXISTS idx_career_stats_season ON career_stats_history(player_id, season);
-  CREATE INDEX IF NOT EXISTS idx_news_season_cat ON news_events(season, category);
+    CREATE INDEX IF NOT EXISTS idx_players_status ON players(roster_status);
+    CREATE INDEX IF NOT EXISTS idx_stats_season_playoff ON stats(season, is_playoff);
+    CREATE INDEX IF NOT EXISTS idx_career_stats_season ON career_stats_history(player_id, season);
+    CREATE INDEX IF NOT EXISTS idx_career_stats_team ON career_stats_history(team_id);
+    CREATE INDEX IF NOT EXISTS idx_news_season_cat ON news_events(season, category);
   `);
 
   // ── Roster trimming ───────────────────────────────────────────────────────
@@ -434,7 +436,7 @@ export function generateContracts(): void {
 
 // ─── Migration Versioning ─────────────────────────────────────────────────────
 
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 9;
 
 interface Migration { version: number; description: string; up: () => void; }
 
@@ -450,7 +452,7 @@ const MIGRATIONS: Migration[] = [
       db.prepare(`
         UPDATE stats
         SET season = (SELECT season FROM games WHERE games.id = stats.game_id),
-            week = (SELECT week FROM games WHERE games.id = stats.game_id),
+            week   = (SELECT week   FROM games WHERE games.id = stats.game_id),
             is_playoff = (SELECT is_playoff FROM games WHERE games.id = stats.game_id)
         WHERE season IS NULL
       `).run();
@@ -510,11 +512,11 @@ const MIGRATIONS: Migration[] = [
     description: 'Add combine measurables to draft_prospects',
     up: () => {
       const cols = (db.prepare('PRAGMA table_info(draft_prospects)').all() as any[]).map((c: any) => c.name);
-      if (!cols.includes('forty_time')) db.prepare('ALTER TABLE draft_prospects ADD COLUMN forty_time REAL').run();
-      if (!cols.includes('bench_press')) db.prepare('ALTER TABLE draft_prospects ADD COLUMN bench_press INTEGER').run();
+      if (!cols.includes('forty_time'))    db.prepare('ALTER TABLE draft_prospects ADD COLUMN forty_time REAL').run();
+      if (!cols.includes('bench_press'))   db.prepare('ALTER TABLE draft_prospects ADD COLUMN bench_press INTEGER').run();
       if (!cols.includes('vertical_jump')) db.prepare('ALTER TABLE draft_prospects ADD COLUMN vertical_jump REAL').run();
-      if (!cols.includes('broad_jump')) db.prepare('ALTER TABLE draft_prospects ADD COLUMN broad_jump INTEGER').run();
-      if (!cols.includes('cone_time')) db.prepare('ALTER TABLE draft_prospects ADD COLUMN cone_time REAL').run();
+      if (!cols.includes('broad_jump'))    db.prepare('ALTER TABLE draft_prospects ADD COLUMN broad_jump INTEGER').run();
+      if (!cols.includes('cone_time'))     db.prepare('ALTER TABLE draft_prospects ADD COLUMN cone_time REAL').run();
     },
   },
   {
@@ -531,11 +533,10 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
-    {
+  {
     version: 8,
     description: 'Consolidate legacy startup PRAGMA checks — all column additions now version-gated',
     up: () => {
-      // Stats columns
       const statCols = (db.prepare('PRAGMA table_info(stats)').all() as any[]).map((c: any) => c.name);
       const statMigs: [string, string][] = [
         ['season', 'INTEGER'], ['week', 'INTEGER'], ['is_playoff', 'INTEGER DEFAULT 0'],
@@ -550,7 +551,6 @@ const MIGRATIONS: Migration[] = [
       for (const [col, type] of statMigs)
         if (!statCols.includes(col)) db.prepare(`ALTER TABLE stats ADD COLUMN ${col} ${type}`).run();
 
-      // Games columns
       const gameCols = (db.prepare('PRAGMA table_info(games)').all() as any[]).map((c: any) => c.name);
       const gameMigs: [string, string][] = [
         ['home_q1', 'INTEGER DEFAULT 0'], ['home_q2', 'INTEGER DEFAULT 0'],
@@ -562,7 +562,6 @@ const MIGRATIONS: Migration[] = [
       for (const [col, type] of gameMigs)
         if (!gameCols.includes(col)) db.prepare(`ALTER TABLE games ADD COLUMN ${col} ${type}`).run();
 
-      // Players columns — read once, handle dev_trait/roster_status data migrations first
       const playerCols = (db.prepare('PRAGMA table_info(players)').all() as any[]).map((c: any) => c.name);
 
       if (!playerCols.includes('dev_trait')) {
@@ -605,17 +604,25 @@ const MIGRATIONS: Migration[] = [
       for (const [col, def] of playerMigs)
         if (!freshPlayerCols.includes(col)) db.prepare(`ALTER TABLE players ADD COLUMN ${col} ${def}`).run();
 
-      // Contracts columns
       const contractCols = (db.prepare('PRAGMA table_info(contracts)').all() as any[]).map((c: any) => c.name);
       if (!contractCols.includes('guaranteed_amount'))
         db.prepare('ALTER TABLE contracts ADD COLUMN guaranteed_amount REAL DEFAULT 0').run();
       if (!contractCols.includes('guaranteed_pct'))
         db.prepare('ALTER TABLE contracts ADD COLUMN guaranteed_pct REAL DEFAULT 0').run();
 
-      // Draft prospects columns
       const prospectCols = (db.prepare('PRAGMA table_info(draft_prospects)').all() as any[]).map((c: any) => c.name);
       if (!prospectCols.includes('scouted'))
         db.prepare('ALTER TABLE draft_prospects ADD COLUMN scouted INTEGER DEFAULT 0').run();
+    },
+  },
+  {
+    version: 9,
+    description: 'Add team_id to career_stats_history for franchise records',
+    up: () => {
+      const cols = (db.prepare('PRAGMA table_info(career_stats_history)').all() as any[]).map((c: any) => c.name);
+      if (!cols.includes('team_id'))
+        db.prepare('ALTER TABLE career_stats_history ADD COLUMN team_id INTEGER').run();
+      db.exec('CREATE INDEX IF NOT EXISTS idx_career_stats_team ON career_stats_history(team_id)');
     },
   },
 ];
