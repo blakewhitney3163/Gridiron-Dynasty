@@ -33,6 +33,11 @@ const actionBtn = (bg: string, fg: string, disabled: boolean): React.CSSProperti
   borderRadius: 4, color: disabled ? T.textMuted : fg, fontWeight: 'bold',
   cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 12, flex: 1,
 });
+const ovrColor = (ovr: number): string =>
+  ovr >= 80 ? '#4caf50' : ovr >= 70 ? '#FF8740' : '#e57373';
+
+const ovrGrade = (ovr: number): string =>
+  ovr >= 90 ? 'A+' : ovr >= 85 ? 'A' : ovr >= 80 ? 'B+' : ovr >= 75 ? 'B' : ovr >= 70 ? 'C+' : ovr >= 65 ? 'C' : 'D';
 
 interface Props {
   // Season controls
@@ -67,6 +72,7 @@ interface Props {
   userTradeStatus?: any;
   onSetTradeStatus?: (status: string) => void;
   settingStatus?: boolean;
+  franchiseHealth?: FranchiseHealth | null;
 }
 
 export default function Sidebar({
@@ -78,7 +84,7 @@ export default function Sidebar({
   onGenerateSchedule, onSimulateWeek, onSimulatePlayoffs,
   onConfirm, onCancelConfirm, onAdvance,
   injuryReport, topAFC, topNFC, champions, statLeaders,
-  userTradeStatus, onSetTradeStatus, settingStatus,
+  userTradeStatus, onSetTradeStatus, settingStatus, franchiseHealth,
 }: Props) {
 
   const subtitle = !hasSchedule
@@ -145,6 +151,36 @@ export default function Sidebar({
           </div>
         )}
       </SidebarBlock>
+
+      {/* Franchise Health */}
+{franchiseHealth && franchiseHealth.overall_ovr > 0 && (
+  <div style={{ marginBottom: 16 }}>
+    <div style={{ fontSize: 9, letterSpacing: 1.5, color: '#444', marginBottom: 6, textTransform: 'uppercase' }}>
+      YOUR ROSTER
+    </div>
+    <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+      {[
+        { label: 'OFF', value: franchiseHealth.offense_ovr },
+        { label: 'DEF', value: franchiseHealth.defense_ovr },
+        { label: 'OVR', value: franchiseHealth.overall_ovr },
+      ].map(({ label, value }) => (
+        <div key={label} style={{ flex: 1, textAlign: 'center', background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 4, padding: '4px 0' }}>
+          <div style={{ fontSize: 8, color: '#444', letterSpacing: 1 }}>{label}</div>
+          <div style={{ fontSize: 15, fontWeight: 'bold', color: ovrColor(value) }}>{value}</div>
+          <div style={{ fontSize: 8, color: ovrColor(value), opacity: 0.7 }}>{ovrGrade(value)}</div>
+        </div>
+      ))}
+    </div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 3 }}>
+      {franchiseHealth.groups.map(g => (
+        <div key={g.group} style={{ textAlign: 'center', background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 3, padding: '3px 0' }}>
+          <div style={{ fontSize: 7, color: '#444', letterSpacing: 0.5 }}>{g.group}</div>
+          <div style={{ fontSize: 12, fontWeight: 'bold', color: ovrColor(g.avg_ovr) }}>{g.avg_ovr}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 
       {/* Retirements banner */}
       {retiredPlayers.length > 0 && (
