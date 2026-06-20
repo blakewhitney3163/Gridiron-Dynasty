@@ -340,7 +340,7 @@ export function registerSimHandlers(): void {
     `).all(season, week);
   });
 
-  ipcMain.handle('simulate-week', async (_event: IpcEvent, week: number) => {
+ipcMain.handle('simulate-week', async (_event: IpcEvent, week: number) => {
   const season = getCurrentSeason();
   const userTeamId = settingsRepo.getUserTeamId() ?? -1;
   const games = gameRepo.getPendingByWeek(season, week)
