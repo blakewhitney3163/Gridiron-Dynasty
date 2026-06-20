@@ -114,7 +114,7 @@ const createWindow = (): void => {
 
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
-    mainWindow.once('ready-to-show', () => {
+      mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     mainWindow.setAlwaysOnTop(true);
     mainWindow.focus();
