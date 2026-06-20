@@ -7,8 +7,12 @@ interface Props {
   cpuOffer: CpuOffer;
   offerWorking: boolean;
   currentSeason: number;
+  offerIndex: number;
+  offerCount: number;
   onAccept: () => void;
   onDecline: () => void;
+  onPrev: () => void;
+  onNext: () => void;
 }
 
 const traitColor = (t: string) =>
@@ -16,7 +20,7 @@ const traitColor = (t: string) =>
 
 const fmtSal = (s?: number) => s ? `$${s.toFixed(1)}M` : '';
 
-export default function CpuOfferBanner({ cpuOffer, offerWorking, currentSeason, onAccept, onDecline }: Props) {
+export default function CpuOfferBanner({ cpuOffer, offerWorking, currentSeason, offerIndex, offerCount, onAccept, onDecline, onPrev, onNext }: Props) {
   const posLabel = (p: typeof cpuOffer.requestedPlayer) => p.position_label || p.position;
 
   return (
@@ -24,13 +28,46 @@ export default function CpuOfferBanner({ cpuOffer, offerWorking, currentSeason, 
       background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8,
       padding: '14px 16px', marginBottom: 20,
     }}>
-      <div style={{ color: '#4caf50', fontSize: 11, fontWeight: 700, letterSpacing: 1, marginBottom: 12 }}>
-        📨 INCOMING TRADE OFFER — {cpuOffer.fromTeamName}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <div style={{ color: '#4caf50', fontSize: 11, fontWeight: 700, letterSpacing: 1 }}>
+          📨 INCOMING TRADE OFFER — {cpuOffer.fromTeamName}
+        </div>
+        {offerCount > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+            <span style={{
+              background: '#1a2a1a', border: '1px solid #2a4a2a', borderRadius: 10,
+              color: '#4caf50', fontSize: 10, fontWeight: 700, padding: '2px 8px',
+            }}>
+              {offerIndex + 1} of {offerCount} offers
+            </span>
+            <button
+              onClick={onPrev}
+              disabled={offerIndex === 0}
+              style={{
+                width: 24, height: 24, borderRadius: 4, border: '1px solid #2a2a2a',
+                background: offerIndex === 0 ? '#111' : '#1a1a1a',
+                color: offerIndex === 0 ? '#333' : '#aaa',
+                fontSize: 12, cursor: offerIndex === 0 ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >‹</button>
+            <button
+              onClick={onNext}
+              disabled={offerIndex === offerCount - 1}
+              style={{
+                width: 24, height: 24, borderRadius: 4, border: '1px solid #2a2a2a',
+                background: offerIndex === offerCount - 1 ? '#111' : '#1a1a1a',
+                color: offerIndex === offerCount - 1 ? '#333' : '#aaa',
+                fontSize: 12, cursor: offerIndex === offerCount - 1 ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >›</button>
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
 
-        {/* They want */}
         <div style={{ flex: 1, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 6, padding: '10px 12px', minWidth: 200 }}>
           <div style={{ color: T.textDim, fontSize: 9, letterSpacing: 1, marginBottom: 6 }}>THEY WANT</div>
           <div style={{ color: '#e57373', fontWeight: 700, fontSize: 14 }}>
@@ -54,7 +91,6 @@ export default function CpuOfferBanner({ cpuOffer, offerWorking, currentSeason, 
 
         <div style={{ color: T.textDim, fontSize: 18, paddingTop: 14 }}>⇄</div>
 
-        {/* You receive */}
         <div style={{ flex: 1, background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 6, padding: '10px 12px', minWidth: 200 }}>
           <div style={{ color: T.textDim, fontSize: 9, letterSpacing: 1, marginBottom: 6 }}>YOU RECEIVE</div>
           <div style={{ color: '#4caf50', fontWeight: 700, fontSize: 14 }}>
@@ -81,45 +117,5 @@ export default function CpuOfferBanner({ cpuOffer, offerWorking, currentSeason, 
           )}
         </div>
 
-        {/* Net value */}
         <div style={{ textAlign: 'center', paddingTop: 14 }}>
-          <div style={{ fontSize: 9, color: T.textDim, letterSpacing: 1, marginBottom: 4 }}>NET VALUE</div>
-          {(() => {
-            const diff = cpuOffer.offerValue - cpuOffer.requestedValue;
-            const col = diff >= 0 ? '#4caf50' : '#FF8740';
-            return (
-              <>
-                <div style={{ fontSize: 18, fontWeight: 700, color: col }}>{diff >= 0 ? '+' : ''}{diff}</div>
-                <div style={{ fontSize: 9, color: T.textDim }}>{diff >= 0 ? 'in your favor' : 'in their favor'}</div>
-              </>
-            );
-          })()}
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-        <button
-          onClick={onAccept}
-          disabled={offerWorking}
-          style={{
-            padding: '7px 20px', background: offerWorking ? T.bgCard : '#0a2a0a',
-            border: '1px solid #2a5a2a', borderRadius: 4,
-            color: offerWorking ? T.textMuted : '#4caf50',
-            fontSize: 12, fontWeight: 700, cursor: offerWorking ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {offerWorking ? 'Processing...' : 'Accept Trade'}
-        </button>
-        <button
-          onClick={onDecline}
-          style={{
-            padding: '7px 16px', background: T.bgCard, color: T.textMuted,
-            border: `1px solid ${T.borderFaint}`, borderRadius: 4, fontSize: 12, cursor: 'pointer',
-          }}
-        >
-          Decline
-        </button>
-      </div>
-    </div>
-  );
-}
+          <div style={{ fontSize: 9, color: T.textDim
