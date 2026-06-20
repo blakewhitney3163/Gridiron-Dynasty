@@ -326,8 +326,8 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
 
         {/* ── Season active: user's game card ── */}
         {hasSchedule && !allWeeksDone && userGame && (
-          <div style={{ background: '#0f0f0f', border: '1px solid #1e1e1e', borderRadius: 8, padding: '20px 24px' }}>
-            <div style={{ fontSize: 9, letterSpacing: 2, color: '#444', marginBottom: 16, textTransform: 'uppercase' }}>
+          <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '20px 24px' }}>
+            <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, marginBottom: 16, textTransform: 'uppercase' }}>
               Your Game — Week {currentWeek}
             </div>
 
@@ -336,12 +336,12 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
                   <div style={{ flex: 1, textAlign: 'center' }}>
                     <div style={{ fontSize: 16, fontWeight: 700, color: '#4FC3F7' }}>{userTeam.city} {userTeam.name}</div>
-                    <div style={{ fontSize: 9, color: '#444', marginTop: 3, letterSpacing: 1 }}>{isHome ? 'HOME' : 'AWAY'}</div>
+                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 3, letterSpacing: 1 }}>{isHome ? 'HOME' : 'AWAY'}</div>
                   </div>
-                  <div style={{ fontSize: 14, color: '#333', fontWeight: 700, fontFamily: 'monospace' }}>VS</div>
+                  <div style={{ fontSize: 14, color: T.borderStrong, fontWeight: 700, fontFamily: 'monospace' }}>VS</div>
                   <div style={{ flex: 1, textAlign: 'center' }}>
                     <div style={{ fontSize: 16, fontWeight: 700, color: '#aaa' }}>{oppTeamName}</div>
-                    <div style={{ fontSize: 9, color: '#444', marginTop: 3, letterSpacing: 1 }}>{isHome ? 'AWAY' : 'HOME'}</div>
+                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 3, letterSpacing: 1 }}>{isHome ? 'AWAY' : 'HOME'}</div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
@@ -349,7 +349,8 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                     onClick={() => handleSimulateGame(userGame.id)}
                     disabled={!!simulating || !!simulatingGameId}
                     style={{
-                      flex: 1, padding: '10px 0', background: simulatingGameId === userGame.id ? '#1a3a1a' : '#0a2a0a',
+                      flex: 1, padding: '10px 0',
+                      background: simulatingGameId === userGame.id ? '#1a3a1a' : '#0a2a0a',
                       border: '1px solid #4caf50', borderRadius: 5, color: '#4caf50',
                       fontWeight: 700, fontSize: 12, cursor: (simulating || !!simulatingGameId) ? 'not-allowed' : 'pointer',
                       opacity: (simulating || !!simulatingGameId) ? 0.5 : 1,
@@ -361,7 +362,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                     onClick={handleSimulateWeek}
                     disabled={!!simulating}
                     style={{
-                      flex: 1, padding: '10px 0', background: '#111',
+                      flex: 1, padding: '10px 0', background: T.bgCard,
                       border: `1px solid ${T.borderMid}`, borderRadius: 5, color: T.textMuted,
                       fontWeight: 700, fontSize: 12, cursor: simulating ? 'not-allowed' : 'pointer',
                       opacity: simulating ? 0.5 : 1,
@@ -375,12 +376,12 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                   <div style={{ flex: 1, textAlign: 'center' }}>
-                    <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>{userTeam.city} {userTeam.name}</div>
+                    <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 4 }}>{userTeam.city} {userTeam.name}</div>
                     <div style={{ fontSize: 40, fontWeight: 900, color: userWon ? '#4caf50' : '#e57373', fontFamily: 'monospace' }}>{userScore}</div>
                   </div>
-                  <div style={{ fontSize: 10, color: '#333', letterSpacing: 1 }}>FINAL</div>
+                  <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1 }}>FINAL</div>
                   <div style={{ flex: 1, textAlign: 'center' }}>
-                    <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>{oppTeamName}</div>
+                    <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 4 }}>{oppTeamName}</div>
                     <div style={{ fontSize: 40, fontWeight: 900, color: !userWon ? '#4caf50' : '#e57373', fontFamily: 'monospace' }}>{oppScore}</div>
                   </div>
                 </div>
@@ -390,19 +391,19 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                 <button
                   onClick={() => handleBoxScore(userGame.id)}
                   disabled={boxScoreLoading}
-                  style={{ width: '100%', padding: '8px 0', background: '#0a0a0a', border: `1px solid ${T.borderFaint}`, borderRadius: 4, color: T.textMuted, cursor: 'pointer', fontSize: 11 }}
+                  style={{ width: '100%', padding: '8px 0', background: T.bgCard, border: `1px solid ${T.borderFaint}`, borderRadius: 4, color: T.textMuted, cursor: 'pointer', fontSize: 11 }}
                 >
                   {boxScoreLoading ? 'Loading...' : boxScore?.game?.id === userGame.id ? '▲ Hide Box Score' : '▼ View Box Score'}
                 </button>
                 {boxScore && boxScore.game.id === userGame.id && (
                   <div style={{ marginTop: 12, borderTop: `1px solid ${T.borderFaint}`, paddingTop: 12 }}>
                     {[
-                      { label: 'PASSING', rows: boxScore.players.filter(p => p.pass_attempts > 0).sort((a, b) => b.pass_yards - a.pass_yards).slice(0, 4), cols: ['pass_yards','completions','pass_attempts','pass_tds','interceptions'], heads: ['YDS','CMP','ATT','TD','INT'] },
-                      { label: 'RUSHING', rows: boxScore.players.filter(p => p.rush_attempts > 0).sort((a, b) => b.rush_yards - a.rush_yards).slice(0, 4), cols: ['rush_yards','rush_attempts','rush_tds'], heads: ['YDS','CAR','TD'] },
-                      { label: 'RECEIVING', rows: boxScore.players.filter(p => p.targets > 0).sort((a, b) => b.rec_yards - a.rec_yards).slice(0, 4), cols: ['rec_yards','receptions','targets','rec_tds'], heads: ['YDS','REC','TGT','TD'] },
+                      { label: 'PASSING',   rows: boxScore.players.filter(p => p.pass_attempts > 0).sort((a, b) => b.pass_yards - a.pass_yards).slice(0, 4),  cols: ['pass_yards','completions','pass_attempts','pass_tds','interceptions'], heads: ['YDS','CMP','ATT','TD','INT'] },
+                      { label: 'RUSHING',   rows: boxScore.players.filter(p => p.rush_attempts > 0).sort((a, b) => b.rush_yards - a.rush_yards).slice(0, 4),  cols: ['rush_yards','rush_attempts','rush_tds'], heads: ['YDS','CAR','TD'] },
+                      { label: 'RECEIVING', rows: boxScore.players.filter(p => p.targets > 0).sort((a, b) => b.rec_yards - a.rec_yards).slice(0, 4),           cols: ['rec_yards','receptions','targets','rec_tds'], heads: ['YDS','REC','TGT','TD'] },
                     ].filter(s => s.rows.length > 0).map(section => (
                       <div key={section.label} style={{ marginBottom: 10 }}>
-                        <div style={{ fontSize: 8, color: '#444', letterSpacing: 1.5, marginBottom: 4 }}>{section.label}</div>
+                        <div style={{ fontSize: 8, color: T.textMuted, letterSpacing: 1.5, marginBottom: 4 }}>{section.label}</div>
                         {section.rows.map((p, i) => (
                           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
                             <span style={{ color: '#aaa', flex: 2 }}>{p.player_name}</span>
@@ -423,24 +424,24 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         {/* ── Roster Health ── */}
         {hasSchedule && !allWeeksDone && franchiseHealth && franchiseHealth.overall_ovr > 0 && (
           <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '16px 20px' }}>
-  <div style={{ fontSize: 9, letterSpacing: 2, color: T.textDim, marginBottom: 12, textTransform: 'uppercase' }}>Roster Health</div>
-  <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+            <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, marginBottom: 12, textTransform: 'uppercase' }}>Roster Health</div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
               {[
                 { label: 'OFFENSE', value: franchiseHealth.offense_ovr },
                 { label: 'DEFENSE', value: franchiseHealth.defense_ovr },
                 { label: 'OVERALL', value: franchiseHealth.overall_ovr },
               ].map(({ label, value }) => (
-                <div key={label} style={{ flex: 1, textAlign: 'center', background: '#0a0a0a', border: '1px solid #111', borderRadius: 6, padding: '8px 0' }}>
-                  <div style={{ fontSize: 8, color: '#444', letterSpacing: 1 }}>{label}</div>
+                <div key={label} style={{ flex: 1, textAlign: 'center', background: T.bgCard, border: `1px solid ${T.borderMid}`, borderRadius: 6, padding: '8px 0' }}>
+                  <div style={{ fontSize: 8, color: T.textMuted, letterSpacing: 1 }}>{label}</div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: ovrColor(value) }}>{value}</div>
                   <div style={{ fontSize: 9, color: ovrColor(value), opacity: 0.7 }}>{ovrGrade(value)}</div>
                 </div>
               ))}
             </div>
-             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-    {franchiseHealth.groups.map(g => (
-      <div key={g.group} style={{ textAlign: 'center', background: T.bgCard, border: `1px solid ${T.borderFaint}`, borderRadius: 4, padding: '4px 0' }}>
-        <div style={{ fontSize: 7, color: T.textMuted }}>{g.group}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+              {franchiseHealth.groups.map(g => (
+                <div key={g.group} style={{ textAlign: 'center', background: T.bgCard, border: `1px solid ${T.borderFaint}`, borderRadius: 4, padding: '4px 0' }}>
+                  <div style={{ fontSize: 7, color: T.textMuted }}>{g.group}</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: ovrColor(g.avg_ovr) }}>{g.avg_ovr}</div>
                 </div>
               ))}
@@ -450,10 +451,10 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
 
         {/* ── Active Alerts ── */}
         {hasSchedule && !allWeeksDone && (seriousInjuries.length > 0 || psAlert) && (
-          <div style={{ background: '#0f0f0f', border: '1px solid #1a1a1a', borderRadius: 8, padding: '14px 20px' }}>
-            <div style={{ fontSize: 9, letterSpacing: 2, color: '#444', marginBottom: 10, textTransform: 'uppercase' }}>Active Alerts</div>
+          <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '14px 20px' }}>
+            <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, marginBottom: 10, textTransform: 'uppercase' }}>Active Alerts</div>
             {seriousInjuries.slice(0, 5).map(p => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: `1px solid #111` }}>
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
                 <span style={{
                   fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 3, minWidth: 26, textAlign: 'center',
                   background: p.injury_status === 'ir' ? '#1a0a0a' : '#140a00',
@@ -461,15 +462,15 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                 }}>
                   {p.injury_status === 'ir' ? 'IR' : 'OUT'}
                 </span>
-                <span style={{ fontSize: 12, color: '#ccc', flex: 1 }}>{p.first_name[0]}. {p.last_name}</span>
-                <span style={{ fontSize: 10, color: '#555' }}>{p.position_label || p.position}</span>
-                <span style={{ fontSize: 10, color: '#444' }}>{p.injury_type}{p.weeks_out > 0 ? ` · ${p.weeks_out}wk` : ''}</span>
+                <span style={{ fontSize: 12, color: T.textSecondary, flex: 1 }}>{p.first_name[0]}. {p.last_name}</span>
+                <span style={{ fontSize: 10, color: T.textMuted }}>{p.position_label || p.position}</span>
+                <span style={{ fontSize: 10, color: T.textDim }}>{p.injury_type}{p.weeks_out > 0 ? ` · ${p.weeks_out}wk` : ''}</span>
               </div>
             ))}
             {psAlert && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8 }}>
                 <span style={{ fontSize: 11, color: '#FF8740' }}>⚠ {psAlert}</span>
-                <button onClick={() => setPSAlert(null)} style={{ fontSize: 9, color: '#444', background: 'none', border: 'none', cursor: 'pointer' }}>dismiss</button>
+                <button onClick={() => setPSAlert(null)} style={{ fontSize: 9, color: T.textDim, background: 'none', border: 'none', cursor: 'pointer' }}>dismiss</button>
               </div>
             )}
           </div>
