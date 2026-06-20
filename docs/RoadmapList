@@ -3,12 +3,13 @@ Last Updated: June 19, 2026
 Repository: https://github.com/blakewhitney3163/Gridiron-Dynasty
 ================================================================================
 
-The incoming trades are way too lopsided. I’m trading away a TE 76 over, value of 105 fora. 91 rtg OL + 25 1st round pick valued at 224 
-Break out LBs on depth chart too 
+The incoming trades are way too lopsided. I'm trading away a TE 76 over, value of 105 fora. 91 rtg OL + 25 1st round pick valued at 224
+Break out LBs on depth chart too
 Full edibility of all stats for players (use all columns - the attributes should impact rating and performance etc)
-Too many dev traits assigned out - let's ensure the ratio is logical. 
-I want the home page to be the main place - maybe just show the players game to sim + the sim week button, any trade offers, stat leaders, any team changes/openings that are available. Also think the team status update area should just be on the franchise tab. Trying to make this cohesive and tell the story the user should follow. 
-extensions feel too easy. I also can't type into the # when negotiating. I can only use the arrows to go up or down. 
+Too many dev traits assigned out - let's ensure the ratio is logical.
+I want the home page to be the main place - maybe just show the players game to sim + the sim week button, any trade offers, stat leaders, any team changes/openings that are available. Also think the team status update area should just be on the franchise tab. Trying to make this cohesive and tell the story the user should follow.
+extensions feel too easy. I also can't type into the # when negotiating. I can only use the arrows to go up or down.
+Franchise Health Panel on Home — show the user team's offense OVR, defense OVR, overall team grade, and positional group breakdowns (QB, RB, WR/TE, OL, DL, LB, DB) directly on the Home page sidebar. Update live after each simulated week so the user can monitor roster health, injuries, and depth drops without navigating to Franchise.
 
 TIER 3 — Polish & replayability
 ────────────────────────────────────────────────────────────────────────────────
@@ -18,6 +19,13 @@ League Customization — expansion teams, relocation, custom team names.
 
 In-Game Narrative / Play-by-Play — text play-by-play during simulation.
   Stats-only output today limits immersion significantly.
+
+Franchise Health Monitor — positional group OVR panel on the Home page sidebar
+  showing offense OVR, defense OVR, and 7 positional group grades (QB, RB,
+  WR/TE, OL, DL, LB, DB). Updates live after every simulated week reflecting
+  injuries, practice squad promotions, and roster moves. Color-coded (green
+  80+, orange 70–79, red <70) with letter grades so the user can see org
+  health at a glance without leaving the Home screen.
 
 ================================================================================
 GAMEPLAY DEPTH — OOTP-Tier Features
@@ -118,6 +126,14 @@ Startup Migration Check Consolidation — currently runs multiple individual
 COMPLETED ITEMS
 ================================================================================
 
+[DONE June 19, 2026] Franchise Health Monitor — positional group OVR panel
+  on the Home page sidebar. Shows offense OVR, defense OVR, overall grade,
+  and 7 positional group tiles (QB, RB, WR/TE, OL, DL, LB, DB) with letter
+  grades. Color-coded green/orange/red. Updates live after every simulated
+  week via getFranchiseHealth() in PlayerRepository, get-franchise-health IPC
+  handler, preload exposure, and FranchiseHealth state in Home.tsx passed
+  as franchiseHealth prop to Sidebar.tsx.
+
 [DONE June 19, 2026] Schemes System — offensive and defensive scheme selection
   for every team. 5 offensive schemes (West Coast, Air Raid, Power Run, Spread,
   Run & Gun) and 5 defensive schemes (4-3, 3-4, Zone Cover 2, Man Press, Blitz
@@ -160,65 +176,30 @@ COMPLETED ITEMS
 
 [DONE June 19, 2026] Contract Negotiation Depth — multi-year offer counters,
   holdout mechanic, dead cap penalties on early releases.
-  Counter Offer: elite players (OVR 80+) can reject an offer and return a
-  counter at their asking price; the counter panel appears inline in the
-  Offseason tab with Accept / Decline — Let Walk buttons. Accepting writes a
-  new contract; declining releases the player to FA.
-  Holdout Risk Badge: players with OVR 85+, Superstar/X-Factor trait, and
-  morale < 65 display a ⚠ HOLDOUT RISK warning badge while still pending.
-  Dead Cap: releasing a player mid-contract writes the remaining guaranteed
-  amount to dead_cap_entries (season-scoped); getCapUsage() sums active
-  salaries + dead cap charges; Franchise cap summary shows 💀 Dead cap with
-  per-player breakdown. Backed by dead_cap_entries table (migration v4),
-  ContractRepository dead cap methods, ContractService resignPlayer /
-  releasePlayer / acceptCounterOffer, and accept-counter-offer /
-  get-dead-cap IPC handlers.
 
 [DONE June 19, 2026] Surface Trade Offers on Main Screen — incoming CPU trade
   proposals now surface on the Home tab as a green-bordered notification card.
-  Shows the offering team, what they want, what you receive (player + optional
-  pick), and net value diff. Accept and Decline buttons work directly from Home
-  without navigating to the Trades tab. "Full Details →" navigates to Trades.
-  Also added a Trade Status widget to the Home sidebar showing the user team's
-  current buy/sell posture (Contender/Buyer/Seller/Rebuilding/Neutral) with
-  quick-click override buttons. Implemented via TradeOfferCard.tsx (new),
-  Sidebar.tsx (new Trade Status block), and Home.tsx (new state + handlers).
 
 [DONE June 19, 2026] Meet the Team Screen — orientation screen shown after
-  team selection on new dynasties. Displays team grade, offense/defense OVR,
-  cap space, top 10 players with dev trait badges, team needs, roster snapshot,
-  and getting-started tips. Transitions to main game via "BEGIN DYNASTY →"
-  button. Implemented in MeetTheTeam.tsx, wired into App.tsx as the
-  'meet-team' screen state after setup completes.
+  team selection on new dynasties.
 
 [DONE June 19, 2026] Franchise Tag + Tender System — Franchise Tag (FT,
   ~135% of fair market) and Transition Tag (TT, ~110%) designations in the
-  Offseason tab. One of each per team per offseason. Tag Usage banner shows
-  Available/Used status. Applying a tag auto-resolves the player's re-sign
-  decision. Remove Tag releases the player to FA. Backed by franchise_tagged
-  column on players table (migration v3), applyFranchiseTag /
-  removeFranchiseTag in ContractService, IPC handlers, and preload exposure.
+  Offseason tab.
 
 [DONE June 19, 2026] Player Morale System — morale column on players table
-  (default 75, range 0–100). Updated seasonally based on win%, contract
-  status, and playing time. Visible as a colored bar on each Franchise tab
-  player card (green 80+, orange 60–79, red <60). Wired into the sim engine
-  via applyMoraleModifier — every game's getTeamRatings call applies a
-  per-player (morale − 75) × 0.001 multiplier before averaging team strength.
+  (default 75, range 0–100).
 
 [DONE June 18, 2026] Season Awards — MVP, Offensive Player of the Year,
   Defensive Player of the Year, Offensive Rookie of the Year, Defensive
-  Rookie of the Year, and Coach of the Year computed at season end. Displayed
-  in SeasonAwardsView.tsx on the Home tab after playoffs. MVP and DPOY winners
-  also generate news feed events.
+  Rookie of the Year, and Coach of the Year.
 
 [DONE June 18, 2026] Practice Squad Accelerated Development — PS players aged
   23 or younger receive OVR gains each season (up to +3 bonus on top of normal
-  progression). Rewards intentional roster building through the practice squad.
+  progression).
 
 [DONE June 18, 2026] Contract Demand News Events — elite players (OVR 85+)
-  entering their final contract year automatically generate a news event
-  demanding a new deal, adding urgency to offseason planning.
+  entering their final contract year automatically generate a news event.
 
 [DONE June 18, 2026] Retirement + HOF News Events — retirements and Hall of
   Fame inductions now generate news feed events at season end.
@@ -229,16 +210,13 @@ COMPLETED ITEMS
 [DONE June 18, 2026] OL Ratings in Teams / Depth Chart — getRatingCols now
   returns PBK / RBK / STR / AWR for all OL positions.
 
-[DONE] Player Editor — inline edit mode in PlayerProfile.tsx with
-  position-specific attribute sliders, backed by edit-player IPC handler.
+[DONE] Player Editor — inline edit mode in PlayerProfile.tsx.
 
-[DONE] Playoff UI Update — bracket-style visual for the playoff tree with
-  game scores, seeds, and champion display in Playoffs.tsx.
+[DONE] Playoff UI Update — bracket-style visual for the playoff tree.
 
 ================================================================================
 COMMERCIAL / SCALABILITY TRACK
 ================================================================================
-Items required before the game could be sold or distributed publicly.
 
 BLOCKING — Must fix before distribution
 ────────────────────────────────────────────────────────────────────────────────
