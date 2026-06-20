@@ -1,6 +1,6 @@
 import type { IpcEvent } from '../types/ipc';
 import type { InjuredPlayer } from '../types';
-import type { GamePlayerStat } from './sim/types';
+import type { GamePlayerStat } from '../sim/types';
 import { ipcMain } from 'electron';
 import { db, getDbPath } from '../database';
 import { simulateGame } from '../simulateGame';
