@@ -274,15 +274,15 @@ export async function advanceSeason(): Promise<AdvanceSeasonResult> {
   db.prepare("UPDATE players SET injury_status = 'healthy', weeks_out = 0, injury_type = NULL").run();
   db.prepare("UPDATE players SET roster_status = 'free_agent', is_free_agent = 1 WHERE roster_status = 'waivers'").run();
 
-  // ── Archive Career Stats ──────────────────────────────────────────────────
+    // ── Archive Career Stats ──────────────────────────────────────────────────
   db.prepare(`
     INSERT INTO career_stats_history (
-      player_id, season, games, completions, pass_attempts, pass_yards, pass_tds, interceptions,
-      rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds,
-      tackles, assisted_tackles, sacks, tfl, forced_fumbles, fumble_recoveries,
-      def_interceptions, pass_deflections, def_tds
+      player_id, season, team_id, games, completions, pass_attempts, pass_yards,
+      pass_tds, interceptions, rush_attempts, rush_yards, rush_tds, targets, receptions,
+      rec_yards, rec_tds, tackles, assisted_tackles, sacks, tfl, forced_fumbles,
+      fumble_recoveries, def_interceptions, pass_deflections, def_tds
     )
-    SELECT s.player_id, s.season,
+    SELECT s.player_id, s.season, MAX(s.team_id),
       COUNT(DISTINCT s.game_id), SUM(s.completions), SUM(s.pass_attempts), SUM(s.pass_yards),
       SUM(s.pass_tds), SUM(s.interceptions), SUM(s.rush_attempts), SUM(s.rush_yards),
       SUM(s.rush_tds), SUM(s.targets), SUM(s.receptions), SUM(s.rec_yards), SUM(s.rec_tds),
@@ -292,19 +292,36 @@ export async function advanceSeason(): Promise<AdvanceSeasonResult> {
     WHERE s.season = ? AND s.is_playoff = 0
     GROUP BY s.player_id, s.season
     ON CONFLICT(player_id, season) DO UPDATE SET
-      games = excluded.games, completions = excluded.completions,
-      pass_attempts = excluded.pass_attempts, pass_yards = excluded.pass_yards,
-      pass_tds = excluded.pass_tds, interceptions = excluded.interceptions,
-      rush_attempts = excluded.rush_attempts, rush_yards = excluded.rush_yards,
-      rush_tds = excluded.rush_tds, targets = excluded.targets,
-      receptions = excluded.receptions, rec_yards = excluded.rec_yards,
-      rec_tds = excluded.rec_tds, tackles = excluded.tackles,
-      assisted_tackles = excluded.assisted_tackles, sacks = excluded.sacks,
-      tfl = excluded.tfl, forced_fumbles = excluded.forced_fumbles,
+      team_id           = excluded.team_id,
+      games             = excluded.games,
+      completions       = excluded.completions,
+      pass_attempts     = excluded.pass_attempts,
+      pass_yards        = excluded.pass_yards,
+      pass_tds          = excluded.pass_tds,
+      interceptions     = excluded.interceptions,
+      rush_attempts     = excluded.rush_attempts,
+      rush_yards        = excluded.rush_yards,
+      rush_tds          = excluded.rush_tds,
+      targets           = excluded.targets,
+      receptions        = excluded.receptions,
+      rec_yards         = excluded.rec_yards,
+      rec_tds           = excluded.rec_tds,
+      tackles           = excluded.tackles,
+      assisted_tackles  = excluded.assisted_tackles,
+      sacks             = excluded.sacks,
+      tfl               = excluded.tfl,
+      forced_fumbles    = excluded.forced_fumbles,
       fumble_recoveries = excluded.fumble_recoveries,
       def_interceptions = excluded.def_interceptions,
-      pass_deflections = excluded.pass_deflections, def_tds = excluded.def_tds
+      pass_deflections  = excluded.pass_deflections,
+      def_tds           = excluded.def_tds
   `).run(current);
+
+  // ── Prune raw game stats (keep current + prior season; older data archived) 
+  db.prepare('DELETE FROM stats WHERE season < ?').run(current - 1);
+
+  // ── Prune old news events (keep last 3 seasons) ──────────────────────────
+  db.prepare('DELETE FROM news_events WHERE season < ?').run(next - 2);
 
   // ── HOF Inductions ────────────────────────────────────────────────────────
   const hofInductees: { name: string; position: string }[] = [];
