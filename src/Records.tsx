@@ -138,7 +138,7 @@ export default function Records() {
         </div>
       )}
 
-      {mode === 'awards' && <AwardsView awards={awards} />}
+      {mode === 'awards' && <AwardsView awards={awards} currentSeason={currentSeason} />}
 
       {mode !== 'awards' && mode !== 'hof' && mode !== 'franchise' && (
         <LeaderboardTable
