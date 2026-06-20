@@ -39,7 +39,7 @@ export default function ActiveRosterTab({
   handleExtend, handleRelease, working,
 }: Props) {
   const filtered = contracts
-    .filter(c => posFilter === 'ALL' || (c.position_label || c.position) === posFilter)
+    .filter(c => posFilter === 'ALL' || c.position === posFilter || c.position_label === posFilter)
     .filter(c => {
       if (!rosterSearch.trim()) return true;
       const q = rosterSearch.toLowerCase();
@@ -219,8 +219,8 @@ export default function ActiveRosterTab({
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <span style={{ color: '#444' }}>$</span>
                       <input type="text" inputMode="decimal" value={extendSalary} onChange={e => setExtendSalary(e.target.value)}
-  placeholder="0.0"
-  style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4, color: '#ccc', padding: '6px 10px', fontSize: 13, width: 80 }} />
+                        placeholder="0.0"
+                        style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 4, color: '#ccc', padding: '6px 10px', fontSize: 13, width: 80 }} />
                       <span style={{ color: '#444' }}>M</span>
                     </div>
                   </div>
