@@ -48,10 +48,6 @@ Scouting Department — hire scouts with regional specialties that improve
 
 SIMULATION & SCHEDULE
 ────────────────────────────────────────────────────────────────────────────────
-Realistic Schedule Generation — division-based scheduling with proper
-  home/away splits and divisional game weighting. Current schedule is fully
-  random, making standings feel arbitrary. Also flagged as a scalability
-  concern — random matchups produce unrealistic standings and division races.
 
 Multi-Season Batch Simulation — "Sim N seasons" with a progress bar. Critical
   for dynasty feel — users should be able to fast-forward through rebuilds.
@@ -80,6 +76,11 @@ Realistic Schedule Generation — see SIMULATION & SCHEDULE above.
 
 IMPORTANT — Fix before next major feature
 ────────────────────────────────────────────────────────────────────────────────
+[DONE June 20, 2026] Realistic Schedule Generation — division-based scheduling with proper
+  home/away splits and divisional game weighting. Current schedule is fully
+  random, making standings feel arbitrary. Also flagged as a scalability
+  concern — random matchups produce unrealistic standings and division races.
+
 [DONE June 20, 2026] Split simulateGame.ts — broken into src/sim/ratings.ts,
   src/sim/stats.ts, src/sim/scoring.ts, and src/sim/types.ts. Thin orchestrator
   simulateGame.ts imports and re-exports all modules.
