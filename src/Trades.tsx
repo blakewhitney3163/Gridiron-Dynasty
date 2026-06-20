@@ -13,7 +13,11 @@ declare const window: any;
 
 const DEADLINE = 8;
 
-export default function Trades() {
+interface Props {
+  isActive?: boolean;
+}
+
+export default function Trades({ isActive }: Props) {
   const { userTeam, currentSeason } = useGameStore();
 
   const [teams, setTeams] = useState<Team[]>([]);
@@ -38,6 +42,7 @@ export default function Trades() {
   const [offerWorking, setOfferWorking] = useState(false);
   const [savingOverride, setSavingOverride] = useState(false);
 
+  // Initial load
   useEffect(() => {
     if (!userTeam) return;
     Promise.all([
@@ -53,6 +58,15 @@ export default function Trades() {
       setMyPicks(picks); setCpuOffer(offer);
     });
   }, [userTeam?.id]);
+
+  // Refresh CPU offer whenever the tab becomes active
+  useEffect(() => {
+    if (!isActive || !userTeam) return;
+    window.api.getCpuTradeOffer().then((offer: CpuOffer | null) => {
+      setCpuOffer(offer ?? null);
+      setOfferHandled(false);
+    });
+  }, [isActive]);
 
   const handleSelectTeam = async (teamId: number) => {
     setSelectedTeamId(teamId);
@@ -75,9 +89,9 @@ export default function Trades() {
     setSavingOverride(false);
   };
 
-  const toggleMine = (id: number) => { setResult(null); setMySelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
-  const toggleTheirs = (id: number) => { setResult(null); setTheirSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
-  const toggleMyPick = (id: number) => { setResult(null); setMyPicksSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
+  const toggleMine    = (id: number) => { setResult(null); setMySelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
+  const toggleTheirs  = (id: number) => { setResult(null); setTheirSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
+  const toggleMyPick  = (id: number) => { setResult(null); setMyPicksSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
   const toggleTheirPick = (id: number) => { setResult(null); setTheirPicksSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); };
 
   const handlePropose = async () => {
@@ -140,7 +154,7 @@ export default function Trades() {
   const selectedTeam = teams.find(t => t.id === selectedTeamId);
   const isPastDeadline = !!(weekInfo?.hasSchedule && (!weekInfo.currentWeek || weekInfo.currentWeek > DEADLINE));
   const weeksToDeadline = weekInfo?.currentWeek ? Math.max(0, DEADLINE - weekInfo.currentWeek + 1) : null;
-  const myFiltered = myRoster.filter(p => myPos === 'ALL' || p.position === myPos);
+  const myFiltered  = myRoster.filter(p => myPos === 'ALL' || p.position === myPos);
   const theirFiltered = theirRoster.filter(p => theirPos === 'ALL' || p.position === theirPos);
 
   return (
