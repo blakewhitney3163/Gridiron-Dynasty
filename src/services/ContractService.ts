@@ -554,11 +554,6 @@ export function extendPlayer(playerId: number, years: number, salary: number): S
   return { success: true };
 }
 
-  const guaranteedPct = Math.round(40 + Math.random() * 20);
-  contractRepo.update(playerId, years, salary, Math.round(salary * years * (guaranteedPct / 100) * 10) / 10, guaranteedPct);
-  return { success: true };
-}
-
 export function restructurePlayer(playerId: number, pct: number): SuccessResult & { savings?: number; newSalary?: number } {
   const contract = contractRepo.getByPlayer(playerId);
   if (!contract) return { success: false, reason: 'No contract found.' };
