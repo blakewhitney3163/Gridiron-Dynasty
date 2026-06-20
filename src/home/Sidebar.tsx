@@ -101,14 +101,14 @@ export default function Sidebar({
 
         {!hasSchedule && onGenerateSchedule && (
           <button onClick={onGenerateSchedule} disabled={!!generatingSchedule} style={actionBtn(T.bgGreen, '#4caf50', !!generatingSchedule)}>
-            {simulating ? 'Simulating Week...' : '▶ Sim Rest of Week'}
+            {generatingSchedule ? 'Generating...' : `▶ Start ${currentSeason} Season`}
           </button>
         )}
 
         {hasSchedule && !allWeeksDone && currentWeek != null && (
           <div style={{ display: 'flex', gap: 6 }}>
             <button onClick={onSimulateWeek} disabled={!!simulating} style={actionBtn(T.bgGreen, '#4caf50', !!simulating)}>
-              {simulating ? 'Simulating...' : `▶ Sim Week ${currentWeek}`}
+              {simulating ? 'Simulating...' : `▶ Sim Rest of Week ${currentWeek}`}
             </button>
           </div>
         )}
