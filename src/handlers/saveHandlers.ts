@@ -2,7 +2,7 @@ import { ipcMain, app } from 'electron';
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import { initDatabase } from '../database';
+import { initDatabase, closeDatabase, getDbPath } from '../database';
 
 const SAVES_DIR = path.join(app.getPath('userData'), 'saves');
 
@@ -64,12 +64,15 @@ export function registerSaveHandlers(bootstrapDatabase: (isNew: boolean) => void
 
   ipcMain.handle('delete-save', (_event, name: string): { ok: boolean } => {
     const p = savePath(name);
-    if (fs.existsSync(p)) fs.unlinkSync(p);
+    if (fs.existsSync(p)) {
+      // Close the active DB connection if it's the file being deleted
+      if (getDbPath() === p) closeDatabase();
+      fs.unlinkSync(p);
+    }
     return { ok: true };
   });
 
   ipcMain.handle('get-active-save', (): string | null => {
-    // Returns the name of the currently loaded save by inspecting the active db path
     return _activeSaveName;
   });
 }
