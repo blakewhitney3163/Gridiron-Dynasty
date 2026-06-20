@@ -57,16 +57,6 @@ export function signFreeAgent(
   const player = playerRepo.getById(playerId);
   if (!player) return { success: false, reason: 'Player not found.' };
 
-    // Hard floor: players won't accept more than a 25% pay cut from their current salary
-  const currentSalary = contract.annual_salary ?? 0;
-  const payCutFloor = Math.round(currentSalary * 0.75 * 10) / 10;
-  if (salary < payCutFloor && currentSalary > 2.0) {
-    return {
-      success: false,
-      reason: `Won't accept a pay cut that large. Current salary: $${currentSalary.toFixed(1)}M — minimum offer: $${payCutFloor.toFixed(1)}M/yr.`,
-    };
-  }
-
   const fairMarket = calcFairMarket(player.overall_rating, player.position, player.dev_trait);
   const ratio = salary / Math.max(fairMarket, 1);
   let acceptChance =
@@ -521,6 +511,16 @@ export function extendPlayer(playerId: number, years: number, salary: number): S
   const player = playerRepo.getById(playerId);
   if (!player) return { success: false, reason: 'Player not found.' };
 
+  // Hard floor: players won't accept more than a 25% pay cut from their current salary
+  const currentSalary = contract.annual_salary ?? 0;
+  const payCutFloor = Math.round(currentSalary * 0.75 * 10) / 10;
+  if (salary < payCutFloor && currentSalary > 2.0) {
+    return {
+      success: false,
+      reason: `Won't accept a pay cut that large. Current salary: $${currentSalary.toFixed(1)}M — minimum offer: $${payCutFloor.toFixed(1)}M/yr.`,
+    };
+  }
+
   const fairMarket = calcFairMarket(player.overall_rating, player.position, player.dev_trait);
   const ratio = salary / Math.max(fairMarket, 1);
 
@@ -539,7 +539,7 @@ export function extendPlayer(playerId: number, years: number, salary: number): S
   if ((player.morale ?? 75) >= 85) acceptChance = Math.min(1, acceptChance + 0.08);
 
   if (Math.random() >= acceptChance) {
-        const floor = Math.round(Math.max(fairMarket * 0.90, payCutFloor) * 2) / 2;
+    const floor = Math.round(Math.max(fairMarket * 0.90, payCutFloor) * 2) / 2;
     return {
       success: false,
       reason:
@@ -548,6 +548,11 @@ export function extendPlayer(playerId: number, years: number, salary: number): S
                        `Declined the extension — wants closer to $${floor.toFixed(1)}M/yr.`,
     };
   }
+
+  const guaranteedPct = Math.round(40 + Math.random() * 20);
+  contractRepo.update(playerId, years, salary, Math.round(salary * years * (guaranteedPct / 100) * 10) / 10, guaranteedPct);
+  return { success: true };
+}
 
   const guaranteedPct = Math.round(40 + Math.random() * 20);
   contractRepo.update(playerId, years, salary, Math.round(salary * years * (guaranteedPct / 100) * 10) / 10, guaranteedPct);
