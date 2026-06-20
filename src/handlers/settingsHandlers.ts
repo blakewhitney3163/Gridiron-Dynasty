@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import { db, generateContracts } from '../database';
 import { balanceRosters } from '../helpers/balanceRosters';
 import { settingsRepo } from '../repositories';
+import type { IpcEvent, CountRow, CntRow } from '../types/ipc';
 
 const DIFFICULTY_FACTORS: Record<string, number> = { easy: 8, normal: 0, hard: -8 };
 
@@ -17,7 +18,7 @@ export function registerSettingsHandlers(): void {
 
   ipcMain.handle('get-difficulty', () => getDifficulty());
 
-  ipcMain.handle('set-difficulty', (_event: any, level: string) => {
+  ipcMain.handle('set-difficulty', (_event: IpcEvent, level: string) => {
     if (!['easy', 'normal', 'hard'].includes(level)) return { success: false };
     settingsRepo.set('difficulty', level);
     return { success: true };
@@ -25,7 +26,7 @@ export function registerSettingsHandlers(): void {
 
   ipcMain.handle('get-user-team', () => settingsRepo.getUserTeam());
 
-  ipcMain.handle('set-user-team', (_event: any, teamId: number) => {
+  ipcMain.handle('set-user-team', (_event: IpcEvent, teamId: number) => {
     settingsRepo.set('user_team_id', String(teamId));
     return { success: true };
   });
@@ -72,16 +73,16 @@ export function registerSettingsHandlers(): void {
 
   ipcMain.handle('balance-rosters', () => {
     balanceRosters();
-    const faCount = (db.prepare('SELECT COUNT(*) as count FROM players WHERE is_free_agent = 1').get() as any).count;
-    return { success: true, freeAgents: faCount };
+    const row = db.prepare('SELECT COUNT(*) as count FROM players WHERE is_free_agent = 1').get() as CountRow;
+    return { success: true, freeAgents: row.count };
   });
 
   ipcMain.handle('check-setup-done', () => {
-    const cnt = (db.prepare('SELECT COUNT(*) as cnt FROM players').get() as any).cnt;
-    return cnt > 0;
+    const row = db.prepare('SELECT COUNT(*) as cnt FROM players').get() as CntRow;
+    return row.cnt > 0;
   });
 
-  ipcMain.handle('edit-player', (_event: any, payload: {
+  ipcMain.handle('edit-player', (_event: IpcEvent, payload: {
     playerId: number;
     overall_rating?: number;
     age?: number;
