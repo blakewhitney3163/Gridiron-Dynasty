@@ -72,8 +72,6 @@ HIGH PRIORITY
   1-2 joined queries per team per game, reducing per-season DB calls from
   ~5,760 down to ~1,700.
 
-Realistic Schedule Generation — see SIMULATION & SCHEDULE above.
-
 IMPORTANT — Fix before next major feature
 ────────────────────────────────────────────────────────────────────────────────
 [DONE June 20, 2026] Realistic Schedule Generation — division-based scheduling with proper
