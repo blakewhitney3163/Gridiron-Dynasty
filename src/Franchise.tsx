@@ -8,6 +8,8 @@ import FreeAgentsTab from './franchise/FreeAgentsTab';
 import OffseasonTab from './franchise/OffseasonTab';
 import CoachingTab from './franchise/CoachingTab';
 import SchemesTab from './franchise/SchemesTab';
+import PlayerProfile from './teams/PlayerProfile';
+import { Player, PlayerStats, CareerSeasonStats } from './teams/types';
 
 declare const window: any;
 interface CpuFaResult { totalSigned: number; teamsActive: number; }
@@ -52,6 +54,11 @@ export default function Franchise() {
   const [deadCap, setDeadCap] = useState<{ amount: number; entries: any[] } | null>(null);
   const [staff, setStaff] = useState<Coach[]>([]);
   const [tagWorking, setTagWorking] = useState(false);
+
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
+  const [careerStats, setCareerStats] = useState<CareerSeasonStats[]>([]);
+  const [statsView, setStatsView] = useState<'season' | 'career'>('season');
 
   useEffect(() => { loadData(); loadTeamNeeds(); }, [userTeam.id]);
   useEffect(() => {
@@ -110,7 +117,12 @@ export default function Franchise() {
       return;
     }
     setWorking(true);
-    await window.api.extendPlayer({ playerId: extendingId, years: extendYears, salary: salaryNum });
+    const result = await window.api.extendPlayer({ playerId: extendingId, years: extendYears, salary: salaryNum });
+    if (!result?.success) {
+      showToast(result?.reason ?? 'Player declined the extension.', 'error');
+      setWorking(false);
+      return;
+    }
     setExtendingId(null);
     showToast('Contract extended successfully.', 'success');
     await loadData();
@@ -266,6 +278,18 @@ export default function Franchise() {
     setTagWorking(false);
   };
 
+  const handlePlayerClick = async (playerId: number) => {
+    const roster: Player[] = await window.api.getRoster(userTeam.id);
+    const player = roster.find((p: Player) => p.id === playerId) ?? null;
+    if (!player) return;
+    setSelectedPlayer(player);
+    setPlayerStats(null);
+    setCareerStats([]);
+    setStatsView('season');
+    window.api.getPlayerStats(playerId).then((s: PlayerStats) => setPlayerStats(s));
+    window.api.getPlayerCareerStats(playerId).then((s: CareerSeasonStats[]) => setCareerStats(s));
+  };
+
   const expiringCount = contracts.filter(c => c.years_remaining === 1).length;
   const capPct = cap ? (cap.used_cap / cap.total_cap) * 100 : 0;
   const capColor = capPct > 100 ? '#e57373' : capPct > 90 ? '#FF8740' : '#4caf50';
@@ -281,7 +305,7 @@ export default function Franchise() {
   ];
 
   return (
-        <div style={{ padding: '16px 20px', maxWidth: 1100, margin: '0 auto', height: '100%', overflowY: 'auto', boxSizing: 'border-box' }}>
+    <div style={{ padding: '16px 20px', maxWidth: 1100, margin: '0 auto', height: '100%', overflowY: 'auto', boxSizing: 'border-box' }}>
 
       {toast && (
         <div style={{
@@ -304,10 +328,7 @@ export default function Franchise() {
       </div>
 
       {cap && (
-        <div style={{
-          background: '#111', border: '1px solid #222', borderRadius: 6,
-          padding: '10px 14px', marginBottom: 14,
-        }}>
+        <div style={{ background: '#111', border: '1px solid #222', borderRadius: 6, padding: '10px 14px', marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: 9, color: '#555', letterSpacing: 1, marginBottom: 2 }}>SALARY CAP</div>
@@ -364,6 +385,7 @@ export default function Franchise() {
           extendYears={extendYears} setExtendYears={setExtendYears}
           releasingId={releasingId} setReleasingId={setReleasingId}
           working={working} handleExtend={handleExtend} handleRelease={handleRelease}
+          onPlayerClick={handlePlayerClick}
         />
       )}
 
@@ -426,6 +448,25 @@ export default function Franchise() {
           teamName={`${userTeam.city} ${userTeam.name}`}
           onToast={showToast}
         />
+      )}
+
+      {selectedPlayer && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000,
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
+        }} onClick={() => setSelectedPlayer(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ height: '100%', overflowY: 'auto' }}>
+            <PlayerProfile
+              player={selectedPlayer}
+              playerStats={playerStats}
+              careerStats={careerStats}
+              statsView={statsView}
+              setStatsView={setStatsView}
+              onClose={() => setSelectedPlayer(null)}
+              onSave={(updated: Player) => setSelectedPlayer(updated)}
+            />
+          </div>
+        </div>
       )}
 
     </div>
