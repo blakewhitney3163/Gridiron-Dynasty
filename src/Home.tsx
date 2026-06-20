@@ -362,7 +362,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         )}
       </div>
 
-      <Sidebar
+     <Sidebar
   userTeam={userTeam}
   currentSeason={currentSeason}
   userRecord={userRecord}
