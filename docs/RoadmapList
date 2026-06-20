@@ -116,6 +116,33 @@ MAINTENANCE — Address before extended dynasty saves become common
 COMPLETED ITEMS
 ================================================================================
 
+[DONE June 20, 2026] Position Filter Bug Fix (Roster + Free Agents) —
+  ActiveRosterTab.tsx and FreeAgentsTab.tsx filter logic changed from
+  (position_label || position) === filter to
+  position === filter || position_label === filter. The old || short-circuit
+  caused RBs (position_label: HB/FB) and safeties (position_label: SS/FS) to
+  disappear when their position group buttons were clicked. Both roster
+  management and free agent signing screens now correctly show all players
+  under the RB and S filter buttons.
+
+[DONE June 20, 2026] Multiple Incoming CPU Trade Offers — getCpuTradeOffer
+  renamed to getCpuTradeOffers (TradeService.ts), now returns an array of up
+  to 3 simultaneous offers instead of a single offer or null. A ~35% random
+  gate prevents offers from generating on every tab check. A claimedUserPlayerIds
+  Set ensures no two offers in the same batch target the same player. Trades.tsx
+  updated to store cpuOffers[] array with offerIndex cursor. CpuOfferBanner.tsx
+  gains offerIndex, offerCount, onPrev, and onNext props — when multiple offers
+  are present a "X of Y offers" pill and ‹ › navigation arrows appear in the
+  header. Accept or Decline removes only the current offer; remaining offers
+  stay visible.
+
+[DONE June 20, 2026] CPU Trade Frequency Reduction — CPU-vs-CPU in-season
+  trades (runCpuTrades) capped at 2/week (down from 4). Skip threshold for
+  normal sellers raised to 72% (from 60%), reducing the expected number of
+  CPU-vs-CPU trades per simulated week from ~1.5 to ~0.5. Incoming user-facing
+  offer generation gated at 35% per check (see above), preventing trade offers
+  from appearing after every single tab visit.
+
 [DONE June 20, 2026] Franchise & League Records — Franchise Records tab added
   to Records screen. Queries career_stats_history filtered by team_id for
   single-season franchise bests across all 8 stat categories. Team selector
