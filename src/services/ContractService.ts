@@ -57,6 +57,16 @@ export function signFreeAgent(
   const player = playerRepo.getById(playerId);
   if (!player) return { success: false, reason: 'Player not found.' };
 
+    // Hard floor: players won't accept more than a 25% pay cut from their current salary
+  const currentSalary = contract.annual_salary ?? 0;
+  const payCutFloor = Math.round(currentSalary * 0.75 * 10) / 10;
+  if (salary < payCutFloor && currentSalary > 2.0) {
+    return {
+      success: false,
+      reason: `Won't accept a pay cut that large. Current salary: $${currentSalary.toFixed(1)}M — minimum offer: $${payCutFloor.toFixed(1)}M/yr.`,
+    };
+  }
+
   const fairMarket = calcFairMarket(player.overall_rating, player.position, player.dev_trait);
   const ratio = salary / Math.max(fairMarket, 1);
   let acceptChance =
