@@ -87,7 +87,7 @@ export default function Sidebar({
     ? `${currentSeason} season complete`
     : allWeeksDone
     ? 'Playoffs ready'
-    : `Week ${currentWeek} of 18`;
+    : currentWeek != null ? `Week ${currentWeek} of 18` : 'Season ready';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 220 }}>
