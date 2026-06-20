@@ -114,9 +114,12 @@ const createWindow = (): void => {
 
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
-  mainWindow.once('ready-to-show', () => {
+    mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    mainWindow.setAlwaysOnTop(true);
     mainWindow.focus();
+    mainWindow.setAlwaysOnTop(false);
+    setTimeout(() => mainWindow.webContents.focus(), 100);
   });
 
   if (process.env.NODE_ENV === 'development') {
