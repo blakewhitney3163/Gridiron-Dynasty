@@ -32,4 +32,7 @@ export const T = {
   bgGold:     '#3d2800',   // very dark amber
   bgRed:      '#450a0a',   // very dark red
   bgSelected: '#1e3a5f',   // selected row / active item
+  // Aliases used by some components
+  bgDark: '#0a1120',  // same as bgDeep
+  text:   '#f1f5f9',  // same as textPrimary
 } as const;
