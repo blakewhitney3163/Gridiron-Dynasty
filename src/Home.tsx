@@ -6,9 +6,9 @@ import Sidebar from './home/Sidebar';
 import PlayoffSeedingsView from './home/PlayoffSeedingsView';
 import PlayoffResultsView from './home/PlayoffResultsView';
 import SeasonAwardsView from './home/SeasonAwardsView';
+import GamePreview from './home/GamePreview';
 import { useGameStore } from './store/gameStore';
 import TradeOfferCard from './home/TradeOfferCard';
-import GamePreview from './home/GamePreview';
 import { CpuOffer } from './trades/types';
 
 declare const window: any;
@@ -59,9 +59,9 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [settingStatus, setSettingStatus] = useState(false);
   const [franchiseHealth, setFranchiseHealth] = useState<FranchiseHealth | null>(null);
   const [oppHealth, setOppHealth] = useState<FranchiseHealth | null>(null);
-const [oppScheme, setOppScheme] = useState<{ offenseScheme: string; defenseScheme: string } | null>(null);
-const [userScheme, setUserScheme] = useState<{ offenseScheme: string; defenseScheme: string } | null>(null);
-const [allStandings, setAllStandings] = useState<{ id: number; wins: number; losses: number }[]>([]);
+  const [oppScheme, setOppScheme] = useState<{ offenseScheme: string; defenseScheme: string } | null>(null);
+  const [userScheme, setUserScheme] = useState<{ offenseScheme: string; defenseScheme: string } | null>(null);
+  const [allStandings, setAllStandings] = useState<{ id: number; wins: number; losses: number }[]>([]);
 
   useEffect(() => {
     if (!userTeam) return;
@@ -135,30 +135,31 @@ const [allStandings, setAllStandings] = useState<{ id: number; wins: number; los
   }, [currentSeason, userTeam?.id]);
 
   useEffect(() => {
-  if (!userGame || !userTeam || userGame.is_simulated === 1) {
-    setOppHealth(null);
-    setOppScheme(null);
-    setUserScheme(null);
-    return;
-  }
-  const oppId = userGame.home_team_id === userTeam.id
-    ? userGame.away_team_id
-    : userGame.home_team_id;
-  let cancelled = false;
-  (async () => {
-    const [oh, os, us] = await Promise.all([
-      window.api.getFranchiseHealth(oppId),
-      window.api.getTeamScheme(oppId),
-      window.api.getTeamScheme(userTeam.id),
-    ]);
-    if (!cancelled) {
-      setOppHealth(oh ?? null);
-      setOppScheme(os ?? null);
-      setUserScheme(us ?? null);
+    const userGame = matchups.find(m => m.home_team_id === userTeam?.id || m.away_team_id === userTeam?.id);
+    if (!userGame || !userTeam || userGame.is_simulated === 1) {
+      setOppHealth(null);
+      setOppScheme(null);
+      setUserScheme(null);
+      return;
     }
-  })();
-  return () => { cancelled = true; };
-}, [userGame?.id]);
+    const oppId = userGame.home_team_id === userTeam.id
+      ? userGame.away_team_id
+      : userGame.home_team_id;
+    let cancelled = false;
+    (async () => {
+      const [oh, os, us] = await Promise.all([
+        window.api.getFranchiseHealth(oppId),
+        window.api.getTeamScheme(oppId),
+        window.api.getTeamScheme(userTeam.id),
+      ]);
+      if (!cancelled) {
+        setOppHealth(oh ?? null);
+        setOppScheme(os ?? null);
+        setUserScheme(us ?? null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [matchups, userTeam?.id]);
 
   const refreshOffseasonStatus = async () => {
     const [offseason, spots] = await Promise.all([
@@ -213,6 +214,7 @@ const [allStandings, setAllStandings] = useState<{ id: number; wins: number; los
     setInjuryReport(injuries ?? []);
     const mine = standings.find((t: any) => t.id === userTeam.id);
     if (mine) setUserRecord({ wins: mine.wins, losses: mine.losses });
+    setAllStandings(standings);
     if (weekResult?.userPSOpenSpots > 0)
       setPSAlert(`Practice squad has ${weekResult.userPSOpenSpots} open spot${weekResult.userPSOpenSpots !== 1 ? 's' : ''}. Go to My Team → Practice Squad.`);
     if (status.currentWeek === null && status.hasSchedule) {
@@ -242,6 +244,7 @@ const [allStandings, setAllStandings] = useState<{ id: number; wins: number; los
     setInjuryReport(injuries ?? []);
     const mine = standings.find((t: any) => t.id === userTeam.id);
     if (mine) setUserRecord({ wins: mine.wins, losses: mine.losses });
+    setAllStandings(standings);
     if (result.userPSOpenSpots > 0)
       setPSAlert(`Practice squad has ${result.userPSOpenSpots} open spot${result.userPSOpenSpots !== 1 ? 's' : ''}. Go to My Team → Practice Squad.`);
     if (currentWeek) setMatchups(await window.api.getWeekMatchups(currentWeek));
@@ -356,17 +359,31 @@ const [allStandings, setAllStandings] = useState<{ id: number; wins: number; los
 
             {!isGameSimmed ? (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-                  <div style={{ flex: 1, textAlign: 'center' }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#4FC3F7' }}>{userTeam.city} {userTeam.name}</div>
-                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 3, letterSpacing: 1 }}>{isHome ? 'HOME' : 'AWAY'}</div>
+                {oppHealth && userScheme && oppScheme && userRecord && franchiseHealth ? (
+                  <GamePreview
+                    userTeamName={`${userTeam.city} ${userTeam.name}`}
+                    userRecord={userRecord}
+                    userHealth={franchiseHealth}
+                    userScheme={userScheme}
+                    userIsHome={isHome ?? false}
+                    oppTeamName={oppTeamName ?? ''}
+                    oppRecord={allStandings.find(t => t.id === (isHome ? userGame.away_team_id : userGame.home_team_id)) ?? { wins: 0, losses: 0 }}
+                    oppHealth={oppHealth}
+                    oppScheme={oppScheme}
+                  />
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+                    <div style={{ flex: 1, textAlign: 'center' }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#4FC3F7' }}>{userTeam.city} {userTeam.name}</div>
+                      <div style={{ fontSize: 9, color: T.textDim, marginTop: 3, letterSpacing: 1 }}>{isHome ? 'HOME' : 'AWAY'}</div>
+                    </div>
+                    <div style={{ fontSize: 14, color: T.borderStrong, fontWeight: 700, fontFamily: 'monospace' }}>VS</div>
+                    <div style={{ flex: 1, textAlign: 'center' }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#aaa' }}>{oppTeamName}</div>
+                      <div style={{ fontSize: 9, color: T.textDim, marginTop: 3, letterSpacing: 1 }}>{isHome ? 'AWAY' : 'HOME'}</div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 14, color: T.borderStrong, fontWeight: 700, fontFamily: 'monospace' }}>VS</div>
-                  <div style={{ flex: 1, textAlign: 'center' }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#aaa' }}>{oppTeamName}</div>
-                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 3, letterSpacing: 1 }}>{isHome ? 'AWAY' : 'HOME'}</div>
-                  </div>
-                </div>
+                )}
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button
                     onClick={() => handleSimulateGame(userGame.id)}
