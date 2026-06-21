@@ -141,37 +141,33 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   };
 
   const handleGenerateSchedule = async () => {
-  setGeneratingSchedule(true);
-  try {
-    const result = await window.api.generateSchedule();
-    console.log('[generate-schedule] result:', result);
-
-    if (result?.error) {
-      alert(`Schedule generation failed: ${result.error}`);
+    setGeneratingSchedule(true);
+    try {
+      const result = await window.api.generateSchedule();
+      console.log('[generate-schedule] result:', result);
+      if (result?.error) {
+        alert(`Schedule generation failed: ${result.error}`);
+        setGeneratingSchedule(false);
+        return;
+      }
+      const status = await window.api.getCurrentWeek();
+      console.log('[get-current-week] status:', status);
+      setHasSchedule(status.hasSchedule);
+      setCurrentWeek(status.currentWeek);
+      if (status.currentWeek !== null) {
+        setMatchups(await window.api.getWeekMatchups(status.currentWeek));
+      }
+      const tradeOffer = await window.api.getCpuTradeOffer();
+      setCpuOffer(tradeOffer ?? null);
+      setOfferHandled(false);
+    } catch (err) {
+      console.error('[handleGenerateSchedule] error:', err);
+      alert(`Error generating schedule: ${err}`);
+    } finally {
       setGeneratingSchedule(false);
-      return;
     }
+  };
 
-    const status = await window.api.getCurrentWeek();
-    console.log('[get-current-week] status:', status);
-
-    setHasSchedule(status.hasSchedule);
-    setCurrentWeek(status.currentWeek);
-    if (status.currentWeek !== null) {
-      setMatchups(await window.api.getWeekMatchups(status.currentWeek));
-    }
-    const tradeOffer = await window.api.getCpuTradeOffer();
-    setCpuOffer(tradeOffer ?? null);
-    setOfferHandled(false);
-  } catch (err) {
-    console.error('[handleGenerateSchedule] error:', err);
-    alert(`Error generating schedule: ${err}`);
-  } finally {
-    setGeneratingSchedule(false);
-  }
-};
-
-  // Sims the remaining CPU games for the week — called by Sidebar and the "Advance Week" button
   const handleSimulateWeek = async () => {
     if (currentWeek === null || !userTeam) return;
     setSimulating(true);
@@ -201,7 +197,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     setSimulating(false);
   };
 
-  // Sims only the user's game, then shows the result
   const handleSimulateGame = async (gameId: number) => {
     if (!userTeam) return;
     setSimulatingGameId(gameId);
@@ -313,7 +308,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       {/* Main content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-        {/* Trade offer */}
         {cpuOffer && !offerHandled && (
           <TradeOfferCard
             offer={cpuOffer} currentSeason={currentSeason} working={offerWorking}
@@ -322,7 +316,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
           />
         )}
 
-        {/* Week card */}
         {hasSchedule && !allWeeksDone && userGame && (
           <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '16px 20px' }}>
             <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, marginBottom: 16, textTransform: 'uppercase' }}>
@@ -387,7 +380,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                     cursor: simulating ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {simulating ? 'Advancing Week...' : `▶ Advance to Week ${(currentWeek ?? 1) + 1}`}
+                  {simulating ? 'Advancing Week...' : currentWeek === 17 ? '▶ End Regular Season' : `▶ Advance to Week ${(currentWeek ?? 1) + 1}`}
                 </button>
                 <button
                   onClick={() => handleBoxScore(userGame.id)}
@@ -398,21 +391,43 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                 </button>
                 {boxScore && boxScore.game.id === userGame.id && (
                   <div style={{ marginTop: 12, borderTop: `1px solid ${T.borderFaint}`, paddingTop: 12 }}>
+                    {/* Quarter scores */}
+                    <div style={{ display: 'flex', fontSize: 10, marginBottom: 12, background: T.bgCard, borderRadius: 4, padding: '6px 10px', gap: 6, alignItems: 'center', fontFamily: 'monospace' }}>
+                      {[
+                        { name: boxScore.game.home_team, scores: [boxScore.game.home_q1, boxScore.game.home_q2, boxScore.game.home_q3, boxScore.game.home_q4], total: boxScore.game.home_score },
+                        { name: boxScore.game.away_team, scores: [boxScore.game.away_q1, boxScore.game.away_q2, boxScore.game.away_q3, boxScore.game.away_q4], total: boxScore.game.away_score },
+                      ].map((team, ti) => (
+                        <div key={ti} style={{ flex: 1 }}>
+                          <div style={{ fontSize: 9, color: T.textMuted, marginBottom: 3 }}>{team.name}</div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            {team.scores.map((s, qi) => (
+                              <span key={qi} style={{ color: T.textDim }}>Q{qi + 1}: <span style={{ color: T.textSecondary }}>{s ?? 0}</span></span>
+                            ))}
+                            <span style={{ marginLeft: 'auto', fontWeight: 700, color: '#4FC3F7' }}>{team.total}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                     {[
-                      { label: 'PASSING',   rows: boxScore.players.filter(p => p.pass_attempts > 0).sort((a, b) => b.pass_yards - a.pass_yards).slice(0, 4),  cols: ['pass_yards','completions','pass_attempts','pass_tds','interceptions'], heads: ['YDS','CMP','ATT','TD','INT'] },
-                      { label: 'RUSHING',   rows: boxScore.players.filter(p => p.rush_attempts > 0).sort((a, b) => b.rush_yards - a.rush_yards).slice(0, 4),  cols: ['rush_yards','rush_attempts','rush_tds'], heads: ['YDS','CAR','TD'] },
-                      { label: 'RECEIVING', rows: boxScore.players.filter(p => p.targets > 0).sort((a, b) => b.rec_yards - a.rec_yards).slice(0, 4),           cols: ['rec_yards','receptions','targets','rec_tds'], heads: ['YDS','REC','TGT','TD'] },
+                      { label: 'PASSING',   rows: boxScore.players.filter(p => p.pass_attempts > 0).sort((a, b) => b.pass_yards - a.pass_yards).slice(0, 6),  cols: ['pass_yards','completions','pass_attempts','pass_tds','interceptions'] },
+                      { label: 'RUSHING',   rows: boxScore.players.filter(p => p.rush_attempts > 0).sort((a, b) => b.rush_yards - a.rush_yards).slice(0, 6),  cols: ['rush_yards','rush_attempts','rush_tds'] },
+                      { label: 'RECEIVING', rows: boxScore.players.filter(p => p.targets > 0).sort((a, b) => b.rec_yards - a.rec_yards).slice(0, 6),           cols: ['rec_yards','receptions','targets','rec_tds'] },
                     ].filter(s => s.rows.length > 0).map(section => (
                       <div key={section.label} style={{ marginBottom: 10 }}>
                         <div style={{ fontSize: 8, color: T.textMuted, letterSpacing: 1.5, marginBottom: 4 }}>{section.label}</div>
-                        {section.rows.map((p, i) => (
-                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
-                            <span style={{ color: '#aaa', flex: 2 }}>{p.player_name}</span>
-                            {section.cols.map(col => (
-                              <span key={col} style={{ color: '#4FC3F7', fontFamily: 'monospace', minWidth: 30, textAlign: 'right' }}>{(p as any)[col] ?? 0}</span>
-                            ))}
-                          </div>
-                        ))}
+                        {section.rows.map((p, i) => {
+                          const isHomePlayer = p.team_id === boxScore.game.home_team_id;
+                          const teamLabel = isHomePlayer ? boxScore.game.home_team : boxScore.game.away_team;
+                          return (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, padding: '2px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
+                              <span style={{ color: '#aaa', flex: 2 }}>{p.player_name}</span>
+                              <span style={{ fontSize: 9, color: isHomePlayer ? '#4FC3F7' : '#FF8740', marginRight: 8, opacity: 0.7, minWidth: 60, textAlign: 'right', fontFamily: 'monospace' }}>{teamLabel}</span>
+                              {section.cols.map(col => (
+                                <span key={col} style={{ color: '#4FC3F7', fontFamily: 'monospace', minWidth: 30, textAlign: 'right' }}>{(p as any)[col] ?? 0}</span>
+                              ))}
+                            </div>
+                          );
+                        })}
                       </div>
                     ))}
                   </div>
@@ -422,7 +437,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
           </div>
         )}
 
-        {/* Roster Health */}
         {hasSchedule && !allWeeksDone && franchiseHealth && franchiseHealth.overall_ovr > 0 && (
           <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '16px 20px' }}>
             <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, marginBottom: 12, textTransform: 'uppercase' }}>Roster Health</div>
@@ -450,17 +464,12 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
           </div>
         )}
 
-        {/* Active Alerts */}
         {hasSchedule && !allWeeksDone && (seriousInjuries.length > 0 || psAlert) && (
           <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '14px 20px' }}>
             <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, marginBottom: 10, textTransform: 'uppercase' }}>Active Alerts</div>
             {seriousInjuries.slice(0, 5).map(p => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
-                <span style={{
-                  fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 3, minWidth: 26, textAlign: 'center',
-                  background: p.injury_status === 'ir' ? '#1a0a0a' : '#140a00',
-                  color: p.injury_status === 'ir' ? '#e57373' : '#FF8740',
-                }}>
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 3, minWidth: 26, textAlign: 'center', background: p.injury_status === 'ir' ? '#1a0a0a' : '#140a00', color: p.injury_status === 'ir' ? '#e57373' : '#FF8740' }}>
                   {p.injury_status === 'ir' ? 'IR' : 'OUT'}
                 </span>
                 <span style={{ fontSize: 12, color: T.textSecondary, flex: 1 }}>{p.first_name[0]}. {p.last_name}</span>
@@ -477,12 +486,10 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
           </div>
         )}
 
-        {/* Playoff seedings */}
         {allWeeksDone && !isPlayoffsComplete && (
           <PlayoffSeedingsView seeds={playoffSeeds} onSimulate={handleSimulatePlayoffs} simulating={simulatingPlayoffs} />
         )}
 
-        {/* Post-season */}
         {allWeeksDone && isPlayoffsComplete && (
           <>
             <SeasonAwardsView awards={seasonAwards} season={currentSeason} />
