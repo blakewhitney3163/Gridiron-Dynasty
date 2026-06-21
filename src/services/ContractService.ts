@@ -549,8 +549,9 @@ export function extendPlayer(playerId: number, years: number, salary: number): S
     };
   }
 
-  const guaranteedPct = Math.round(40 + Math.random() * 20);
-  contractRepo.update(playerId, years, salary, Math.round(salary * years * (guaranteedPct / 100) * 10) / 10, guaranteedPct);
+  const newYearsTotal = contract.years_remaining + years;
+const guaranteedPct = Math.round(40 + Math.random() * 20);
+contractRepo.update(playerId, newYearsTotal, salary, Math.round(salary * newYearsTotal * (guaranteedPct / 100) * 10) / 10, guaranteedPct);
   return { success: true };
 }
 
