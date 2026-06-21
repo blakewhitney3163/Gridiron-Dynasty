@@ -1,7 +1,7 @@
 // ─── Primitive Types ──────────────────────────────────────────────────────────
 
 export type DevTrait = 'Normal' | 'Star' | 'Superstar' | 'X-Factor';
-export type RosterStatus = 'active' | 'practice_squad' | 'free_agent' | 'waivers' | 'retired';
+export type RosterStatus = 'active' | 'practice_squad' | 'free_agent' | 'waivers' | 'retired' | 'announcing_retirement';
 export type InjuryStatus = 'healthy' | 'questionable' | 'out' | 'ir';
 export type Conference = 'AFC' | 'NFC';
 export type Division = 'North' | 'South' | 'East' | 'West';
@@ -242,6 +242,7 @@ export interface SimWeekResult {
 export interface AdvanceSeasonResult {
   nextSeason: number;
   retired: { id: number; name: string; position: string; age: number; ovr: number }[];
+  announcingRetirements: { id: number; name: string; position: string; age: number; ovr: number }[];
   cpuResigns: number;
   breakouts: number;
   hofInductees: { name: string; position: string }[];
