@@ -224,28 +224,52 @@ export function registerSimHandlers(): void {
 
     const afcDivs = ['AFC-North', 'AFC-South', 'AFC-East', 'AFC-West'];
     const nfcDivs = ['NFC-North', 'NFC-South', 'NFC-East', 'NFC-West'];
-    const allDivs = [...afcDivs, ...nfcDivs];
 
-    // ── PHASE 1: Intra-division games, weeks 1–6 (DETERMINISTIC) ─────────────
-    // Each 4-team division has 6 round-robin rounds (2 games each, perfect matching).
-    // All 8 divisions share the same round per week → 16 games/week, all 32 teams.
-    const divWeeks: { home: number; away: number }[][] = Array.from({ length: 6 }, () => []);
+    // Build a round of K_{4,4}: round r pairs teamA[i] vs teamB[(i+r)%4]
+    const k44Round = (a: number[], b: number[], r: number, offset: number): { home: number; away: number }[] =>
+      Array.from({ length: 4 }, (_, i) => {
+        const j = (i + r) % 4;
+        return (i + j + offset) % 2 === 0 ? { home: a[i], away: b[j] } : { home: b[j], away: a[i] };
+      });
 
-    for (const divKey of allDivs) {
+    // Build a round of near-K_{4,4} (each team skips 1 opponent)
+    // validShifts = [0,1,2,3] minus (offset%4); round r uses validShifts[r]
+    const nearK44Round = (a: number[], b: number[], r: number, offset: number): { home: number; away: number }[] => {
+      const skipShift = ((offset % 4) + 4) % 4;
+      const validShifts = [0, 1, 2, 3].filter(s => s !== skipShift);
+      const shift = validShifts[r];
+      return Array.from({ length: 4 }, (_, i) => {
+        const j = (i + shift) % 4;
+        return (i + j + offset) % 2 === 0 ? { home: a[i], away: b[j] } : { home: b[j], away: a[i] };
+      });
+    };
+
+    const weeks: { home: number; away: number }[][] = [];
+
+    // ── PHASE 1: Intra-division, weeks 1–6 ──────────────────────────────────────
+    // 6 round-robin rounds per division, stacked across all 8 divisions per week.
+    // Each week: 8 divs × 2 games = 16 games, all 32 teams play exactly once.
+    const divisionRounds: { home: number; away: number }[][][] = [];
+    for (const divKey of [...afcDivs, ...nfcDivs]) {
       const [t0, t1, t2, t3] = divMap[divKey] ?? [];
-      const rounds: { home: number; away: number }[][] = [
+      divisionRounds.push([
         [{ home: t0, away: t1 }, { home: t2, away: t3 }],
         [{ home: t0, away: t2 }, { home: t1, away: t3 }],
         [{ home: t0, away: t3 }, { home: t1, away: t2 }],
         [{ home: t1, away: t0 }, { home: t3, away: t2 }],
         [{ home: t2, away: t0 }, { home: t3, away: t1 }],
         [{ home: t3, away: t0 }, { home: t2, away: t1 }],
-      ];
-      for (let r = 0; r < 6; r++) divWeeks[r].push(...rounds[r]);
+      ]);
+    }
+    for (let r = 0; r < 6; r++) {
+      const week: { home: number; away: number }[] = [];
+      for (const div of divisionRounds) week.push(...div[r]);
+      weeks.push(week);
     }
 
-    // ── PHASE 2: Non-division games, weeks 7–17 ───────────────────────────────
-    // 128 inter-conf + 48 cross-conf = 176 games across 11 weeks (16/week).
+    // ── PHASE 2: Inter-conference, weeks 7–14 ───────────────────────────────────
+    // confPairs split into 2 stacks of 2 complementary pairs each (4 rounds per stack).
+    // Each stack covers all 32 teams per round: 4 × 4 games = 16 games/week.
     const intraPairings: [number, number][][] = [
       [[0,1],[2,3],[0,2],[1,3]],
       [[0,2],[1,3],[0,3],[1,2]],
@@ -253,81 +277,44 @@ export function registerSimHandlers(): void {
     ];
     const confPairs = intraPairings[season % 3];
 
-    const divMatchup = (keyA: string, keyB: string, offset: number): { home: number; away: number }[] => {
-      const a = divMap[keyA] ?? [];
-      const b = divMap[keyB] ?? [];
-      const games: { home: number; away: number }[] = [];
-      for (let i = 0; i < a.length; i++)
-        for (let j = 0; j < b.length; j++)
-          if ((i + j + offset) % 2 === 0) games.push({ home: a[i], away: b[j] });
-          else games.push({ home: b[j], away: a[i] });
-      return games;
-    };
+    for (let stack = 0; stack < 2; stack++) {
+      const [pA, pB] = [confPairs[stack * 2], confPairs[stack * 2 + 1]];
+      const [afcA, afcB] = [divMap[afcDivs[pA[0]]] ?? [], divMap[afcDivs[pA[1]]] ?? []];
+      const [afcC, afcD] = [divMap[afcDivs[pB[0]]] ?? [], divMap[afcDivs[pB[1]]] ?? []];
+      const [nfcA, nfcB] = [divMap[nfcDivs[pA[0]]] ?? [], divMap[nfcDivs[pA[1]]] ?? []];
+      const [nfcC, nfcD] = [divMap[nfcDivs[pB[0]]] ?? [], divMap[nfcDivs[pB[1]]] ?? []];
 
-    const divMatchupCross = (keyA: string, keyB: string, offset: number): { home: number; away: number }[] => {
-      const a = divMap[keyA] ?? [];
-      const b = divMap[keyB] ?? [];
-      const games: { home: number; away: number }[] = [];
-      for (let i = 0; i < a.length; i++) {
-        const skip = (i + offset) % b.length;
-        for (let j = 0; j < b.length; j++) {
-          if (j === skip) continue;
-          if ((i + j + offset) % 2 === 0) games.push({ home: a[i], away: b[j] });
-          else games.push({ home: b[j], away: a[i] });
-        }
+      for (let r = 0; r < 4; r++) {
+        weeks.push([
+          ...k44Round(afcA, afcB, r, season),
+          ...k44Round(afcC, afcD, r, season),
+          ...k44Round(nfcA, nfcB, r, season),
+          ...k44Round(nfcC, nfcD, r, season),
+        ]);
       }
-      return games;
-    };
-
-    const nonDivMatchups: { home: number; away: number }[] = [];
-    for (const [di, dj] of confPairs) {
-      nonDivMatchups.push(...divMatchup(afcDivs[di], afcDivs[dj], season));
-      nonDivMatchups.push(...divMatchup(nfcDivs[di], nfcDivs[dj], season));
     }
-    for (let i = 0; i < 4; i++) {
-      nonDivMatchups.push(...divMatchupCross(afcDivs[i], nfcDivs[(i + season) % 4], season + 1));
-    }
-    // nonDivMatchups = 128 + 48 = 176 games
 
-    let nonDivWeeks: { home: number; away: number }[][] | null = null;
-
-    for (let attempt = 0; attempt < 100 && !nonDivWeeks; attempt++) {
-      const order = Array.from({ length: nonDivMatchups.length }, (_, i) => i)
-        .sort(() => Math.random() - 0.5);
-      const weekOf = new Array(nonDivMatchups.length).fill(-1);
-      const tryWeeks: { home: number; away: number }[][] = Array.from({ length: 11 }, () => []);
-
-      for (let w = 0; w < 11; w++) {
-        const used = new Set<number>();
-        for (const idx of order) {
-          if (tryWeeks[w].length >= 16) break;
-          if (weekOf[idx] !== -1) continue;
-          const g = nonDivMatchups[idx];
-          if (!used.has(g.home) && !used.has(g.away)) {
-            tryWeeks[w].push(g);
-            used.add(g.home);
-            used.add(g.away);
-            weekOf[idx] = w;
-          }
-        }
+    // ── PHASE 3: Cross-conference, weeks 15–17 ──────────────────────────────────
+    // 4 AFC/NFC division pairings × 3 rounds = 3 weeks × 16 games.
+    // Each pairing uses nearK44Round (3 games per team, not 4).
+    for (let r = 0; r < 3; r++) {
+      const week: { home: number; away: number }[] = [];
+      for (let i = 0; i < 4; i++) {
+        const afcTeams = divMap[afcDivs[i]] ?? [];
+        const nfcTeams = divMap[nfcDivs[(i + season) % 4]] ?? [];
+        week.push(...nearK44Round(afcTeams, nfcTeams, r, season + 1));
       }
-
-      if (weekOf.every(w => w !== -1)) nonDivWeeks = tryWeeks;
+      weeks.push(week);
     }
 
-    if (!nonDivWeeks) {
-      return { season, created: false, error: 'Could not schedule non-division games after 100 attempts' };
-    }
-
-    // Weeks 1–6: div games. Weeks 7–17: non-div games.
-    const allWeeks = [...divWeeks, ...nonDivWeeks];
+    // weeks: 6 + 8 + 3 = 17, each with 16 games = 272 total, 17 per team, no byes
 
     const insertGame = db.prepare(
       'INSERT INTO games (season, week, home_team_id, away_team_id, is_simulated) VALUES (?, ?, ?, ?, 0)'
     );
     db.transaction(() => {
       for (let w = 0; w < 17; w++) {
-        for (const g of allWeeks[w]) {
+        for (const g of weeks[w]) {
           insertGame.run(season, w + 1, g.home, g.away);
         }
       }
