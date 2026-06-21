@@ -28,7 +28,7 @@ export default function League() {
   };
 
   const style = (v: View): React.CSSProperties =>
-    view === v ? { flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' } : { display: 'none' };
+    view === v ? { flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' } : { display: 'none' }
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
