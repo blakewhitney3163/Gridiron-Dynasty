@@ -427,6 +427,10 @@ export function registerSimHandlers(): void {
       ORDER BY CASE p.injury_status WHEN 'ir' THEN 1 WHEN 'out' THEN 2 ELSE 3 END, p.overall_rating DESC
     `).all(teamId));
 
+  ipcMain.handle('get-ps-promotion-alerts', (_event: IpcEvent, teamId: number) =>
+  playerRepo.getPSPromotionAlerts(teamId)
+);
+
   ipcMain.handle('get-game-box-score', (_event: IpcEvent, gameId: number) => {
     const game = db.prepare(`
       SELECT g.id, g.week, g.home_score, g.away_score,
