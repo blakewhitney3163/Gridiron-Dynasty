@@ -8,6 +8,7 @@ import PlayoffResultsView from './home/PlayoffResultsView';
 import SeasonAwardsView from './home/SeasonAwardsView';
 import { useGameStore } from './store/gameStore';
 import TradeOfferCard from './home/TradeOfferCard';
+import GamePreview from './home/GamePreview';
 import { CpuOffer } from './trades/types';
 
 declare const window: any;
@@ -57,6 +58,10 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [userTradeStatus, setUserTradeStatus] = useState<any>(null);
   const [settingStatus, setSettingStatus] = useState(false);
   const [franchiseHealth, setFranchiseHealth] = useState<FranchiseHealth | null>(null);
+  const [oppHealth, setOppHealth] = useState<FranchiseHealth | null>(null);
+const [oppScheme, setOppScheme] = useState<{ offenseScheme: string; defenseScheme: string } | null>(null);
+const [userScheme, setUserScheme] = useState<{ offenseScheme: string; defenseScheme: string } | null>(null);
+const [allStandings, setAllStandings] = useState<{ id: number; wins: number; losses: number }[]>([]);
 
   useEffect(() => {
     if (!userTeam) return;
@@ -106,6 +111,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
 
       const myTeam = standings.find((t: any) => t.id === userTeam.id);
       if (myTeam) setUserRecord({ wins: myTeam.wins, losses: myTeam.losses });
+      setAllStandings(standings);
 
       if (status.hasSchedule && !seasonDone) {
         const data = await window.api.getWeekMatchups(status.currentWeek);
@@ -127,6 +133,32 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     init();
     return () => { cancelled = true; };
   }, [currentSeason, userTeam?.id]);
+
+  useEffect(() => {
+  if (!userGame || !userTeam || userGame.is_simulated === 1) {
+    setOppHealth(null);
+    setOppScheme(null);
+    setUserScheme(null);
+    return;
+  }
+  const oppId = userGame.home_team_id === userTeam.id
+    ? userGame.away_team_id
+    : userGame.home_team_id;
+  let cancelled = false;
+  (async () => {
+    const [oh, os, us] = await Promise.all([
+      window.api.getFranchiseHealth(oppId),
+      window.api.getTeamScheme(oppId),
+      window.api.getTeamScheme(userTeam.id),
+    ]);
+    if (!cancelled) {
+      setOppHealth(oh ?? null);
+      setOppScheme(os ?? null);
+      setUserScheme(us ?? null);
+    }
+  })();
+  return () => { cancelled = true; };
+}, [userGame?.id]);
 
   const refreshOffseasonStatus = async () => {
     const [offseason, spots] = await Promise.all([
