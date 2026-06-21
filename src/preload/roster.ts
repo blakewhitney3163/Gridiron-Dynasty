@@ -30,4 +30,7 @@ export const rosterApi = {
   
   getTeamScheme: (teamId: number) =>
   ipcRenderer.invoke('get-team-scheme', teamId),
+
+  getPSPromotionAlerts: (teamId: number) =>
+  ipcRenderer.invoke('get-ps-promotion-alerts', teamId),
 };
