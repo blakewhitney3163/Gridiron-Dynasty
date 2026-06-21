@@ -153,6 +153,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     setGeneratingSchedule(false);
   };
 
+  // Used by the Sidebar "Sim Rest of Week" button — sims CPU games only, skips user's game
   const handleSimulateWeek = async () => {
     if (currentWeek === null || !userTeam) return;
     setSimulating(true);
@@ -183,33 +184,55 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   };
 
   const handleSimulateGame = async (gameId: number) => {
-    if (!userTeam) return;
+    if (!userTeam || currentWeek === null) return;
+    const weekBeingSim = currentWeek;
     setSimulatingGameId(gameId);
+
+    // Phase 1: sim the user's game and show the result
     const result = await window.api.simulateOneGame(gameId);
     if (!result?.success) { setSimulatingGameId(null); return; }
+
+    if (result.userPSOpenSpots > 0)
+      setPSAlert(`Practice squad has ${result.userPSOpenSpots} open spot${result.userPSOpenSpots !== 1 ? 's' : ''}. Go to My Team → Practice Squad.`);
+
+    const [midStandings, midInjuries] = await Promise.all([
+      window.api.getStandings(currentSeason),
+      window.api.getInjuryReport(userTeam.id),
+    ]);
+    const midMine = midStandings.find((t: any) => t.id === userTeam.id);
+    if (midMine) setUserRecord({ wins: midMine.wins, losses: midMine.losses });
+    setInjuryReport(midInjuries ?? []);
+    setMatchups(await window.api.getWeekMatchups(weekBeingSim));
+    setFranchiseHealth(await window.api.getFranchiseHealth(userTeam.id));
+    setSimulatingGameId(null);
+
+    // Phase 2: auto-sim remaining CPU games and advance the week
+    setSimulating(true);
+    const weekResult = await window.api.simulateWeek(weekBeingSim);
+
     const [status, dashboard, standings, injuries] = await Promise.all([
       window.api.getCurrentWeek(), window.api.getDashboard(currentSeason),
       window.api.getStandings(currentSeason), window.api.getInjuryReport(userTeam.id),
     ]);
-    setCurrentWeek(status.currentWeek); setTopAFC(dashboard.topAFC); setTopNFC(dashboard.topNFC);
+    setCurrentWeek(status.currentWeek);
+    setTopAFC(dashboard.topAFC); setTopNFC(dashboard.topNFC);
     setInjuryReport(injuries ?? []);
     const mine = standings.find((t: any) => t.id === userTeam.id);
     if (mine) setUserRecord({ wins: mine.wins, losses: mine.losses });
-    if (result.userPSOpenSpots > 0)
-      setPSAlert(`Practice squad has ${result.userPSOpenSpots} open spot${result.userPSOpenSpots !== 1 ? 's' : ''}. Go to My Team → Practice Squad.`);
-    if (result.weekComplete) {
-      setStatLeaders(await window.api.getStats(currentSeason));
-      if (status.currentWeek === null && status.hasSchedule) {
-        setPlayoffSeeds(await window.api.getPlayoffSeeds());
-        setMatchups(await window.api.getWeekMatchups(18));
-      } else if (status.currentWeek) {
-        setMatchups(await window.api.getWeekMatchups(status.currentWeek));
-      }
-    } else if (currentWeek) {
-      setMatchups(await window.api.getWeekMatchups(currentWeek));
+    if (weekResult?.userPSOpenSpots > 0)
+      setPSAlert(`Practice squad has ${weekResult.userPSOpenSpots} open spot${weekResult.userPSOpenSpots !== 1 ? 's' : ''}. Go to My Team → Practice Squad.`);
+
+    if (status.currentWeek === null && status.hasSchedule) {
+      setPlayoffSeeds(await window.api.getPlayoffSeeds());
+      setMatchups(await window.api.getWeekMatchups(18));
+    } else if (status.currentWeek) {
+      setMatchups(await window.api.getWeekMatchups(status.currentWeek));
     }
+    setStatLeaders(await window.api.getStats(currentSeason));
     setFranchiseHealth(await window.api.getFranchiseHealth(userTeam.id));
-    setSimulatingGameId(null);
+    setBoxScore(null);
+    incrementSimCount();
+    setSimulating(false);
   };
 
   const handleBoxScore = async (gameId: number) => {
@@ -254,11 +277,11 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     if (!cpuOffer || offerWorking) return;
     setOfferWorking(true);
     await window.api.acceptCpuTradeOffer({
-  myPlayerId: cpuOffer.requestedPlayer.id,
-  theirPlayerId: cpuOffer.offeredPlayer.id,
-  theirTeamId: cpuOffer.fromTeamId,
-  theirPickId: cpuOffer.offeredPick?.id ?? null,
-});
+      myPlayerId: cpuOffer.requestedPlayer.id,
+      theirPlayerId: cpuOffer.offeredPlayer.id,
+      theirTeamId: cpuOffer.fromTeamId,
+      theirPickId: cpuOffer.offeredPick?.id ?? null,
+    });
     setCpuOffer(null);
     setOfferHandled(true);
     setOfferWorking(false);
@@ -340,23 +363,16 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                       flex: 1, padding: '10px 0',
                       background: simulatingGameId === userGame.id ? '#1a3a1a' : '#0a2a0a',
                       border: '1px solid #4caf50', borderRadius: 5, color: '#4caf50',
-                      fontWeight: 700, fontSize: 12, cursor: (simulating || !!simulatingGameId) ? 'not-allowed' : 'pointer',
+                      fontWeight: 700, fontSize: 12,
+                      cursor: (simulating || !!simulatingGameId) ? 'not-allowed' : 'pointer',
                       opacity: (simulating || !!simulatingGameId) ? 0.5 : 1,
                     }}
                   >
-                    {simulatingGameId === userGame.id ? 'Simulating...' : '▶ Sim My Game'}
-                  </button>
-                  <button
-                    onClick={handleSimulateWeek}
-                    disabled={!!simulating || !!simulatingGameId}
-                    style={{
-                      flex: 1, padding: '10px 0', background: T.bgCard,
-                      border: `1px solid ${T.borderMid}`, borderRadius: 5, color: T.textMuted,
-                      fontWeight: 700, fontSize: 12, cursor: (simulating || !!simulatingGameId) ? 'not-allowed' : 'pointer',
-                      opacity: (simulating || !!simulatingGameId) ? 0.5 : 1,
-                    }}
-                  >
-                    {simulating ? 'Simulating Week...' : '▶ Sim Rest of Week'}
+                    {simulatingGameId === userGame.id
+                      ? 'Simulating Game...'
+                      : simulating
+                      ? 'Simulating Week...'
+                      : '▶ Sim My Game'}
                   </button>
                 </div>
               </>
