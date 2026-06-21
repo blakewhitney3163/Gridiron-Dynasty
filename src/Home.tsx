@@ -18,6 +18,16 @@ interface Props {
   onNavigate: (tab: string) => void;
 }
 
+interface PSPromotionAlert {
+  id: number;
+  first_name: string;
+  last_name: string;
+  position: string;
+  position_label: string;
+  ps_ovr: number;
+  lowest_active_ovr: number;
+}
+
 const ovrColor = (v: number) => v >= 80 ? '#4caf50' : v >= 70 ? '#FF8740' : '#e57373';
 const ovrGrade = (v: number) => v >= 90 ? 'A+' : v >= 85 ? 'A' : v >= 80 ? 'B+' : v >= 75 ? 'B' : v >= 70 ? 'C+' : v >= 65 ? 'C' : 'D';
 
@@ -51,6 +61,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [retiredPlayers, setRetiredPlayers] = useState<{ name: string; position: string; age: number; ovr: number }[]>([]);
   const [statLeaders, setStatLeaders] = useState<any>(null);
   const [psAlert, setPSAlert] = useState<string | null>(null);
+  const [psPromotionAlerts, setPSPromotionAlerts] = useState<PSPromotionAlert[]>([]);
   const [seasonAwards, setSeasonAwards] = useState<any>(null);
   const [cpuOffer, setCpuOffer] = useState<CpuOffer | null>(null);
   const [offerHandled, setOfferHandled] = useState(false);
@@ -72,7 +83,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setPlayoffResults(null); setUserRecord(null); setInjuryReport([]);
       setSeasonAwards(null);
 
-      const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffer, tradeStatus, spots, health] = await Promise.all([
+      const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffer, tradeStatus, spots, health, psAlerts] = await Promise.all([
         window.api.getCurrentWeek(),
         window.api.getDashboard(currentSeason),
         window.api.getChampions(),
@@ -84,6 +95,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         window.api.getTeamStatus(userTeam.id),
         window.api.getRosterSpots(userTeam.id),
         window.api.getFranchiseHealth(userTeam.id),
+        window.api.getPSPromotionAlerts(userTeam.id),
       ]);
       if (cancelled) return;
 
@@ -106,6 +118,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setOfferHandled(false);
       setUserTradeStatus(tradeStatus ?? null);
       setFranchiseHealth(health ?? null);
+      setPSPromotionAlerts(psAlerts ?? []);
 
       if (offseason.playoffsComplete) setPlayoffsComplete(true);
 
@@ -205,13 +218,15 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     if (currentWeek === null || !userTeam) return;
     setSimulating(true);
     const weekResult = await window.api.simulateWeek(currentWeek);
-    const [status, dashboard, standings, injuries] = await Promise.all([
+    const [status, dashboard, standings, injuries, psAlerts] = await Promise.all([
       window.api.getCurrentWeek(), window.api.getDashboard(currentSeason),
       window.api.getStandings(currentSeason), window.api.getInjuryReport(userTeam.id),
+      window.api.getPSPromotionAlerts(userTeam.id),
     ]);
     setCurrentWeek(status.currentWeek);
     setTopAFC(dashboard.topAFC); setTopNFC(dashboard.topNFC);
     setInjuryReport(injuries ?? []);
+    setPSPromotionAlerts(psAlerts ?? []);
     const mine = standings.find((t: any) => t.id === userTeam.id);
     if (mine) setUserRecord({ wins: mine.wins, losses: mine.losses });
     setAllStandings(standings);
@@ -236,12 +251,14 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     setSimulatingGameId(gameId);
     const result = await window.api.simulateOneGame(gameId);
     if (!result?.success) { setSimulatingGameId(null); return; }
-    const [status, dashboard, standings, injuries] = await Promise.all([
+    const [status, dashboard, standings, injuries, psAlerts] = await Promise.all([
       window.api.getCurrentWeek(), window.api.getDashboard(currentSeason),
       window.api.getStandings(currentSeason), window.api.getInjuryReport(userTeam.id),
+      window.api.getPSPromotionAlerts(userTeam.id),
     ]);
     setCurrentWeek(status.currentWeek); setTopAFC(dashboard.topAFC); setTopNFC(dashboard.topNFC);
     setInjuryReport(injuries ?? []);
+    setPSPromotionAlerts(psAlerts ?? []);
     const mine = standings.find((t: any) => t.id === userTeam.id);
     if (mine) setUserRecord({ wins: mine.wins, losses: mine.losses });
     setAllStandings(standings);
@@ -333,6 +350,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const userWon = isGameSimmed && (userScore ?? 0) > (oppScore ?? 0);
 
   const seriousInjuries = injuryReport.filter(p => p.injury_status === 'ir' || p.injury_status === 'out');
+  const showAlerts = hasSchedule && !allWeeksDone && (seriousInjuries.length > 0 || psAlert || psPromotionAlerts.length > 0);
 
   if (loading || !userTeam)
     return <div style={{ color: T.textMuted, padding: 40, textAlign: 'center' }}>Loading...</div>;
@@ -440,7 +458,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                 </button>
                 {boxScore && boxScore.game.id === userGame.id && (
                   <div style={{ marginTop: 12, borderTop: `1px solid ${T.borderFaint}`, paddingTop: 12 }}>
-                    {/* Quarter scores */}
                     <div style={{ display: 'flex', fontSize: 10, marginBottom: 12, background: T.bgCard, borderRadius: 4, padding: '6px 10px', gap: 6, alignItems: 'center', fontFamily: 'monospace' }}>
                       {[
                         { name: boxScore.game.home_team, scores: [boxScore.game.home_q1, boxScore.game.home_q2, boxScore.game.home_q3, boxScore.game.home_q4], total: boxScore.game.home_score },
@@ -513,9 +530,11 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
           </div>
         )}
 
-        {hasSchedule && !allWeeksDone && (seriousInjuries.length > 0 || psAlert) && (
+        {showAlerts && (
           <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '14px 20px' }}>
             <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, marginBottom: 10, textTransform: 'uppercase' }}>Active Alerts</div>
+
+            {/* Injury alerts */}
             {seriousInjuries.slice(0, 5).map(p => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
                 <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 3, minWidth: 26, textAlign: 'center', background: p.injury_status === 'ir' ? '#1a0a0a' : '#140a00', color: p.injury_status === 'ir' ? '#e57373' : '#FF8740' }}>
@@ -526,6 +545,28 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                 <span style={{ fontSize: 10, color: T.textDim }}>{p.injury_type}{p.weeks_out > 0 ? ` · ${p.weeks_out}wk` : ''}</span>
               </div>
             ))}
+
+            {/* PS promotion alerts */}
+            {psPromotionAlerts.slice(0, 4).map(p => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 3, minWidth: 26, textAlign: 'center', background: '#0a2a0a', color: '#4caf50' }}>
+                  PS↑
+                </span>
+                <span style={{ fontSize: 12, color: T.textSecondary, flex: 1 }}>{p.first_name[0]}. {p.last_name}</span>
+                <span style={{ fontSize: 10, color: T.textMuted }}>{p.position_label || p.position}</span>
+                <span style={{ fontSize: 10, color: '#4caf50', fontFamily: 'monospace' }}>
+                  {p.ps_ovr} <span style={{ color: T.textDim }}>vs</span> {p.lowest_active_ovr}
+                </span>
+                <button
+                  onClick={() => onNavigate('myteam')}
+                  style={{ fontSize: 9, color: '#4caf50', background: 'none', border: '1px solid #1a4a1a', borderRadius: 3, padding: '2px 7px', cursor: 'pointer' }}
+                >
+                  Promote
+                </button>
+              </div>
+            ))}
+
+            {/* PS open spots alert */}
             {psAlert && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8 }}>
                 <span style={{ fontSize: 11, color: '#FF8740' }}>⚠ {psAlert}</span>
