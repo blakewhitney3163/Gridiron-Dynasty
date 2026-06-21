@@ -204,7 +204,7 @@ export default function ActiveRosterTab({
                 <button
                   onClick={() => isExtending
                     ? setExtendingId(null)
-                    : (setExtendingId(contract.id), setReleasingId(null), setExtendYears(Math.min(contract.years_remaining + 2, 5)))}
+                    : (setExtendingId(contract.id), setReleasingId(null), setExtendYears(2))}
                   style={{ padding: '4px 10px', background: isExtending ? '#1a3a1a' : '#141414', border: `1px solid ${isExtending ? '#4caf50' : '#2a2a2a'}`, borderRadius: 4, color: isExtending ? '#4caf50' : '#555', fontSize: 11, cursor: 'pointer' }}>
                   {isExtending ? 'Cancel' : 'Extend'}
                 </button>
@@ -223,13 +223,16 @@ export default function ActiveRosterTab({
                 </div>
                 <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                   <div>
-                    <div style={{ color: '#444', fontSize: 10, letterSpacing: 1, marginBottom: 6 }}>YEARS</div>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      {[1,2,3,4,5].map(y => (
-                        <button key={y} onClick={() => setExtendYears(y)} style={{ width: 32, height: 32, background: extendYears === y ? '#4caf50' : '#141414', border: `1px solid ${extendYears === y ? '#4caf50' : '#2a2a2a'}`, borderRadius: 4, color: extendYears === y ? '#000' : '#555', fontWeight: 'bold', fontSize: 12, cursor: 'pointer' }}>{y}</button>
-                      ))}
-                    </div>
-                  </div>
+  <div style={{ color: '#444', fontSize: 10, letterSpacing: 1, marginBottom: 6 }}>ADD YEARS</div>
+  <div style={{ display: 'flex', gap: 4 }}>
+    {[1,2,3,4,5].map(y => (
+      <button key={y} onClick={() => setExtendYears(y)} style={{ width: 32, height: 32, background: extendYears === y ? '#4caf50' : '#141414', border: `1px solid ${extendYears === y ? '#4caf50' : '#2a2a2a'}`, borderRadius: 4, color: extendYears === y ? '#000' : '#555', fontWeight: 'bold', fontSize: 12, cursor: 'pointer' }}>+{y}</button>
+    ))}
+  </div>
+  <div style={{ color: '#4caf50', fontSize: 10, marginTop: 4 }}>
+    {currentExtend.years_remaining}yr remaining → <strong>{currentExtend.years_remaining + extendYears}yr total</strong>
+  </div>
+</div>
                   <div>
                     <div style={{ color: '#444', fontSize: 10, letterSpacing: 1, marginBottom: 6 }}>ANNUAL SALARY (M)</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
