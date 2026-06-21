@@ -88,7 +88,7 @@ export default function Sidebar({
     : currentWeek != null ? `Week ${currentWeek} of 17` : 'Season ready';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 220, maxWidth: 220, borderLeft: `1px solid ${T.borderFaint}`, padding: '16px 14px', overflowY: 'auto', background: T.bgDark }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 260, maxWidth: 260, borderLeft: `1px solid ${T.borderFaint}`, padding: '16px 14px', overflowY: 'auto', background: T.bgDark }}>
 
       <SidebarBlock title="YOUR SEASON">
         <div style={{ color: '#ddd', fontWeight: 700, fontSize: 13 }}>{userTeam.city} {userTeam.name}</div>
@@ -202,10 +202,15 @@ export default function Sidebar({
             { label: 'SACKS', p: statLeaders.sacks?.[0], val: (p: any) => Number(p.sacks ?? 0).toFixed(1) },
             { label: 'TACKLES', p: statLeaders.tackles?.[0], val: (p: any) => ((p.tackles ?? 0) + (p.assisted_tackles ?? 0)).toString() },
           ].filter(r => r.p).map(({ label, p, val }) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
-              <span style={{ color: T.textDim, fontSize: 10 }}>{label}</span>
-              <span style={{ color: '#bbb', fontSize: 11, flex: 1, textAlign: 'center' }}>{p.player_name}</span>
-              <span style={{ color: '#4FC3F7', fontSize: 11, fontFamily: 'monospace' }}>{val(p)}</span>
+            <div key={label} style={{ padding: '4px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ color: T.textDim, fontSize: 10 }}>{label}</span>
+                <span style={{ color: '#4FC3F7', fontSize: 12, fontFamily: 'monospace', fontWeight: 700 }}>{val(p)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 1 }}>
+                <span style={{ color: '#bbb', fontSize: 11 }}>{p.player_name}</span>
+                {p.team_name && <span style={{ color: T.textDim, fontSize: 10, fontFamily: 'monospace' }}>{p.team_name}</span>}
+              </div>
             </div>
           ))}
         </SidebarBlock>
