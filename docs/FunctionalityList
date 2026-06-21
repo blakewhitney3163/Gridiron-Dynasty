@@ -14,7 +14,7 @@ CORE INFRASTRUCTURE
 - Schema version: v11. Migration runner in runMigrations() upgrades existing
   saves on launch. Old migration blocks removed once all saves have passed them.
   Active migrations:
-    v9:  team_id INTEGER on career_stats_history + idx_career_stats_team
+    v9: team_id INTEGER on career_stats_history + idx_career_stats_team
     v10: Recalibrate all active-roster contract salaries to market-rate scale
          (fixes "TEAM DEAL" badge on nearly every player from prior saves)
     v11: Normalize all team salary totals to 95% of salary cap (~$265M),
@@ -29,15 +29,15 @@ CORE INFRASTRUCTURE
   team_id captures the team the player accumulated stats for that season
   (archived via MAX(s.team_id) at season-end).
 - DB indexes:
-  stats: game_id, player_id, team_id, (team_id,game_id), (season,is_playoff)
-  games: season, (season,is_simulated), (season,week,is_playoff)
-  career_stats_history: player_id, (player_id,season), team_id
-  news_events: (season,week), (season,category)
-  contracts: team_id, player_id
-  depth_chart: (team_id,position_group)
-  pick_assets: (owner_team_id,season)
-  draft_prospects: season
-  players: (team_id,roster_status), roster_status
+    stats: game_id, player_id, team_id, (team_id,game_id), (season,is_playoff)
+    games: season, (season,is_simulated), (season,week,is_playoff)
+    career_stats_history: player_id, (player_id,season), team_id
+    news_events: (season,week), (season,category)
+    contracts: team_id, player_id
+    depth_chart: (team_id,position_group)
+    pick_assets: (owner_team_id,season)
+    draft_prospects: season
+    players: (team_id,roster_status), roster_status
 - player_milestones table — deduplication store with PRIMARY KEY
   (player_id, milestone_key)
 - 32 fictional teams auto-seeded on first launch (AFC/NFC, 4 divisions each)
@@ -52,15 +52,15 @@ CORE INFRASTRUCTURE
 CODE ARCHITECTURE
 ────────────────────────────────────────────────────────────────────────────────
 - Game simulation modularized into src/sim/:
-    types.ts    — shared TeamRatings, GameResult, GamePlayerStat interfaces
-    ratings.ts  — loadTeamData(), computeTeamRatings(), math helpers
-    stats.ts    — player stat generation per position
-    scoring.ts  — weather, quarter scoring, overtime
-  simulateGame.ts is a thin orchestrator that imports and re-exports these.
+    types.ts — shared TeamRatings, GameResult, GamePlayerStat interfaces
+    ratings.ts — loadTeamData(), computeTeamRatings(), math helpers
+    stats.ts — player stat generation per position
+    scoring.ts — weather, quarter scoring, overtime
+    simulateGame.ts is a thin orchestrator that imports and re-exports these.
 - Preload modularized into src/preload/ (8 domain files):
     core.ts, season.ts, roster.ts, contracts.ts, trades.ts, draft.ts,
     stats.ts, coaching.ts
-  preload.ts merges all via spread into a single contextBridge exposure.
+    preload.ts merges all via spread into a single contextBridge exposure.
 - IPC handlers split by domain in src/handlers/:
     simHandlers, seasonHandlers, settingsHandlers, statsHandlers,
     contractHandlers, tradeHandlers, draftHandlers, importHandlers,
@@ -77,37 +77,54 @@ MEET THE TEAM SCREEN
 - Displays: Team grade, Offense/Defense OVR, Cap Space, top 10 players,
   Team Needs panel, Roster Snapshot, Getting Started tips
 
+DYNASTY SETUP SCREEN (App.tsx)
+────────────────────────────────────────────────────────────────────────────────
+- Dynasty name input fully editable with clear visual affordance:
+  white border, orange glow on focus, helper label below the field
+- "Start New Dynasty" → team selection → Meet the Team → Home
+
+TEAM SELECTION SCREEN (TeamSelection.tsx)
+────────────────────────────────────────────────────────────────────────────────
+- Blue-navy gradient background replacing the near-black prior design
+- Lighter division header cards and team cards with improved hover states
+- Conference / division layout, readable text at all times
+
 HOME TAB
 ────────────────────────────────────────────────────────────────────────────────
 - Current week display with season + user team record
 - Generate schedule for the season (all 18 weeks)
 - Simulate one week at a time or one game at a time
 - Game cards showing matchups (pre-sim preview or post-sim results)
+- "Advance Week" button label is context-aware:
+    Weeks 1–16: "▶ Advance to Week N"
+    Week 17:    "▶ End Regular Season" (triggers playoff seeding)
 - Clickable games open a box score modal:
-  - Q1–Q4 scoring breakdown + final score
-  - Weather condition label
-  - Passing / rushing / receiving / defense / kicker stat leaders
-  - Defensive TD row when applicable
+    - Q1–Q4 scoring breakdown + final score for both teams
+    - Weather condition label
+    - Passing / rushing / receiving / defense / kicker stat leaders
+    - Each stat leader row shows the player's name AND team name
+    - Defensive TD row when applicable
 - Incoming CPU Trade Offer card (TradeOfferCard.tsx):
-  - Appears at top of content when a CPU team has an active offer
-  - Shows offering team, requested player, offered player + optional pick,
-    net value diff (green if in your favor, orange if against)
-  - Accept Trade and Decline buttons work directly from Home
-  - "Full Details →" navigates to the Trades tab
+    - Appears at top of content when a CPU team has an active offer
+    - Shows offering team, requested player, offered player + optional pick,
+      net value diff (green if in your favor, orange if against)
+    - Accept Trade and Decline buttons work directly from Home
+    - "Full Details →" navigates to the Trades tab
 - Franchise Health Monitor panel in sidebar (YOUR ROSTER block):
-  - Offense OVR, Defense OVR, Overall OVR — large color-coded tiles with
-    letter grades (A+ through D)
-  - 7 positional group tiles: QB, RB, WR/TE, OL, DL, LB, DB
-  - Color-coded green (80+), orange (70–79), red (<70)
-  - Updates live after every simulated week and individual game sim
-  - Backed by getFranchiseHealth() in PlayerRepository
+    - Offense OVR, Defense OVR, Overall OVR — large color-coded tiles with
+      letter grades (A+ through D)
+    - 7 positional group tiles: QB, RB, WR/TE, OL, DL, LB, DB
+    - Color-coded green (80+), orange (70–79), red (<70)
+    - Updates live after every simulated week and individual game sim
+    - Backed by getFranchiseHealth() in PlayerRepository
 - Live standings snapshot (top AFC / NFC teams in sidebar)
 - Weekly stat leaders widget in sidebar (Pass Yds, Rush Yds, Rec Yds,
-  Sacks, Tackles)
+  Sacks, Tackles) — each leader shows player name + team name on separate lines
+- Sidebar width: 260px (widened from 220px for better readability)
 - Trade Status widget in sidebar:
-  - Displays user team's current trade posture badge
-  - Quick-click buttons to override: auto / Buyer / Seller / Rebuilding /
-    Neutral
+    - Displays user team's current trade posture badge
+    - Quick-click buttons to override: auto / Buyer / Seller / Rebuilding /
+      Neutral
 - Practice squad injury alert banner
 - Advance season button with confirmation dialog
 - Playoff seeding display + simulate playoffs trigger
@@ -115,8 +132,8 @@ HOME TAB
 - Draft status indicator (draft complete / generated)
 - Pending re-sign count notification
 - Season Awards panel (SeasonAwardsView.tsx) — after playoffs:
-  MVP, Offensive POY, Defensive POY, Offensive ROY, Defensive ROY,
-  Coach of the Year with stat lines formatted by position group
+    MVP, Offensive POY, Defensive POY, Offensive ROY, Defensive ROY,
+    Coach of the Year with stat lines formatted by position group
 
 STANDINGS TAB
 ────────────────────────────────────────────────────────────────────────────────
@@ -125,6 +142,7 @@ STANDINGS TAB
 - Playoff seed panel showing current seedings
 - Historical season selector (browse any past season)
 - User team highlighted in standings
+- Container uses overflow: auto — fully scrollable when content overflows
 
 SCHEDULE TAB
 ────────────────────────────────────────────────────────────────────────────────
@@ -138,9 +156,9 @@ TEAMS TAB
 - Click a player → detail panel with full position-specific attribute ratings,
   dev trait badge, season stats, career stats (expandable by season)
 - Player Editor (inline edit mode via Edit button):
-  - Editable: overall rating, age, dev trait, all 14 position-specific
-    attribute sliders (40–99)
-  - Saves via edit-player IPC handler with column allowlist
+    - Editable: overall rating, age, dev trait, all 14 position-specific
+      attribute sliders (40–99)
+    - Saves via edit-player IPC handler with column allowlist
 
 DEPTH CHART TAB
 ────────────────────────────────────────────────────────────────────────────────
@@ -150,7 +168,7 @@ DEPTH CHART TAB
 - Dev trait badges per player
 - Depth chart drives target distribution in game simulation
 
-FRANCHISE TAB (6 sub-tabs)
+FRANCHISE TAB (7 sub-tabs)
 ────────────────────────────────────────────────────────────────────────────────
 Roster Tab:
   - Full active roster with salary, years remaining, OVR, age, dev trait
@@ -162,6 +180,20 @@ Roster Tab:
     (label: SS/FS) appear correctly under their position group buttons
   - Contract grade badges (TEAM DEAL / OVERPAID)
   - Release, Extend, Restructure actions with cap impact preview
+  - Extend dialog: shows current remaining years + extension years being added;
+    button labels read "+1 yr", "+2 yrs" etc.; extension ADDS years to the
+    existing remaining years rather than overwriting them
+
+Salaries Tab (SalariesTab.tsx):
+  - Full salary + contract detail for every player on the active roster
+  - Columns: Player, Pos, OVR, Salary, Years Remaining, Contract Grade
+  - Position filter buttons and name search
+  - Sort by salary, years remaining, OVR, or name
+  - Cap summary bar at top: Total Cap / Used Cap / Available Cap
+  - Contract grade badges: TEAM DEAL (green), FAIR (gray), OVERPAID (red)
+  - Guaranteed percentage display per player
+  - Years remaining pips (visual dots per year left on deal)
+  - Value grading (A / B / C / D) derived from OVR vs. salary percentile
 
 Practice Squad Tab:
   - View PS players; promote to active roster (53-man limit enforced)
@@ -213,16 +245,16 @@ TRADES TAB
 - CPU acceptance logic: value balance, team needs, trade status
 - Team trade status: Buyer / Seller / Rebuilding / Neutral (+ manual override)
 - CPU incoming trade offers (getCpuTradeOffers in TradeService.ts):
-  - Returns an array of up to 3 simultaneous offers (previously single offer)
-  - ~35% chance of any offers generating on a given check — prevents inbox
-    from always being full after every tab visit
-  - No two offers in the same batch can target the same user player
-    (claimedUserPlayerIds Set tracks claimed players)
-  - Displayed in CpuOfferBanner.tsx with "X of Y offers" pill and ‹ › prev/
-    next navigation buttons when multiple offers are present
-  - Accept removes that offer from the array; Decline removes it too; other
-    offers in the batch remain visible and navigable
-  - Also surfaced as a card on the Home tab (TradeOfferCard.tsx)
+    - Returns an array of up to 3 simultaneous offers (previously single offer)
+    - ~35% chance of any offers generating on a given check — prevents inbox
+      from always being full after every tab visit
+    - No two offers in the same batch can target the same user player
+      (claimedUserPlayerIds Set tracks claimed players)
+    - Displayed in CpuOfferBanner.tsx with "X of Y offers" pill and ‹ › prev/
+      next navigation buttons when multiple offers are present
+    - Accept removes that offer from the array; Decline removes it too; other
+      offers in the batch remain visible and navigable
+    - Also surfaced as a card on the Home tab (TradeOfferCard.tsx)
 - Trade deadline enforcement (locked after Week 8)
 - CPU-vs-CPU in-season trades (runCpuTrades): Weeks 2–8, capped at 2/week
   (reduced from 4), higher skip threshold (72% for normal sellers) to reduce
@@ -314,9 +346,9 @@ GAME SIMULATION ENGINE
   Week assignment prevents teams from playing twice in the same week.
 - Morale modifier: effective OVR = rating × (1 + (morale − 75) × 0.001)
 - Coaching modifier (applied in getTeamRatings):
-  OC offense_rating: offenseRating += (oc_rating − 70) × 0.15
-  DC defense_rating: defenseRating += (dc_rating − 70) × 0.15
-  HC overall_rating: both sides += (hc_rating − 70) × 0.05
+    OC offense_rating: offenseRating += (oc_rating − 70) × 0.15
+    DC defense_rating: defenseRating += (dc_rating − 70) × 0.15
+    HC overall_rating: both sides += (hc_rating − 70) × 0.05
 - Scheme modifier: each team's offense/defense rating adjusted based on
   roster fit to scheme (West Coast, Air Raid, Power Run, Spread, Run & Gun,
   4-3, 3-4, Zone Cover 2, Man Press, Blitz Heavy)
@@ -370,35 +402,35 @@ MILESTONE SYSTEM
 
 BACKEND IPC HANDLERS (full list)
 ────────────────────────────────────────────────────────────────────────────────
-balance-rosters        get-waiver-wire        claim-waiver
-get-standings          get-teams              get-roster
-get-player-stats       get-player-career-stats get-schedule
-get-dashboard          get-stats              get-hall-of-fame
-get-team-season-stats  simulate-playoffs      get-playoffs
-get-champions          get-seasons            get-current-season
-advance-season         generate-schedule      get-current-week
-get-week-matchups      simulate-week          get-injury-report
-get-game-box-score     reset-dynasty          get-playoff-seeds
-get-user-team          set-user-team          get-team-status
-set-team-trade-status  propose-trade          get-tradeable-picks
-get-cpu-trade-offer    accept-cpu-trade-offer get-team-contracts
-get-practice-squad     get-cap-summary        get-roster-spots
-sign-free-agent-to-ps  get-free-agents        extend-player
-restructure-player     release-player         get-team-stats
-promote-from-ps        sign-free-agent        get-expiring-contracts
-resign-player          get-offseason-status   cpu-fa-signing
-generate-draft-class   get-draft-class        get-draft-order
-get-round-pick-order   make-draft-pick        scout-prospect
-get-scout-count        run-cpu-round          complete-draft
-get-depth-chart        set-depth-chart-order  reset-depth-chart
-get-alltime-leaders    get-season-records     get-season-awards
-get-franchise-records  get-team-needs         check-setup-done
-reset-save             get-news-feed          get-news-seasons
-simulate-game          list-saves             open-save
-delete-save            edit-player            apply-franchise-tag
-remove-franchise-tag   accept-counter-offer   get-dead-cap
-open-free-agency       get-coaching-staff     get-available-coaches
-hire-coach             fire-coach             get-team-scheme
-get-scheme-options     set-team-scheme        get-franchise-health
-get-difficulty         set-difficulty         import-historical-records
-import-custom-teams    import-custom-players
+balance-rosters get-waiver-wire claim-waiver
+get-standings get-teams get-roster
+get-player-stats get-player-career-stats get-schedule
+get-dashboard get-stats get-hall-of-fame
+get-team-season-stats simulate-playoffs get-playoffs
+get-champions get-seasons get-current-season
+advance-season generate-schedule get-current-week
+get-week-matchups simulate-week get-injury-report
+get-game-box-score reset-dynasty get-playoff-seeds
+get-user-team set-user-team get-team-status
+set-team-trade-status propose-trade get-tradeable-picks
+get-cpu-trade-offer accept-cpu-trade-offer get-team-contracts
+get-practice-squad get-cap-summary get-roster-spots
+sign-free-agent-to-ps get-free-agents extend-player
+restructure-player release-player get-team-stats
+promote-from-ps sign-free-agent get-expiring-contracts
+resign-player get-offseason-status cpu-fa-signing
+generate-draft-class get-draft-class get-draft-order
+get-round-pick-order make-draft-pick scout-prospect
+get-scout-count run-cpu-round complete-draft
+get-depth-chart set-depth-chart-order reset-depth-chart
+get-alltime-leaders get-season-records get-season-awards
+get-franchise-records get-team-needs check-setup-done
+reset-save get-news-feed get-news-seasons
+simulate-game list-saves open-save
+delete-save edit-player apply-franchise-tag
+remove-franchise-tag accept-counter-offer get-dead-cap
+open-free-agency get-coaching-staff get-available-coaches
+hire-coach fire-coach get-team-scheme
+get-scheme-options set-team-scheme get-franchise-health
+get-difficulty set-difficulty import-historical-records
+import-custom-teams import-custom-players
