@@ -427,5 +427,5 @@ db.transaction(() => {
 
   // ── Advance Season Counter ────────────────────────────────────────────────
   settingsRepo.set('current_season', String(next));
-  return { nextSeason: next, retired, cpuResigns, breakouts: breakoutIds.size, hofInductees };
+  return { nextSeason: next, retired, announcingRetirements, cpuResigns, breakouts: breakoutIds.size, hofInductees };
 }
