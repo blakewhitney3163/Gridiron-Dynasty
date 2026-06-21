@@ -146,14 +146,16 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     const status = await window.api.getCurrentWeek();
     setHasSchedule(status.hasSchedule);
     setCurrentWeek(status.currentWeek);
-    setMatchups(await window.api.getWeekMatchups(status.currentWeek));
+    if (status.currentWeek !== null) {
+      setMatchups(await window.api.getWeekMatchups(status.currentWeek));
+    }
     const tradeOffer = await window.api.getCpuTradeOffer();
     setCpuOffer(tradeOffer ?? null);
     setOfferHandled(false);
     setGeneratingSchedule(false);
   };
 
-  // Used by the Sidebar "Sim Rest of Week" button — sims CPU games only, skips user's game
+  // Sims the remaining CPU games for the week — called by Sidebar and the "Advance Week" button
   const handleSimulateWeek = async () => {
     if (currentWeek === null || !userTeam) return;
     setSimulating(true);
@@ -183,35 +185,26 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     setSimulating(false);
   };
 
+  // Sims only the user's game, then shows the result
   const handleSimulateGame = async (gameId: number) => {
-  if (!userTeam) return;
-  setSimulatingGameId(gameId);
-  const result = await window.api.simulateOneGame(gameId);
-  if (!result?.success) { setSimulatingGameId(null); return; }
-  const [status, dashboard, standings, injuries] = await Promise.all([
-    window.api.getCurrentWeek(), window.api.getDashboard(currentSeason),
-    window.api.getStandings(currentSeason), window.api.getInjuryReport(userTeam.id),
-  ]);
-  setCurrentWeek(status.currentWeek); setTopAFC(dashboard.topAFC); setTopNFC(dashboard.topNFC);
-  setInjuryReport(injuries ?? []);
-  const mine = standings.find((t: any) => t.id === userTeam.id);
-  if (mine) setUserRecord({ wins: mine.wins, losses: mine.losses });
-  if (result.userPSOpenSpots > 0)
-    setPSAlert(`Practice squad has ${result.userPSOpenSpots} open spot${result.userPSOpenSpots !== 1 ? 's' : ''}. Go to My Team → Practice Squad.`);
-  if (result.weekComplete) {
-    setStatLeaders(await window.api.getStats(currentSeason));
-    if (status.currentWeek === null && status.hasSchedule) {
-      setPlayoffSeeds(await window.api.getPlayoffSeeds());
-      setMatchups(await window.api.getWeekMatchups(18));
-    } else if (status.currentWeek) {
-      setMatchups(await window.api.getWeekMatchups(status.currentWeek));
-    }
-  } else if (currentWeek) {
-    setMatchups(await window.api.getWeekMatchups(currentWeek));
-  }
-  setFranchiseHealth(await window.api.getFranchiseHealth(userTeam.id));
-  setSimulatingGameId(null);
-};
+    if (!userTeam) return;
+    setSimulatingGameId(gameId);
+    const result = await window.api.simulateOneGame(gameId);
+    if (!result?.success) { setSimulatingGameId(null); return; }
+    const [status, dashboard, standings, injuries] = await Promise.all([
+      window.api.getCurrentWeek(), window.api.getDashboard(currentSeason),
+      window.api.getStandings(currentSeason), window.api.getInjuryReport(userTeam.id),
+    ]);
+    setCurrentWeek(status.currentWeek); setTopAFC(dashboard.topAFC); setTopNFC(dashboard.topNFC);
+    setInjuryReport(injuries ?? []);
+    const mine = standings.find((t: any) => t.id === userTeam.id);
+    if (mine) setUserRecord({ wins: mine.wins, losses: mine.losses });
+    if (result.userPSOpenSpots > 0)
+      setPSAlert(`Practice squad has ${result.userPSOpenSpots} open spot${result.userPSOpenSpots !== 1 ? 's' : ''}. Go to My Team → Practice Squad.`);
+    if (currentWeek) setMatchups(await window.api.getWeekMatchups(currentWeek));
+    setFranchiseHealth(await window.api.getFranchiseHealth(userTeam.id));
+    setSimulatingGameId(null);
+  };
 
   const handleBoxScore = async (gameId: number) => {
     if (boxScore?.game?.id === gameId) { setBoxScore(null); return; }
@@ -346,11 +339,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                       opacity: (simulating || !!simulatingGameId) ? 0.5 : 1,
                     }}
                   >
-                    {simulatingGameId === userGame.id
-                      ? 'Simulating Game...'
-                      : simulating
-                      ? 'Simulating Week...'
-                      : '▶ Sim My Game'}
+                    {simulatingGameId === userGame.id ? 'Simulating...' : '▶ Sim My Game'}
                   </button>
                 </div>
               </>
@@ -370,6 +359,20 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                 <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: userWon ? '#4caf50' : '#e57373', marginBottom: 12, letterSpacing: 2 }}>
                   {userWon ? 'VICTORY' : 'DEFEAT'}
                 </div>
+                <button
+                  onClick={handleSimulateWeek}
+                  disabled={!!simulating}
+                  style={{
+                    width: '100%', padding: '10px 0', marginBottom: 8,
+                    background: simulating ? T.bgCard : '#0a1a2a',
+                    border: `1px solid ${simulating ? T.borderMid : '#4FC3F7'}`,
+                    borderRadius: 5, color: simulating ? T.textMuted : '#4FC3F7',
+                    fontWeight: 700, fontSize: 12,
+                    cursor: simulating ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {simulating ? 'Advancing Week...' : `▶ Advance to Week ${(currentWeek ?? 1) + 1}`}
+                </button>
                 <button
                   onClick={() => handleBoxScore(userGame.id)}
                   disabled={boxScoreLoading}
