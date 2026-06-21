@@ -207,118 +207,120 @@ export function registerSimHandlers(): void {
   });
 
   ipcMain.handle('generate-schedule', () => {
-  const season = getCurrentSeason();
-  if (gameRepo.countBySeason(season) > 0) return { alreadyExists: true, season };
+    const season = getCurrentSeason();
+    if (gameRepo.countBySeason(season) > 0) return { alreadyExists: true, season };
 
-  // Load teams grouped by conference + division
-  interface TeamRow { id: number; conference: string; division: string; }
-  const teamRows = db.prepare(
-    'SELECT id, conference, division FROM teams ORDER BY conference, division, id'
-  ).all() as TeamRow[];
+    interface TeamRow { id: number; conference: string; division: string; }
+    const teamRows = db.prepare(
+      'SELECT id, conference, division FROM teams ORDER BY conference, division, id'
+    ).all() as TeamRow[];
 
-  const divMap: Record<string, number[]> = {};
-  for (const t of teamRows) {
-    const key = `${t.conference}-${t.division}`;
-    if (!divMap[key]) divMap[key] = [];
-    divMap[key].push(t.id);
-  }
+    const divMap: Record<string, number[]> = {};
+    for (const t of teamRows) {
+      const key = `${t.conference}-${t.division}`;
+      if (!divMap[key]) divMap[key] = [];
+      divMap[key].push(t.id);
+    }
 
-  const afcDivs = ['AFC-North', 'AFC-South', 'AFC-East', 'AFC-West'];
-  const nfcDivs = ['NFC-North', 'NFC-South', 'NFC-East', 'NFC-West'];
+    const afcDivs = ['AFC-North', 'AFC-South', 'AFC-East', 'AFC-West'];
+    const nfcDivs = ['NFC-North', 'NFC-South', 'NFC-East', 'NFC-West'];
 
-  // 3-year rotation: each division draws 2 others within conference per season
-  // Indices: 0=North, 1=South, 2=East, 3=West
-  const intraPairings: [number, number][][] = [
-    [[0,1],[2,3],[0,2],[1,3]], // season % 3 === 0
-    [[0,2],[1,3],[0,3],[1,2]], // season % 3 === 1
-    [[0,3],[1,2],[0,1],[2,3]], // season % 3 === 2
-  ];
-  const confPairs = intraPairings[season % 3];
+    const intraPairings: [number, number][][] = [
+      [[0,1],[2,3],[0,2],[1,3]],
+      [[0,2],[1,3],[0,3],[1,2]],
+      [[0,3],[1,2],[0,1],[2,3]],
+    ];
+    const confPairs = intraPairings[season % 3];
 
-  // Generate all 16 games between two divisions (balanced home/away per team)
-  const divMatchup = (keyA: string, keyB: string, offset: number): { home: number; away: number }[] => {
-    const a = divMap[keyA] ?? [];
-    const b = divMap[keyB] ?? [];
-    const games: { home: number; away: number }[] = [];
-    for (let i = 0; i < a.length; i++) {
-      for (let j = 0; j < b.length; j++) {
-        if ((i + j + offset) % 2 === 0) games.push({ home: a[i], away: b[j] });
-        else games.push({ home: b[j], away: a[i] });
+    const divMatchup = (keyA: string, keyB: string, offset: number): { home: number; away: number }[] => {
+      const a = divMap[keyA] ?? [];
+      const b = divMap[keyB] ?? [];
+      const games: { home: number; away: number }[] = [];
+      for (let i = 0; i < a.length; i++) {
+        for (let j = 0; j < b.length; j++) {
+          if ((i + j + offset) % 2 === 0) games.push({ home: a[i], away: b[j] });
+          else games.push({ home: b[j], away: a[i] });
+        }
+      }
+      return games;
+    };
+
+    const allMatchups: { home: number; away: number }[] = [];
+
+    for (const divKey of [...afcDivs, ...nfcDivs]) {
+      const teams = divMap[divKey] ?? [];
+      for (let i = 0; i < teams.length; i++) {
+        for (let j = i + 1; j < teams.length; j++) {
+          allMatchups.push({ home: teams[i], away: teams[j] });
+          allMatchups.push({ home: teams[j], away: teams[i] });
+        }
       }
     }
-    return games;
-  };
 
-  const allMatchups: { home: number; away: number }[] = [];
+    for (const [di, dj] of confPairs) {
+      allMatchups.push(...divMatchup(afcDivs[di], afcDivs[dj], season));
+      allMatchups.push(...divMatchup(nfcDivs[di], nfcDivs[dj], season));
+    }
 
-  // 1. Divisional — home + away vs each of 3 rivals (6 games per team)
-  for (const divKey of [...afcDivs, ...nfcDivs]) {
-    const teams = divMap[divKey] ?? [];
-    for (let i = 0; i < teams.length; i++) {
-      for (let j = i + 1; j < teams.length; j++) {
-        allMatchups.push({ home: teams[i], away: teams[j] });
-        allMatchups.push({ home: teams[j], away: teams[i] });
+    for (let i = 0; i < 4; i++) {
+      allMatchups.push(...divMatchup(afcDivs[i], nfcDivs[(i + season) % 4], season + 1));
+    }
+
+    // Retry until all 288 games are placed with exactly 1 game per team per week
+    let weeks: { home: number; away: number }[][] = [];
+    let scheduled = false;
+
+    for (let attempt = 0; attempt < 100 && !scheduled; attempt++) {
+      const shuffled = [...allMatchups].sort(() => Math.random() - 0.5);
+      const tryWeeks: { home: number; away: number }[][] = Array.from({ length: 18 }, () => []);
+      const tryUsed: Set<number>[] = Array.from({ length: 18 }, () => new Set());
+      let failed = false;
+
+      for (const game of shuffled) {
+        let placed = false;
+        // Sort weeks by current size so we fill evenly
+        const weekOrder = Array.from({ length: 18 }, (_, i) => i)
+          .sort((a, b) => tryWeeks[a].length - tryWeeks[b].length);
+
+        for (const w of weekOrder) {
+          if (tryWeeks[w].length >= 16) continue;
+          if (tryUsed[w].has(game.home) || tryUsed[w].has(game.away)) continue;
+          tryWeeks[w].push(game);
+          tryUsed[w].add(game.home);
+          tryUsed[w].add(game.away);
+          placed = true;
+          break;
+        }
+
+        if (!placed) {
+          failed = true;
+          break;
+        }
+      }
+
+      if (!failed) {
+        weeks = tryWeeks;
+        scheduled = true;
       }
     }
-  }
 
-  // 2. Intra-conference non-divisional — 2 full division draws (8 games per team)
-  for (const [di, dj] of confPairs) {
-    allMatchups.push(...divMatchup(afcDivs[di], afcDivs[dj], season));
-    allMatchups.push(...divMatchup(nfcDivs[di], nfcDivs[dj], season));
-  }
-
-  // 3. Inter-conference — 1 full division draw rotating by season (4 games per team)
-  for (let i = 0; i < 4; i++) {
-    allMatchups.push(...divMatchup(afcDivs[i], nfcDivs[(i + season) % 4], season + 1));
-  }
-  // Totals: 96 divisional + 128 intra-conf + 64 inter-conf = 288 games
-  // Per team: 6 + 8 + 4 = 18 games, 18 weeks × 16 games ✓
-
-  // Assign matchups to 18 weeks — no team plays twice in the same week
-  const shuffled = [...allMatchups].sort(() => Math.random() - 0.5);
-  const weeks: { home: number; away: number }[][] = Array.from({ length: 18 }, () => []);
-  const usedInWeek: Set<number>[] = Array.from({ length: 18 }, () => new Set());
-
-  for (const game of shuffled) {
-    let placed = false;
-    const weekOrder = Array.from({ length: 18 }, (_, i) => i)
-      .sort((a, b) => weeks[a].length - weeks[b].length);
-    for (const w of weekOrder) {
-      if (weeks[w].length >= 16) continue;
-      if (usedInWeek[w].has(game.home) || usedInWeek[w].has(game.away)) continue;
-      weeks[w].push(game);
-      usedInWeek[w].add(game.home);
-      usedInWeek[w].add(game.away);
-      placed = true;
-      break;
+    if (!scheduled) {
+      return { season, created: false, error: 'Could not generate a valid schedule after 100 attempts' };
     }
-    if (!placed) {
+
+    const insertGame = db.prepare(
+      'INSERT INTO games (season, week, home_team_id, away_team_id, is_simulated) VALUES (?, ?, ?, ?, 0)'
+    );
+    db.transaction(() => {
       for (let w = 0; w < 18; w++) {
-        if (usedInWeek[w].has(game.home) || usedInWeek[w].has(game.away)) continue;
-        weeks[w].push(game);
-        usedInWeek[w].add(game.home);
-        usedInWeek[w].add(game.away);
-        placed = true;
-        break;
+        for (const g of weeks[w]) {
+          insertGame.run(season, w + 1, g.home, g.away);
+        }
       }
-    }
-    if (!placed) weeks[0].push(game);
-  }
+    })();
 
-  const insertGame = db.prepare(
-    'INSERT INTO games (season, week, home_team_id, away_team_id, is_simulated) VALUES (?, ?, ?, ?, 0)'
-  );
-  db.transaction(() => {
-    for (let w = 0; w < 18; w++) {
-      for (const g of weeks[w]) {
-        insertGame.run(season, w + 1, g.home, g.away);
-      }
-    }
-  })();
-
-  return { season, created: true, alreadyExists: false };
-});
+    return { season, created: true, alreadyExists: false };
+  });
 
   ipcMain.handle('get-current-week', () => {
     const season = getCurrentSeason();
@@ -340,23 +342,23 @@ export function registerSimHandlers(): void {
     `).all(season, week);
   });
 
-ipcMain.handle('simulate-week', async (_event: IpcEvent, week: number) => {
-  const season = getCurrentSeason();
-  const userTeamId = settingsRepo.getUserTeamId() ?? -1;
-  const games = gameRepo.getPendingByWeek(season, week)
-    .filter((g: any) => g.home_team_id !== userTeamId && g.away_team_id !== userTeamId);
-  if (games.length === 0) return { week, season, gamesSimulated: 0 };
+  ipcMain.handle('simulate-week', async (_event: IpcEvent, week: number) => {
+    const season = getCurrentSeason();
+    const userTeamId = settingsRepo.getUserTeamId() ?? -1;
+    const games = gameRepo.getPendingByWeek(season, week)
+      .filter((g: any) => g.home_team_id !== userTeamId && g.away_team_id !== userTeamId);
+    if (games.length === 0) return { week, season, gamesSimulated: 0 };
 
-  return runSimWorker({
-    type: 'simulate-week',
-    week,
-    season,
-    games,
-    userTeamId,
-    difficultyFactor: getDifficultyFactor(),
-    dbPath: getDbPath(),
+    return runSimWorker({
+      type: 'simulate-week',
+      week,
+      season,
+      games,
+      userTeamId,
+      difficultyFactor: getDifficultyFactor(),
+      dbPath: getDbPath(),
+    });
   });
-});
 
   ipcMain.handle('simulate-game', (_event: IpcEvent, gameId: number) => {
     const game = db.prepare(`SELECT * FROM games WHERE id = ?`).get(gameId) as any;
