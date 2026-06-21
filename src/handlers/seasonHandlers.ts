@@ -170,6 +170,86 @@ export function registerSeasonHandlers(): void {
     `).all(s);
   });
 
+  ipcMain.handle('get-announcing-retirements', () => {
+  const userTeamId = settingsRepo.getUserTeamId() ?? -1;
+  return db.prepare(`
+    SELECT p.id, p.first_name, p.last_name, p.position, p.position_label,
+           p.age, p.overall_rating, c.annual_salary
+    FROM players p
+    LEFT JOIN contracts c ON c.player_id = p.id
+    WHERE p.team_id = ? AND p.roster_status = 'announcing_retirement'
+    ORDER BY p.overall_rating DESC
+  `).all(userTeamId);
+});
+
+ipcMain.handle('make-retention-offer', (_event: any, playerId: number) => {
+  const player = db.prepare(`
+    SELECT id, first_name, last_name, position, age, overall_rating
+    FROM players WHERE id = ? AND roster_status = 'announcing_retirement'
+  `).get(playerId) as any;
+  if (!player) return { success: false, reason: 'Player not found.' };
+
+  let acceptChance = 0.50;
+  if (player.age <= 33) acceptChance += 0.15;
+  else if (player.age <= 35) acceptChance += 0.00;
+  else if (player.age <= 37) acceptChance -= 0.15;
+  else acceptChance -= 0.30;
+  if (player.overall_rating >= 80) acceptChance += 0.10;
+  if (player.overall_rating < 70) acceptChance -= 0.15;
+  acceptChance = Math.max(0.10, Math.min(0.85, acceptChance));
+
+  const accepted = Math.random() < acceptChance;
+  const name = `${player.first_name} ${player.last_name}`;
+  const season = getCurrentSeason();
+
+  if (accepted) {
+    const contract = db.prepare('SELECT annual_salary FROM contracts WHERE player_id = ?').get(playerId) as any;
+    const currentSalary = contract?.annual_salary ?? 2.0;
+    const offerSalary = Math.max(1.0, Math.round(currentSalary * 0.75 * 10) / 10);
+    db.prepare("UPDATE players SET roster_status = 'active' WHERE id = ?").run(playerId);
+    if (contract) {
+      db.prepare("UPDATE contracts SET years_remaining = 1, annual_salary = ? WHERE player_id = ?").run(offerSalary, playerId);
+    } else {
+      db.prepare("INSERT INTO contracts (player_id, team_id, years_remaining, annual_salary) VALUES (?, ?, 1, ?)").run(playerId, settingsRepo.getUserTeamId(), offerSalary);
+    }
+    logNewsEvent({
+      eventType: 'contract', category: 'transactions',
+      headline: `${name} Returns for One More Year`,
+      detail: `${player.position} · Age ${player.age} · signed a 1-year deal worth $${offerSalary.toFixed(1)}M.`,
+      playerId: player.id, season,
+    });
+    return { accepted: true, name, salary: offerSalary };
+  } else {
+    db.prepare("UPDATE players SET roster_status = 'retired', team_id = NULL, is_free_agent = 0 WHERE id = ?").run(playerId);
+    db.prepare('DELETE FROM contracts WHERE player_id = ?').run(playerId);
+    logNewsEvent({
+      eventType: 'retirement', category: 'season',
+      headline: `${name} Retires`,
+      detail: `${player.position} · Age ${player.age} · ${player.overall_rating} OVR — declined to return for another season.`,
+      playerId: player.id, season,
+    });
+    return { accepted: false, name };
+  }
+});
+
+ipcMain.handle('dismiss-retirement', (_event: any, playerId: number) => {
+  const player = db.prepare(`
+    SELECT id, first_name, last_name, position, age, overall_rating
+    FROM players WHERE id = ? AND roster_status = 'announcing_retirement'
+  `).get(playerId) as any;
+  if (!player) return { success: false };
+  db.prepare("UPDATE players SET roster_status = 'retired', team_id = NULL, is_free_agent = 0 WHERE id = ?").run(playerId);
+  db.prepare('DELETE FROM contracts WHERE player_id = ?').run(playerId);
+  const season = getCurrentSeason();
+  logNewsEvent({
+    eventType: 'retirement', category: 'season',
+    headline: `${player.first_name} ${player.last_name} Retires`,
+    detail: `${player.position} · Age ${player.age} · ${player.overall_rating} OVR — a career comes to an end.`,
+    playerId: player.id, season,
+  });
+  return { success: true };
+});
+
   ipcMain.handle('get-champions', () =>
     db.prepare(`
       SELECT c.season, t.city || ' ' || t.name AS team_name, t.conference
