@@ -28,6 +28,17 @@ interface PSPromotionAlert {
   lowest_active_ovr: number;
 }
 
+interface AnnouncingRetirement {
+  id: number;
+  first_name: string;
+  last_name: string;
+  position: string;
+  position_label: string;
+  age: number;
+  overall_rating: number;
+  annual_salary: number | null;
+}
+
 const ovrColor = (v: number) => v >= 80 ? '#4caf50' : v >= 70 ? '#FF8740' : '#e57373';
 const ovrGrade = (v: number) => v >= 90 ? 'A+' : v >= 85 ? 'A' : v >= 80 ? 'B+' : v >= 75 ? 'B' : v >= 70 ? 'C+' : v >= 65 ? 'C' : 'D';
 
@@ -62,6 +73,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [statLeaders, setStatLeaders] = useState<any>(null);
   const [psAlert, setPSAlert] = useState<string | null>(null);
   const [psPromotionAlerts, setPSPromotionAlerts] = useState<PSPromotionAlert[]>([]);
+  const [announcingRetirements, setAnnouncingRetirements] = useState<AnnouncingRetirement[]>([]);
   const [seasonAwards, setSeasonAwards] = useState<any>(null);
   const [cpuOffer, setCpuOffer] = useState<CpuOffer | null>(null);
   const [offerHandled, setOfferHandled] = useState(false);
@@ -83,7 +95,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setPlayoffResults(null); setUserRecord(null); setInjuryReport([]);
       setSeasonAwards(null);
 
-      const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffer, tradeStatus, spots, health, psAlerts] = await Promise.all([
+      const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffer, tradeStatus, spots, health, psAlerts, announcingRets] = await Promise.all([
         window.api.getCurrentWeek(),
         window.api.getDashboard(currentSeason),
         window.api.getChampions(),
@@ -96,6 +108,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         window.api.getRosterSpots(userTeam.id),
         window.api.getFranchiseHealth(userTeam.id),
         window.api.getPSPromotionAlerts(userTeam.id),
+        window.api.getAnnouncingRetirements(),
       ]);
       if (cancelled) return;
 
@@ -119,6 +132,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setUserTradeStatus(tradeStatus ?? null);
       setFranchiseHealth(health ?? null);
       setPSPromotionAlerts(psAlerts ?? []);
+      setAnnouncingRetirements(announcingRets ?? []);
 
       if (offseason.playoffsComplete) setPlayoffsComplete(true);
 
@@ -150,14 +164,10 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   useEffect(() => {
     const userGame = matchups.find(m => m.home_team_id === userTeam?.id || m.away_team_id === userTeam?.id);
     if (!userGame || !userTeam || userGame.is_simulated === 1) {
-      setOppHealth(null);
-      setOppScheme(null);
-      setUserScheme(null);
+      setOppHealth(null); setOppScheme(null); setUserScheme(null);
       return;
     }
-    const oppId = userGame.home_team_id === userTeam.id
-      ? userGame.away_team_id
-      : userGame.home_team_id;
+    const oppId = userGame.home_team_id === userTeam.id ? userGame.away_team_id : userGame.home_team_id;
     let cancelled = false;
     (async () => {
       const [oh, os, us] = await Promise.all([
@@ -165,11 +175,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         window.api.getTeamScheme(oppId),
         window.api.getTeamScheme(userTeam.id),
       ]);
-      if (!cancelled) {
-        setOppHealth(oh ?? null);
-        setOppScheme(os ?? null);
-        setUserScheme(us ?? null);
-      }
+      if (!cancelled) { setOppHealth(oh ?? null); setOppScheme(os ?? null); setUserScheme(us ?? null); }
     })();
     return () => { cancelled = true; };
   }, [matchups, userTeam?.id]);
@@ -190,24 +196,15 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     setGeneratingSchedule(true);
     try {
       const result = await window.api.generateSchedule();
-      console.log('[generate-schedule] result:', result);
-      if (result?.error) {
-        alert(`Schedule generation failed: ${result.error}`);
-        setGeneratingSchedule(false);
-        return;
-      }
+      if (result?.error) { alert(`Schedule generation failed: ${result.error}`); setGeneratingSchedule(false); return; }
       const status = await window.api.getCurrentWeek();
-      console.log('[get-current-week] status:', status);
       setHasSchedule(status.hasSchedule);
       setCurrentWeek(status.currentWeek);
-      if (status.currentWeek !== null) {
-        setMatchups(await window.api.getWeekMatchups(status.currentWeek));
-      }
+      if (status.currentWeek !== null) setMatchups(await window.api.getWeekMatchups(status.currentWeek));
       const tradeOffer = await window.api.getCpuTradeOffer();
       setCpuOffer(tradeOffer ?? null);
       setOfferHandled(false);
     } catch (err) {
-      console.error('[handleGenerateSchedule] error:', err);
       alert(`Error generating schedule: ${err}`);
     } finally {
       setGeneratingSchedule(false);
@@ -233,8 +230,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     if (weekResult?.userPSOpenSpots > 0)
       setPSAlert(`Practice squad has ${weekResult.userPSOpenSpots} open spot${weekResult.userPSOpenSpots !== 1 ? 's' : ''}. Go to My Team → Practice Squad.`);
     if (status.currentWeek === null && status.hasSchedule) {
-      const seeds = await window.api.getPlayoffSeeds();
-      setPlayoffSeeds(seeds);
+      setPlayoffSeeds(await window.api.getPlayoffSeeds());
       setMatchups(await window.api.getWeekMatchups(18));
     } else if (status.currentWeek) {
       setMatchups(await window.api.getWeekMatchups(status.currentWeek));
@@ -286,8 +282,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     const champForSeason = champs.find((c: Champion) => c.season === currentSeason);
     if (champForSeason) {
       setPlayoffsComplete(true);
-      const awards = await window.api.getSeasonAwards(currentSeason);
-      setSeasonAwards(awards);
+      setSeasonAwards(await window.api.getSeasonAwards(currentSeason));
     }
     setSimulatingPlayoffs(false);
   };
@@ -295,8 +290,8 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const handleAdvance = async () => {
     setAdvancing(true);
     const result = await window.api.advanceSeason();
-    const retired = result?.retiredPlayers ?? [];
-    setRetiredPlayers(retired);
+    setRetiredPlayers(result?.retired ?? []);
+    setAnnouncingRetirements(result?.announcingRetirements ?? []);
     onSeasonAdvance(result.nextSeason);
     setAdvancing(false);
     setConfirming(false);
@@ -305,6 +300,19 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const handleOpenFreeAgency = async () => {
     await window.api.openFreeAgency();
     await refreshOffseasonStatus();
+  };
+
+  const handleMakeOffer = async (playerId: number): Promise<{ accepted: boolean; name: string; salary?: number }> => {
+    const result = await window.api.makeRetentionOffer(playerId);
+    const fresh = await window.api.getAnnouncingRetirements();
+    setAnnouncingRetirements(fresh ?? []);
+    return result;
+  };
+
+  const handleLetGo = async (playerId: number): Promise<void> => {
+    await window.api.dismissRetirement(playerId);
+    const fresh = await window.api.getAnnouncingRetirements();
+    setAnnouncingRetirements(fresh ?? []);
   };
 
   const handleAcceptOffer = async () => {
@@ -316,17 +324,13 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       theirTeamId: cpuOffer.fromTeamId,
       theirPickId: cpuOffer.offeredPick?.id ?? null,
     });
-    setCpuOffer(null);
-    setOfferHandled(true);
-    setOfferWorking(false);
+    setCpuOffer(null); setOfferHandled(true); setOfferWorking(false);
   };
 
   const handleDeclineOffer = async () => {
     if (!cpuOffer || offerWorking) return;
     setOfferWorking(true);
-    setCpuOffer(null);
-    setOfferHandled(true);
-    setOfferWorking(false);
+    setCpuOffer(null); setOfferHandled(true); setOfferWorking(false);
   };
 
   const handleSetTradeStatus = async (status: string) => {
@@ -357,8 +361,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-
-      {/* Main content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
         {cpuOffer && !offerHandled && (
@@ -374,7 +376,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
             <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, marginBottom: 16, textTransform: 'uppercase' }}>
               Your Game — Week {currentWeek}
             </div>
-
             {!isGameSimmed ? (
               <>
                 {oppHealth && userScheme && oppScheme && userRecord && franchiseHealth ? (
@@ -533,8 +534,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         {showAlerts && (
           <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '14px 20px' }}>
             <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, marginBottom: 10, textTransform: 'uppercase' }}>Active Alerts</div>
-
-            {/* Injury alerts */}
             {seriousInjuries.slice(0, 5).map(p => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
                 <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 3, minWidth: 26, textAlign: 'center', background: p.injury_status === 'ir' ? '#1a0a0a' : '#140a00', color: p.injury_status === 'ir' ? '#e57373' : '#FF8740' }}>
@@ -545,8 +544,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                 <span style={{ fontSize: 10, color: T.textDim }}>{p.injury_type}{p.weeks_out > 0 ? ` · ${p.weeks_out}wk` : ''}</span>
               </div>
             ))}
-
-            {/* PS promotion alerts */}
             {psPromotionAlerts.slice(0, 4).map(p => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
                 <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 3, minWidth: 26, textAlign: 'center', background: '#0a2a0a', color: '#4caf50' }}>
@@ -557,16 +554,11 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                 <span style={{ fontSize: 10, color: '#4caf50', fontFamily: 'monospace' }}>
                   {p.ps_ovr} <span style={{ color: T.textDim }}>vs</span> {p.lowest_active_ovr}
                 </span>
-                <button
-                  onClick={() => onNavigate('myteam')}
-                  style={{ fontSize: 9, color: '#4caf50', background: 'none', border: '1px solid #1a4a1a', borderRadius: 3, padding: '2px 7px', cursor: 'pointer' }}
-                >
+                <button onClick={() => onNavigate('myteam')} style={{ fontSize: 9, color: '#4caf50', background: 'none', border: '1px solid #1a4a1a', borderRadius: 3, padding: '2px 7px', cursor: 'pointer' }}>
                   Promote
                 </button>
               </div>
             ))}
-
-            {/* PS open spots alert */}
             {psAlert && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8 }}>
                 <span style={{ fontSize: 11, color: '#FF8740' }}>⚠ {psAlert}</span>
@@ -589,16 +581,18 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
               draftGenerated={draftGenerated}
               faOpen={faOpen}
               rosterSize={rosterSize}
+              announcingRetirements={announcingRetirements}
               refreshOffseasonStatus={refreshOffseasonStatus}
               onNavigate={onNavigate}
               onOpenFreeAgency={handleOpenFreeAgency}
+              onMakeOffer={handleMakeOffer}
+              onLetGo={handleLetGo}
             />
             <PlayoffResultsView results={playoffResults} champion={currentChampion} />
           </>
         )}
       </div>
 
-      {/* Sidebar */}
       <Sidebar
         userTeam={userTeam}
         currentSeason={currentSeason}
