@@ -5,6 +5,7 @@ import { AdvanceSeasonResult } from '../types';
 import { settingsRepo, gameRepo } from '../repositories';
 import { advanceSeason, openFreeAgency } from '../services/SeasonService';
 import { getLeagueStats, getTeamSeasonStats, getTeamPlayerStats } from '../services/StatsService';
+import { logNewsEvent } from '../helpers/logNewsEvent';
 
 export function registerSeasonHandlers(): void {
 
