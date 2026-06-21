@@ -141,9 +141,20 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   };
 
   const handleGenerateSchedule = async () => {
-    setGeneratingSchedule(true);
-    await window.api.generateSchedule();
+  setGeneratingSchedule(true);
+  try {
+    const result = await window.api.generateSchedule();
+    console.log('[generate-schedule] result:', result);
+
+    if (result?.error) {
+      alert(`Schedule generation failed: ${result.error}`);
+      setGeneratingSchedule(false);
+      return;
+    }
+
     const status = await window.api.getCurrentWeek();
+    console.log('[get-current-week] status:', status);
+
     setHasSchedule(status.hasSchedule);
     setCurrentWeek(status.currentWeek);
     if (status.currentWeek !== null) {
@@ -152,8 +163,13 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     const tradeOffer = await window.api.getCpuTradeOffer();
     setCpuOffer(tradeOffer ?? null);
     setOfferHandled(false);
+  } catch (err) {
+    console.error('[handleGenerateSchedule] error:', err);
+    alert(`Error generating schedule: ${err}`);
+  } finally {
     setGeneratingSchedule(false);
-  };
+  }
+};
 
   // Sims the remaining CPU games for the week — called by Sidebar and the "Advance Week" button
   const handleSimulateWeek = async () => {
