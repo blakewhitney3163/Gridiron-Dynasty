@@ -66,8 +66,8 @@ CODE ARCHITECTURE
     contractHandlers, tradeHandlers, draftHandlers, importHandlers,
     newsHandlers, saveHandlers, coachingHandlers, schemeHandlers
 - Services layer in src/services/:
-    SeasonService, SimulationService, StatsService, TradeService,
-    ContractService, CoachingService
+  SeasonService, SimulationService, StatsService, TradeService,
+  ContractService, CoachingService, ProgressionService
 - Repositories layer in src/repositories/ — typed DB access per domain
 
 MEET THE TEAM SCREEN
@@ -198,6 +198,15 @@ Salaries Tab (SalariesTab.tsx):
 Practice Squad Tab:
   - View PS players; promote to active roster (53-man limit enforced)
   - Auto-callup triggers when injured starters leave active roster
+
+Waiver Wire Tab (WaiverWireTab.tsx):
+ - Visible in-season only; hidden during offseason
+ - Shows all players currently on waivers: name, position, OVR, age, dev
+   trait, speed/strength/awareness
+ - Claim button per player (enforces 53-man roster limit)
+ - Players you released show "Your cut" label (cannot re-claim)
+ - Footer: player count, 1-week clearing rule, claim priority note
+ - Tab label shows live count: "WAIVER WIRE (N)" when players present
 
 Waivers Tab:
   - View waiver wire players; claim (user or CPU priority by worst record)
@@ -379,6 +388,8 @@ Order of operations per season advance:
   14. HOF inductions for newly retired players
   15. Season award news events (MVP, DPOY)
   16. Advance season counter
+ 17. Replenish FA pool (replenishFAPool) — tops up each position to minimum
+     floor so FAs remain available for user signing throughout offseason
 
 CPU GM INTELLIGENCE
 ────────────────────────────────────────────────────────────────────────────────
@@ -399,6 +410,52 @@ MILESTONE SYSTEM
 - Runs after every week and individual game sim
 - 4 DB queries (not per-player); 9 career categories, 26 thresholds,
   5 single-season thresholds; fires exactly once per player per threshold
+
+IN-SEASON PLAYER PROGRESSION (ProgressionService.ts)
+────────────────────────────────────────────────────────────────────────────────
+- Runs after every simulated game (simulate-game and simulate-week)
+- Grades each player's performance 0–100 by position:
+  QB: completion %, yards, TDs, INTs; RB: YPC, total yards, TDs;
+  WR/TE: yards per target, total yards, TDs; OL: fixed positive bias (58);
+  DL/LB: tackles, sacks, TFLs; CB/S: tackles, INTs, PBUs; K: FG %
+- Converts grade to OVR delta using age + dev trait modifiers:
+  Grade 82+: 62% chance +1, 10% chance +2 (excellent)
+  Grade 67–81: 30% chance +1 (good)
+  Grade 45–66: no change (average)
+  Grade 32–44: 22% chance -1 (below average)
+  Grade <32: 48% chance -1 (poor)
+- Age modifiers: age ≤22 gets bonus gain chance (+20%); age 31–33 gain
+  suppressed 30%; age 34+ gains suppressed 55%, regression accelerated
+- Young players (≤24) resilient — 60% chance regression is negated
+- Dev trait bonus on positive delta: X-Factor +22%, Superstar +14%, Star +7%
+- OVR ceiling dampening: 91–94 OVR has 70% gain suppression; 95+ has 90%
+- OVR floor protection: ≤52 OVR has 55% loss suppression
+- Breakout news event logged when: delta ≥ 2, OR delta = 1 + age ≤ 24 +
+  OVR ≥ 68 + grade ≥ 85 (young emerging player)
+
+WAIVER WIRE SYSTEM
+────────────────────────────────────────────────────────────────────────────────
+- In-season releases (user or CPU) → roster_status = 'waivers'
+- Offseason releases → roster_status = 'free_agent' directly (no waivers)
+- processWaivers() runs at end of each completed week:
+  CPU teams claim in worst-record-first priority (reverse standings order)
+  Cap and positional limits enforced per claiming team
+  Unclaimed players after 1 week: contract deleted, releaseToFA() called
+- balanceRosters() is now season-aware: excess players go to waivers
+  in-season, free_agent in offseason
+- CPU practice squad fill query restricted to roster_status = 'free_agent'
+  (prevents waiver players from being poached before clearing)
+- Player Retirement Control: announcing_retirement roster status added;
+  user can make a 1-year retention offer; player accepts or declines based
+  on age/OVR probability; unresolved retirements auto-retire on season advance
+
+FA POOL REPLENISHMENT (replenishFAPool in generatePlayers.ts)
+────────────────────────────────────────────────────────────────────────────────
+- Called after every CPU FA signing wave (cpu-fa-signing) and at season advance
+- Checks current FA count per position against MIN_FA_PER_POSITION floor:
+  QB:5, RB:12, WR:14, TE:7, OL:16, DL:14, LB:14, CB:14, S:10, K:4
+- Generates new free agents (OVR 55–76, age 21–31) to fill gaps
+- Ensures user always has a viable FA pool to sign from
 
 BACKEND IPC HANDLERS (full list)
 ────────────────────────────────────────────────────────────────────────────────
@@ -432,5 +489,7 @@ remove-franchise-tag accept-counter-offer get-dead-cap
 open-free-agency get-coaching-staff get-available-coaches
 hire-coach fire-coach get-team-scheme
 get-scheme-options set-team-scheme get-franchise-health
+get-announcing-retirements make-retention-offer dismiss-retirement
+get-waiver-wire claim-waiver
 get-difficulty set-difficulty import-historical-records
 import-custom-teams import-custom-players
