@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useGameStore } from './store/gameStore';
-import { Contract, PracticePlayer, FreeAgent, CapSummary, RosterSpots, Decision, Coach } from './franchise/types';
+import { Contract, PracticePlayer, FreeAgent, CapSummary, RosterSpots, Decision, Coach, WaiverPlayer } from './franchise/types';
 import { fmtSalary, fairMarketValue, askingPrice } from './franchise/utils';
 import ActiveRosterTab from './franchise/ActiveRosterTab';
 import PracticeSquadTab from './franchise/PracticeSquadTab';
 import FreeAgentsTab from './franchise/FreeAgentsTab';
+import WaiverWireTab from './franchise/WaiverWireTab';
 import OffseasonTab from './franchise/OffseasonTab';
 import CoachingTab from './franchise/CoachingTab';
 import SchemesTab from './franchise/SchemesTab';
@@ -22,10 +23,11 @@ export default function Franchise() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [practiceSquad, setPracticeSquad] = useState<PracticePlayer[]>([]);
   const [freeAgents, setFreeAgents] = useState<FreeAgent[]>([]);
+  const [waiverWire, setWaiverWire] = useState<WaiverPlayer[]>([]);
   const [expiringPlayers, setExpiringPlayers] = useState<Contract[]>([]);
   const [cap, setCap] = useState<CapSummary | null>(null);
   const [rosterSpots, setRosterSpots] = useState<RosterSpots | null>(null);
-  const [activeTab, setActiveTab] = useState<'roster' | 'ps' | 'fa' | 'offseason' | 'coaching' | 'schemes' | 'salaries'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'ps' | 'fa' | 'waivers' | 'offseason' | 'coaching' | 'schemes' | 'salaries'>('roster');
   const [working, setWorking] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [teamNeeds, setTeamNeeds] = useState<string[]>([]);
@@ -65,6 +67,7 @@ export default function Franchise() {
   useEffect(() => {
     if (activeTab === 'fa') loadFreeAgents();
     if (activeTab === 'offseason') loadExpiringContracts();
+    if (activeTab === 'waivers') loadWaiverWire();
   }, [activeTab, faPos]);
   useEffect(() => {
     if (!playoffsComplete && activeTab === 'offseason') setActiveTab('roster');
@@ -92,6 +95,11 @@ export default function Franchise() {
   const loadFreeAgents = async () => {
     const fa = await window.api.getFreeAgents(faPos === 'ALL' ? undefined : faPos);
     setFreeAgents(fa);
+  };
+
+  const loadWaiverWire = async () => {
+    const data = await window.api.getWaiverWire();
+    setWaiverWire(Array.isArray(data) ? data : []);
   };
 
   const loadExpiringContracts = async () => {
@@ -139,6 +147,7 @@ export default function Franchise() {
     showToast(`${player?.first_name} ${player?.last_name} released.`, 'error');
     await loadData();
     if (activeTab === 'fa') loadFreeAgents();
+    if (activeTab === 'waivers') loadWaiverWire();
     setWorking(false);
   };
 
@@ -297,17 +306,18 @@ export default function Franchise() {
   const totalGuaranteed = contracts.reduce((s, c) => s + (c.guaranteed_amount ?? 0), 0);
 
   const tabs = [
-    { key: 'roster'   as const, label: `ACTIVE ROSTER (${contracts.length})`, warn: false },
+    { key: 'roster' as const, label: `ACTIVE ROSTER (${contracts.length})`, warn: false },
     { key: 'salaries' as const, label: 'SALARIES', warn: false },
-    { key: 'ps'       as const, label: `PRACTICE SQUAD (${practiceSquad.length})`, warn: false },
-    { key: 'fa'       as const, label: 'FREE AGENTS', warn: false },
+    { key: 'ps' as const, label: `PRACTICE SQUAD (${practiceSquad.length})`, warn: false },
+    { key: 'fa' as const, label: 'FREE AGENTS', warn: false },
+    ...(!playoffsComplete ? [{ key: 'waivers' as const, label: `WAIVER WIRE${waiverWire.length > 0 ? ` (${waiverWire.length})` : ''}`, warn: false }] : []),
     { key: 'coaching' as const, label: 'COACHING STAFF', warn: false },
-    { key: 'schemes'  as const, label: 'SCHEMES', warn: false },
+    { key: 'schemes' as const, label: 'SCHEMES', warn: false },
     ...(playoffsComplete ? [{ key: 'offseason' as const, label: expiringCount > 0 ? `OFFSEASON ⚠ ${expiringCount}` : 'OFFSEASON', warn: expiringCount > 0 }] : []),
   ];
 
   return (
-    <div style={{ padding: '16px 20px', maxWidth: 1100, margin: '0 auto', height: '100%', overflowY: 'auto', boxSizing: 'border-box' }}>
+    <div style={{ color: '#ccc', fontFamily: 'monospace', padding: '16px 20px', maxWidth: 960, margin: '0 auto' }}>
 
       {toast && (
         <div style={{
@@ -315,57 +325,57 @@ export default function Franchise() {
           background: toast.type === 'error' ? '#1a0000' : '#001a00',
           border: `1px solid ${toast.type === 'error' ? '#e57373' : '#4caf50'}`,
           color: toast.type === 'error' ? '#e57373' : '#4caf50',
-          padding: '10px 16px', borderRadius: 6, fontSize: 12,
-          display: 'flex', alignItems: 'center', gap: 10, maxWidth: 400,
+          padding: '10px 16px', borderRadius: 6, fontSize: 13,
+          display: 'flex', alignItems: 'center', gap: 10, maxWidth: 360,
         }}>
           <span>{toast.type === 'error' ? '✗' : '✓'}</span>
-          <span style={{ flex: 1 }}>{toast.message}</span>
+          <span>{toast.message}</span>
           <button onClick={() => setToast(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, opacity: 0.6 }}>×</button>
         </div>
       )}
 
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>Franchise Management</div>
-        <div style={{ fontSize: 11, color: '#555' }}>{userTeam.city} {userTeam.name} · {currentSeason} Season</div>
+        <div style={{ fontSize: 11, letterSpacing: 2, color: '#FF8740', textTransform: 'uppercase' }}>Franchise Management</div>
+        <div style={{ fontSize: 13, color: '#555' }}>{userTeam.city} {userTeam.name} · {currentSeason} Season</div>
       </div>
 
       {cap && (
-        <div style={{ background: '#111', border: '1px solid #222', borderRadius: 6, padding: '10px 14px', marginBottom: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontSize: 9, color: '#555', letterSpacing: 1, marginBottom: 2 }}>SALARY CAP</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ color: capColor, fontWeight: 'bold', fontSize: 14 }}>{fmtSalary(cap.used_cap)}</span>
-                <span style={{ color: '#333' }}>used /</span>
-                <span style={{ color: '#fff', fontSize: 12 }}>{fmtSalary(cap.total_cap)} cap</span>
-              </div>
-              <div style={{ fontSize: 10, color: cap.available_cap < 0 ? '#e57373' : '#4caf50', marginTop: 2 }}>
-                {cap.available_cap < 0 ? '⚠ OVER CAP ' : ''}{fmtSalary(cap.available_cap)}{cap.available_cap >= 0 ? ' available' : ''}
-              </div>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 6, padding: '10px 16px', minWidth: 200 }}>
+            <div style={{ fontSize: 10, color: '#333', letterSpacing: 1, marginBottom: 4 }}>SALARY CAP</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span style={{ fontSize: 18, fontWeight: 700, color: capColor }}>{fmtSalary(cap.used_cap)}</span>
+              <span style={{ color: '#333', fontSize: 11 }}>used /</span>
+              <span style={{ color: '#444', fontSize: 12 }}>{fmtSalary(cap.total_cap)} cap</span>
             </div>
-            <div style={{ width: 120, height: 4, background: '#222', borderRadius: 2 }}>
-              <div style={{ width: `${Math.min(100, capPct)}%`, height: '100%', background: capColor, borderRadius: 2 }} />
+            <div style={{ marginTop: 6, height: 3, background: '#1a1a1a', borderRadius: 2 }}>
+              <div style={{ height: '100%', width: `${Math.min(capPct, 100)}%`, background: capColor, borderRadius: 2, transition: 'width 0.3s' }} />
             </div>
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginLeft: 'auto', fontSize: 10, color: '#555' }}>
-              <span>Guaranteed on books: {fmtSalary(totalGuaranteed)}</span>
-              {expiringCount > 0 && <span style={{ color: '#FF8740' }}>⚠ {expiringCount} expiring this offseason</span>}
-              {rosterSpots && <span>{rosterSpots.active}/53 active · {rosterSpots.ps}/16 PS</span>}
+            <div style={{ fontSize: 11, marginTop: 4, color: cap.available_cap < 0 ? '#e57373' : '#4caf50' }}>
+              {cap.available_cap < 0 ? '⚠ OVER CAP ' : ''}{fmtSalary(cap.available_cap)}{cap.available_cap >= 0 ? ' available' : ''}
             </div>
           </div>
+
+          <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 6, padding: '10px 16px', flex: 1, minWidth: 220 }}>
+            <div style={{ fontSize: 11, color: '#444' }}>Guaranteed on books: {fmtSalary(totalGuaranteed)}</div>
+            {expiringCount > 0 && <div style={{ fontSize: 11, color: '#FF8740', marginTop: 3 }}>⚠ {expiringCount} expiring this offseason</div>}
+            {rosterSpots && <div style={{ fontSize: 11, color: '#444', marginTop: 3 }}>{rosterSpots.active}/53 active · {rosterSpots.ps}/16 PS</div>}
+          </div>
+
           {deadCap && deadCap.amount > 0 && (
-            <div style={{ marginTop: 8, fontSize: 10, color: '#e57373' }}>
-              💀 Dead cap: {fmtSalary(deadCap.amount)}
+            <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 6, padding: '10px 16px' }}>
+              <div style={{ fontSize: 11, color: '#e57373' }}>💀 Dead cap: {fmtSalary(deadCap.amount)}</div>
               {deadCap.entries.length > 0 && (
-                <span style={{ color: '#555', marginLeft: 6 }}>
+                <div style={{ fontSize: 10, color: '#444', marginTop: 3 }}>
                   ({deadCap.entries.map((e: any) => `${e.player_name} ${fmtSalary(e.amount)}`).join(', ')})
-                </span>
+                </div>
               )}
             </div>
           )}
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {tabs.map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
             padding: '5px 16px', fontSize: 11, letterSpacing: 1, cursor: 'pointer', borderRadius: 4,
@@ -379,14 +389,24 @@ export default function Franchise() {
 
       {activeTab === 'roster' && (
         <ActiveRosterTab
-          contracts={contracts} cap={cap} rosterSpots={rosterSpots}
-          posFilter={posFilter} setPosFilter={setPosFilter}
-          sortBy={sortBy} setSortBy={setSortBy}
-          rosterSearch={rosterSearch} setRosterSearch={setRosterSearch}
-          extendingId={extendingId} setExtendingId={setExtendingId}
-          extendYears={extendYears} setExtendYears={setExtendYears}
-          releasingId={releasingId} setReleasingId={setReleasingId}
-          working={working} handleExtend={handleExtend} handleRelease={handleRelease}
+          contracts={contracts}
+          cap={cap}
+          rosterSpots={rosterSpots}
+          posFilter={posFilter}
+          setPosFilter={setPosFilter}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+          rosterSearch={rosterSearch}
+          setRosterSearch={setRosterSearch}
+          extendingId={extendingId}
+          setExtendingId={setExtendingId}
+          extendYears={extendYears}
+          setExtendYears={setExtendYears}
+          releasingId={releasingId}
+          setReleasingId={setReleasingId}
+          handleExtend={handleExtend}
+          handleRelease={handleRelease}
+          working={working}
           onPlayerClick={handlePlayerClick}
         />
       )}
@@ -402,69 +422,95 @@ export default function Franchise() {
 
       {activeTab === 'fa' && (
         <FreeAgentsTab
-          freeAgents={freeAgents} cap={cap} rosterSpots={rosterSpots} teamNeeds={teamNeeds}
-          faPos={faPos} setFaPos={setFaPos}
-          faSortBy={faSortBy} setFaSortBy={setFaSortBy}
-          faSearch={faSearch} setFaSearch={setFaSearch}
-          signingId={signingId} setSigningId={setSigningId}
-          signYears={signYears} setSignYears={setSignYears}
-          signSalary={signSalary} setSignSalary={setSignSalary}
+          freeAgents={freeAgents}
+          cap={cap}
+          rosterSpots={rosterSpots}
+          teamNeeds={teamNeeds}
+          faPos={faPos}
+          setFaPos={setFaPos}
+          faSortBy={faSortBy}
+          setFaSortBy={setFaSortBy}
+          faSearch={faSearch}
+          setFaSearch={setFaSearch}
+          signingId={signingId}
+          setSigningId={setSigningId}
+          signYears={signYears}
+          setSignYears={setSignYears}
+          signSalary={signSalary}
+          setSignSalary={setSignSalary}
           psSigningId={psSigningId}
-          working={working} handleSign={handleSign} handleSignToPs={handleSignToPs}
+          handleSign={handleSign}
+          handleSignToPs={handleSignToPs}
+          working={working}
+        />
+      )}
+
+      {activeTab === 'waivers' && (
+        <WaiverWireTab
+          waiverWire={waiverWire}
+          rosterSpots={rosterSpots}
+          showToast={showToast}
+          loadData={loadData}
+          reloadWaivers={loadWaiverWire}
         />
       )}
 
       {activeTab === 'offseason' && (
         <OffseasonTab
-          expiringPlayers={expiringPlayers} playerDecisions={playerDecisions}
-          setPlayerDecisions={setPlayerDecisions}
+          expiringPlayers={expiringPlayers}
+          playerDecisions={playerDecisions}
           pendingCounters={pendingCounters}
-          cap={cap} working={working || tagWorking}
-          resigningId={resigningId} setResigningId={setResigningId}
-          resignYears={resignYears} setResignYears={setResignYears}
-          resignSalary={resignSalary} setResignSalary={setResignSalary}
-          cpuFaDone={cpuFaDone} setCpuFaDone={setCpuFaDone}
-          cpuFaResult={cpuFaResult} setCpuFaResult={setCpuFaResult}
+          cap={cap}
+          resigningId={resigningId}
+          setResigningId={setResigningId}
+          resignYears={resignYears}
+          setResignYears={setResignYears}
+          resignSalary={resignSalary}
+          setResignSalary={setResignSalary}
           handleResign={handleResign}
           handleLetWalk={handleLetWalk}
           handleAcceptCounter={handleAcceptCounter}
           handleDeclineCounter={handleDeclineCounter}
-          handleCpuFa={handleCpuFa}
           handleApplyTag={handleApplyTag}
           handleRemoveTag={handleRemoveTag}
+          handleCpuFa={handleCpuFa}
+          cpuFaResult={cpuFaResult}
+          cpuFaDone={cpuFaDone}
+          working={working}
+          tagWorking={tagWorking}
         />
       )}
 
       {activeTab === 'coaching' && (
         <CoachingTab
-          teamId={userTeam.id}
           staff={staff}
-          onRefresh={loadData}
+          userTeamId={userTeam.id}
           showToast={showToast}
+          reload={loadData}
         />
       )}
 
       {activeTab === 'schemes' && (
-        <SchemesTab
-          teamId={userTeam.id}
-          teamName={`${userTeam.city} ${userTeam.name}`}
-          onToast={showToast}
-        />
+        <SchemesTab userTeamId={userTeam.id} showToast={showToast} />
       )}
 
       {activeTab === 'salaries' && (
-  <SalariesTab contracts={contracts} cap={cap} />
-)}
+        <SalariesTab
+          contracts={contracts}
+          cap={cap}
+          deadCap={deadCap}
+        />
+      )}
 
       {selectedPlayer && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000,
-          display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
-        }} onClick={() => setSelectedPlayer(null)}>
+        <div onClick={() => setSelectedPlayer(null)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000,
+          display: 'flex', justifyContent: 'flex-end',
+        }}>
           <div onClick={e => e.stopPropagation()} style={{ height: '100%', overflowY: 'auto' }}>
             <PlayerProfile
               player={selectedPlayer}
-              playerStats={playerStats}
+              stats={playerStats}
               careerStats={careerStats}
               statsView={statsView}
               setStatsView={setStatsView}
