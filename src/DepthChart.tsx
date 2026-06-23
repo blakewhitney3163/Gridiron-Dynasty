@@ -134,7 +134,7 @@ export default function DepthChart() {
             disabled={resetting}
             style={{
               padding: '5px 12px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
-              background: T.bgCard, border: `1px solid ${T.bgCardBorder}`, color: T.textMuted,
+              background: T.bgCard, border: `1px solid ${T.borderMid}`, color: T.textMuted,
             }}
           >
             {resetting ? 'Resetting...' : '↺ Reset All'}
