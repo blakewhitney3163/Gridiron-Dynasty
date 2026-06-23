@@ -101,10 +101,10 @@ export function registerContractHandlers(): void {
   });
 
   ipcMain.handle('cpu-fa-signing', () => {
-  const result = cpuFASigning(settingsRepo.getUserTeamId() ?? -1);
-  replenishFAPool();
-  return result;
-});
+    const result = cpuFASigning(settingsRepo.getUserTeamId() ?? -1);
+    replenishFAPool();
+    return result;
+  });
 
   ipcMain.handle('apply-franchise-tag', (_event: IpcEvent, { playerId, tagType }: { playerId: number; tagType: 'franchise' | 'transition' }) => {
     const teamId = settingsRepo.getUserTeamId();
@@ -122,8 +122,25 @@ export function registerContractHandlers(): void {
     const { getCurrentSeason } = require('../helpers/getCurrentSeason');
     const season = getCurrentSeason();
     return {
-      amount: contractRepo.getDeadCap(teamId, season),
+      amount:  contractRepo.getDeadCap(teamId, season),
       entries: contractRepo.getDeadCapEntries(teamId, season),
     };
+  });
+
+  // ── Player Editor: direct contract edit ────────────────────────────────────
+
+  ipcMain.handle('edit-player-contract', (_event: IpcEvent, {
+    playerId,
+    annual_salary,
+    years_remaining,
+  }: { playerId: number; annual_salary: number; years_remaining: number }) => {
+    const contract = db.prepare('SELECT id, years_total FROM contracts WHERE player_id = ?')
+      .get(playerId) as { id: number; years_total: number } | undefined;
+    if (!contract) return { success: false, reason: 'No contract found for this player.' };
+    const newTotal = Math.max(contract.years_total, years_remaining);
+    db.prepare(
+      'UPDATE contracts SET annual_salary = ?, years_remaining = ?, years_total = ? WHERE player_id = ?'
+    ).run(annual_salary, years_remaining, newTotal, playerId);
+    return { success: true };
   });
 }
