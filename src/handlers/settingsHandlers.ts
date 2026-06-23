@@ -84,6 +84,10 @@ export function registerSettingsHandlers(): void {
 
   ipcMain.handle('edit-player', (_event: IpcEvent, payload: {
     playerId: number;
+    first_name?: string;
+    last_name?: string;
+    position?: string;
+    position_label?: string;
     overall_rating?: number;
     age?: number;
     dev_trait?: string;
@@ -104,6 +108,7 @@ export function registerSettingsHandlers(): void {
   }) => {
     const { playerId, ...fields } = payload;
     const ALLOWED = [
+      'first_name', 'last_name', 'position', 'position_label',
       'overall_rating', 'age', 'dev_trait',
       'speed', 'strength', 'awareness',
       'throw_accuracy', 'throw_power',
