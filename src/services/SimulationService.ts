@@ -123,7 +123,8 @@ export function processRosterAdjustments(newlyInjured: InjuredPlayer[], userTeam
     if (team.id === userTeamId) continue;
     const openSpots = MAX_PRACTICE_SQUAD - playerRepo.getPSCount(team.id);
     if (openSpots <= 0) continue;
-    for (const fa of db.prepare("SELECT id FROM players WHERE team_id IS NULL ORDER BY overall_rating DESC LIMIT ?").all(openSpots) as any[]) {
+    for (const fa of db.prepare("SELECT id FROM players WHERE team_id IS NULL AND roster_status = 'free_agent' ORDER BY overall_rating DESC LIMIT ?"
+).all(openSpots) as any[]) {
       playerRepo.assignToPS(fa.id, team.id);
       contractRepo.createPS(fa.id, team.id);
     }
