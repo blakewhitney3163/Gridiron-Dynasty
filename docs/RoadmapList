@@ -2,11 +2,13 @@ GRIDIRON DYNASTY — ROADMAP
 Last Updated: June 21, 2026
 Repository: https://github.com/blakewhitney3163/Gridiron-Dynasty
 ================================================================================
+UPCOMING — Next to build
+────────────────────────────────────────────────────────────────────────────────
+Full Player Editor — dedicated tab for editing player attributes (beyond inline
+ profile editor). Sortable, searchable across full roster with bulk edit support.
 
-Full player editor - maybe Editor has its own tab?
-What does in-season progression look like?
-Move incoming trades/news onto the home page (make them more visible). 
-What do "Breakouts" look like
+Depth Chart Improvements — auto-sort by OVR, starter highlights, position
+ group views with starter vs. backup visual separation.
 
 TIER 3 — Polish & replayability
 ────────────────────────────────────────────────────────────────────────────────
@@ -174,6 +176,41 @@ MAINTENANCE — Address before extended dynasty saves become common
 ================================================================================
 COMPLETED ITEMS
 ================================================================================
+
+[DONE June 23, 2026] In-Season Player Progression — ProgressionService.ts runs
+ after every simulated game. Grades each player's performance 0–100 by position
+ (QB: comp%, yards, TDs, INTs; RB: YPC, total yards; WR/TE: yards per target;
+ DL/LB/DB: tackles, sacks, INTs). Converts grade to OVR delta using age and dev
+ trait modifiers. Young players (≤22) have bonus gain chance; veterans (34+) face
+ regression. OVR ceiling dampening prevents elite players inflating to 99.
+ Breakout news events fire when a player gains 2+ OVR in one game or a young
+ player posts a standout performance. Runs for both simulate-game (in-memory
+ stats) and simulate-week (queried from DB after worker completes).
+
+[DONE June 23, 2026] Full Waiver Wire System — In-season releases now route
+ through waivers instead of going directly to FA. processWaivers() runs at week
+ end: CPU teams claim in worst-record-first order, unclaimed players clear to
+ free agency after 1 week. balanceRosters() is season-aware (waivers in-season,
+ FA in offseason). WaiverWireTab.tsx added to Franchise screen (in-season only)
+ with Claim button and canClaim guard. CPU practice squad fill query restricted
+ to free_agent status to prevent waiver poaching.
+
+[DONE June 23, 2026] FA Pool Replenishment — replenishFAPool() in
+ generatePlayers.ts tops up free agent counts per position to defined minimums
+ (QB:5, RB:12, WR:14, TE:7, OL:16, DL:14, LB:14, CB:14, S:10, K:4). Called
+ after CPU FA signings and at season advance. Fixes the depleted FA pool issue
+ where CPU teams signed nearly all FAs leaving nothing for the user.
+
+[DONE June 23, 2026] Player Retirement Control — players with announcing_retirement
+ roster status surface in the offseason checklist. User can make a 1-year
+ retention offer; player accepts/declines based on age and OVR probability (age
+ ≤33 and OVR 80+ more likely to return). Declined or dismissed players retire
+ and log a news event. Unresolved announcements auto-retire on season advance.
+
+[DONE June 23, 2026] Playoff Simulation Fix — simulate-playoffs handler
+ corrected to fetch playoff results and champions separately after simulation
+ rather than using the simulation result object directly. Resolves the runtime
+ crash when navigating to the Playoffs tab after simulating.
 
 [DONE June 21, 2026] Game Preview / Head-to-Head — Pre-sim matchup card on
   the Home screen now shows a full head-to-head preview before simming a game:
