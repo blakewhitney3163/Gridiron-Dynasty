@@ -9,6 +9,7 @@ import { getDifficultyFactor } from './settingsHandlers';
 import { MAX_ACTIVE_ROSTER } from '../constants';
 import { settingsRepo, playerRepo, contractRepo, gameRepo } from '../repositories';
 import { rollInjuries, processWaivers, processRosterAdjustments } from '../services/SimulationService';
+import { progressPlayers } from '../services/ProgressionService';
 import { logNewsEvent } from '../helpers/logNewsEvent';
 import { runCpuTrades } from '../services/TradeService';
 import { checkMilestones } from '../helpers/checkMilestones';
@@ -225,15 +226,12 @@ export function registerSimHandlers(): void {
     const afcDivs = ['AFC-North', 'AFC-South', 'AFC-East', 'AFC-West'];
     const nfcDivs = ['NFC-North', 'NFC-South', 'NFC-East', 'NFC-West'];
 
-    // Build a round of K_{4,4}: round r pairs teamA[i] vs teamB[(i+r)%4]
     const k44Round = (a: number[], b: number[], r: number, offset: number): { home: number; away: number }[] =>
       Array.from({ length: 4 }, (_, i) => {
         const j = (i + r) % 4;
         return (i + j + offset) % 2 === 0 ? { home: a[i], away: b[j] } : { home: b[j], away: a[i] };
       });
 
-    // Build a round of near-K_{4,4} (each team skips 1 opponent)
-    // validShifts = [0,1,2,3] minus (offset%4); round r uses validShifts[r]
     const nearK44Round = (a: number[], b: number[], r: number, offset: number): { home: number; away: number }[] => {
       const skipShift = ((offset % 4) + 4) % 4;
       const validShifts = [0, 1, 2, 3].filter(s => s !== skipShift);
@@ -246,9 +244,6 @@ export function registerSimHandlers(): void {
 
     const weeks: { home: number; away: number }[][] = [];
 
-    // ── PHASE 1: Intra-division, weeks 1–6 ──────────────────────────────────────
-    // 6 round-robin rounds per division, stacked across all 8 divisions per week.
-    // Each week: 8 divs × 2 games = 16 games, all 32 teams play exactly once.
     const divisionRounds: { home: number; away: number }[][][] = [];
     for (const divKey of [...afcDivs, ...nfcDivs]) {
       const [t0, t1, t2, t3] = divMap[divKey] ?? [];
@@ -267,9 +262,6 @@ export function registerSimHandlers(): void {
       weeks.push(week);
     }
 
-    // ── PHASE 2: Inter-conference, weeks 7–14 ───────────────────────────────────
-    // confPairs split into 2 stacks of 2 complementary pairs each (4 rounds per stack).
-    // Each stack covers all 32 teams per round: 4 × 4 games = 16 games/week.
     const intraPairings: [number, number][][] = [
       [[0,1],[2,3],[0,2],[1,3]],
       [[0,2],[1,3],[0,3],[1,2]],
@@ -294,9 +286,6 @@ export function registerSimHandlers(): void {
       }
     }
 
-    // ── PHASE 3: Cross-conference, weeks 15–17 ──────────────────────────────────
-    // 4 AFC/NFC division pairings × 3 rounds = 3 weeks × 16 games.
-    // Each pairing uses nearK44Round (3 games per team, not 4).
     for (let r = 0; r < 3; r++) {
       const week: { home: number; away: number }[] = [];
       for (let i = 0; i < 4; i++) {
@@ -306,8 +295,6 @@ export function registerSimHandlers(): void {
       }
       weeks.push(week);
     }
-
-    // weeks: 6 + 8 + 3 = 17, each with 16 games = 272 total, 17 per team, no byes
 
     const insertGame = db.prepare(
       'INSERT INTO games (season, week, home_team_id, away_team_id, is_simulated) VALUES (?, ?, ?, ?, 0)'
@@ -350,7 +337,7 @@ export function registerSimHandlers(): void {
       .filter((g: any) => g.home_team_id !== userTeamId && g.away_team_id !== userTeamId);
     if (games.length === 0) return { week, season, gamesSimulated: 0 };
 
-    return runSimWorker({
+    const result = await runSimWorker({
       type: 'simulate-week',
       week,
       season,
@@ -359,6 +346,18 @@ export function registerSimHandlers(): void {
       difficultyFactor: getDifficultyFactor(),
       dbPath: getDbPath(),
     });
+
+    // Run progression for all CPU games just simulated
+    if (games.length > 0) {
+      const gameIds = games.map((g: any) => g.id);
+      const ph = gameIds.map(() => '?').join(',');
+      const weekStats = db.prepare(
+        `SELECT * FROM stats WHERE game_id IN (${ph})`
+      ).all(...gameIds) as any[];
+      progressPlayers(weekStats, season, week);
+    }
+
+    return result;
   });
 
   ipcMain.handle('simulate-game', (_event: IpcEvent, gameId: number) => {
@@ -409,6 +408,8 @@ export function registerSimHandlers(): void {
     const milestonePlayerIds = [...new Set(allStats.map((s: any) => s.player_id as number))];
     checkMilestones(getCurrentSeason(), game.week ?? 1, milestonePlayerIds);
 
+    progressPlayers(allStats, game.season, game.week ?? 1);
+
     const rosterResult = processRosterAdjustments(newlyInjured, userTeamId);
     if (weekComplete) { playerRepo.advanceInjuryTimers(); processWaivers(userTeamId, game.week); }
     return {
@@ -428,8 +429,7 @@ export function registerSimHandlers(): void {
     `).all(teamId));
 
   ipcMain.handle('get-ps-promotion-alerts', (_event: IpcEvent, teamId: number) =>
-  playerRepo.getPSPromotionAlerts(teamId)
-);
+    playerRepo.getPSPromotionAlerts(teamId));
 
   ipcMain.handle('get-game-box-score', (_event: IpcEvent, gameId: number) => {
     const game = db.prepare(`
