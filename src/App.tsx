@@ -450,7 +450,7 @@ export default function App() {
         <Suspense fallback={<TabFallback />}>
           {isMounted('home') && (
             <div style={tabStyle('home')}>
-              <Home onSeasonAdvance={handleSeasonAdvance} />
+              <Home onSeasonAdvance={handleSeasonAdvance} onNavigate={handleTabChange} />
             </div>
           )}
           {isMounted('myteam') && (
