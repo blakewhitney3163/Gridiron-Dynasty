@@ -162,10 +162,21 @@ TEAMS TAB
 
 DEPTH CHART TAB
 ────────────────────────────────────────────────────────────────────────────────
-- Position group tabs: QB, RB, WR, TE, OL, DL, MLB, OLB, CB, S, K
-  (LB split into MLB / OLB as separate groups)
-- Drag-to-reorder, save order, reset to default (by OVR)
-- Dev trait badges per player
+- Position group tabs organized into phase sections: OFFENSE (QB, RB, WR, TE,
+  LT, LG, C, RG, RT), DEFENSE (DE, DT, MLB, OLB, CB, FS, SS), SPECIAL TEAMS (K)
+- Out-of-order warning system:
+  - Tab button shows ⚠ badge when any healthy backup outrates the starter
+  - Orange warning banner inside the group view when mismatch detected
+  - Each backup row shows OVR delta vs. starter (+N green / -N dimmed)
+  - Mismatch rows highlighted with orange tint background + border
+- Starter row highlighted with green tint background and border; STR badge
+- ⇅ Sort [Group] by OVR — auto-sorts just the active position group by OVR
+  descending without touching other groups
+- ↺ Reset All — resets entire depth chart to OVR order across all positions
+- Move up/down controls per player row; buttons disabled while saving
+- Dev trait badges per player (S, SS, XF)
+- Injury status badges (IR, OUT, Q) with injury type and weeks remaining
+- Injured players shown with strikethrough name in depth list
 - Depth chart drives target distribution in game simulation
 
 FRANCHISE TAB (7 sub-tabs)
