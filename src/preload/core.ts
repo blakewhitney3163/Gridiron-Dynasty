@@ -39,6 +39,10 @@ export const coreApi = {
 
   editPlayer: (payload: {
     playerId: number;
+    first_name?: string;
+    last_name?: string;
+    position?: string;
+    position_label?: string;
     overall_rating?: number;
     age?: number;
     dev_trait?: string;
@@ -57,4 +61,10 @@ export const coreApi = {
     runblocking?: number;
     passblocking?: number;
   }) => ipcRenderer.invoke('edit-player', payload),
+
+  editPlayerContract: (payload: {
+    playerId: number;
+    annual_salary: number;
+    years_remaining: number;
+  }) => ipcRenderer.invoke('edit-player-contract', payload),
 };
