@@ -228,21 +228,35 @@ export function progressPlayers(gameStats: StatRow[], season: number, week: numb
     const newOvr = Math.max(40, Math.min(99, player.overall_rating + delta));
     db.prepare('UPDATE players SET overall_rating = ? WHERE id = ?').run(newOvr, player.id);
 
-    const isBreakout =
+    const isBreakoutCandidate =
       delta >= 2 ||
       (delta === 1 && player.age <= 24 && player.overall_rating >= 68 && grade >= 85);
 
-    if (isBreakout) {
-      logNewsEvent({
-        eventType: 'breakout',
-        category: 'season',
-        headline: `${player.first_name} ${player.last_name} Is Breaking Out`,
-        detail: `${player.position} · Age ${player.age} · climbed to ${newOvr} OVR after a standout Week ${week} performance.`,
-        teamId: player.team_id,
-        playerId: player.id,
-        season,
-        week,
-      });
+    if (isBreakoutCandidate && week >= 3) {
+      // Require 3 consecutive good games (grade >= 75) to fire breakout news
+      const recentGrades = (db.prepare(`
+        SELECT s.pass_yards, s.pass_tds, s.rush_yards, s.rec_yards, s.sacks,
+               s.def_interceptions, s.tackles, s.assisted_tackles, s.rec_tds, s.rush_tds,
+               s.targets, s.receptions, s.forced_fumbles, s.pass_deflections, s.tfl
+        FROM stats s
+        JOIN games g ON s.game_id = g.id
+        WHERE s.player_id = ? AND g.season = ? AND g.week < ? AND g.is_playoff = 0
+        ORDER BY g.week DESC LIMIT 2
+      `).all(player.id, season, week) as any[]);
+
+      const allRecent = recentGrades.every(s => gradePerformance(s, player.position) >= 75);
+      if (allRecent && recentGrades.length === 2) {
+        logNewsEvent({
+          eventType: 'breakout',
+          category: 'season',
+          headline: `${player.first_name} ${player.last_name} Is Breaking Out`,
+          detail: `${player.position} · Age ${player.age} · 3 straight strong games, climbed to ${newOvr} OVR.`,
+          teamId: player.team_id,
+          playerId: player.id,
+          season,
+          week,
+        });
+      }
     }
   }
 }
