@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'">
     <title>Sideline to Sideline Football</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -59,6 +59,8 @@
   </head>
   <body>
 
+    <div id="root"></div>
+
     <div id="splash">
       <div class="splash-badge">S2S</div>
       <div class="splash-title-top">Dynasty Simulator</div>
@@ -72,7 +74,6 @@
     </div>
 
     <script>
-      // Remove splash once React is ready
       window.__hideSplash = function () {
         var el = document.getElementById('splash');
         if (!el) return;
