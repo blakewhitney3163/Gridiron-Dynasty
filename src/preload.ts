@@ -1,12 +1,13 @@
 import { contextBridge } from 'electron';
-import { coreApi }      from './preload/core';
-import { seasonApi }    from './preload/season';
-import { rosterApi }    from './preload/roster';
+import { coreApi } from './preload/core';
+import { seasonApi } from './preload/season';
+import { rosterApi } from './preload/roster';
 import { contractsApi } from './preload/contracts';
-import { tradesApi }    from './preload/trades';
-import { draftApi }     from './preload/draft';
-import { statsApi }     from './preload/stats';
-import { coachingApi }  from './preload/coaching';
+import { tradesApi } from './preload/trades';
+import { draftApi } from './preload/draft';
+import { statsApi } from './preload/stats';
+import { coachingApi } from './preload/coaching';
+import { injuriesApi } from './preload/injuries';
 
 contextBridge.exposeInMainWorld('api', {
   ...coreApi,
@@ -17,4 +18,5 @@ contextBridge.exposeInMainWorld('api', {
   ...draftApi,
   ...statsApi,
   ...coachingApi,
+  ...injuriesApi,
 });
