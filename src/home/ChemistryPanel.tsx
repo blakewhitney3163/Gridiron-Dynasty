@@ -1,16 +1,11 @@
 import React from 'react';
 import { T } from '../theme';
-
-interface ChemistryEvent {
-  id: number;
-  week: number;
-  delta: number;
-  reason: string;
-}
+import type { ArchetypeCount, ChemistryEvent } from '../preload/chemistry';
 
 interface Props {
   chemistry: number;
   events: ChemistryEvent[];
+  archetypes: ArchetypeCount[];
 }
 
 function chemColor(c: number): string {
@@ -39,14 +34,29 @@ function chemModLabel(c: number): string {
   return '−4 sim penalty';
 }
 
-export default function ChemistryPanel({ chemistry, events }: Props) {
+const ARCHETYPE_META: Record<string, { label: string; color: string; icon: string }> = {
+  team_leader:  { label: 'Team Leader',  color: '#FFD700', icon: '👑' },
+  vocal_leader: { label: 'Vocal Leader', color: '#64B5F6', icon: '📣' },
+  hard_worker:  { label: 'Hard Worker',  color: '#66BB6A', icon: '💪' },
+  coachable:    { label: 'Coachable',    color: '#4DB6AC', icon: '📋' },
+  selfish:      { label: 'Selfish',      color: '#FFA726', icon: '⚡' },
+  troublemaker: { label: 'Troublemaker', color: '#EF5350', icon: '🔥' },
+};
+
+export default function ChemistryPanel({ chemistry, events, archetypes }: Props) {
   const color = chemColor(chemistry);
+  const positiveArchetypes = archetypes.filter(a =>
+    ['team_leader', 'vocal_leader', 'hard_worker', 'coachable'].includes(a.archetype)
+  );
+  const negativeArchetypes = archetypes.filter(a =>
+    ['selfish', 'troublemaker'].includes(a.archetype)
+  );
 
   return (
     <div style={{ background: T.bgCard, border: `1px solid ${T.borderFaint}`, borderRadius: 6, padding: '14px 16px', marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div style={{ color: T.textMuted, fontFamily: 'monospace', fontSize: 10, letterSpacing: 2 }}>
-          🧪 LOCKER ROOM CHEMISTRY
+          🧬 LOCKER ROOM CHEMISTRY
         </div>
         <div style={{ color: T.textDim, fontFamily: 'monospace', fontSize: 9 }}>
           {chemModLabel(chemistry)}
@@ -71,6 +81,42 @@ export default function ChemistryPanel({ chemistry, events }: Props) {
           {chemLabel(chemistry)}
         </div>
       </div>
+
+      {/* Archetype Breakdown */}
+      {archetypes.length > 0 && (
+        <div style={{ marginBottom: 10, borderTop: `1px solid ${T.borderFaint}`, paddingTop: 10 }}>
+          <div style={{ color: T.textMuted, fontFamily: 'monospace', fontSize: 9, letterSpacing: 1, marginBottom: 6 }}>
+            ROSTER PERSONALITIES
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {[...positiveArchetypes, ...negativeArchetypes].map(a => {
+              const meta = ARCHETYPE_META[a.archetype];
+              if (!meta) return null;
+              return (
+                <div
+                  key={a.archetype}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '2px 7px',
+                    borderRadius: 3,
+                    border: `1px solid ${meta.color}44`,
+                    background: `${meta.color}18`,
+                    fontFamily: 'monospace',
+                    fontSize: 9,
+                    color: meta.color,
+                  }}
+                >
+                  <span>{meta.icon}</span>
+                  <span>{meta.label}</span>
+                  <span style={{ opacity: 0.7 }}>×{a.count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Recent events */}
       {events.length > 0 && (
