@@ -19,7 +19,8 @@ export function severityFromWeeks(weeksOut: number): 'minor' | 'moderate' | 'sev
 
 export function recordInjuryHistory(
   injuredPlayers: Array<{
-    id: number;
+    id?: number;
+    player_id?: number;
     weeks_out?: number;
     injury_type?: string;
   }>,
@@ -39,19 +40,21 @@ export function recordInjuryHistory(
 
   db.transaction(() => {
     for (const p of injuredPlayers) {
+      const pid = p.player_id ?? p.id;
+      if (!pid) continue;
       const weeksOut = p.weeks_out ?? 1;
       const injuryType = p.injury_type ?? 'Injury';
       const severity = severityFromWeeks(weeksOut);
-      insert.run(p.id, season, week, injuryType, severity, weeksOut);
+      insert.run(pid, season, week, injuryType, severity, weeksOut);
 
       // Check if player now qualifies as injury-prone (2+ moderate/severe injuries)
       const significantCount = (db.prepare(`
         SELECT COUNT(*) as cnt FROM injury_history
         WHERE player_id = ? AND severity IN ('moderate', 'severe')
-      `).get(p.id) as any)?.cnt ?? 0;
+      `).get(pid) as any)?.cnt ?? 0;
 
       if (significantCount >= 2) {
-        updateProne.run(p.id);
+        updateProne.run(pid);
       }
     }
   })();
