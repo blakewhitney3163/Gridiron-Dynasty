@@ -14,9 +14,9 @@ import { rendererConfig } from './webpack.renderer.config';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    name: 'Gridiron Dynasty',
-    executableName: 'GridironDynasty',
-    appBundleId: 'com.gridiron.dynasty',
+    name: 'Sideline to Sideline Football',
+    executableName: 'SidelineToSidelineFootball',
+    appBundleId: 'com.sidelinetosideline.football',
     appCopyright: 'Copyright 2026 Blake Whitney',
     appCategoryType: 'public.app-category.games',
     icon: './assets/icon',
@@ -24,7 +24,7 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({
-      name: 'GridironDynasty',
+      name: 'SidelineToSidelineFootball',
       authors: 'Blake Whitney',
       description: 'A professional football dynasty simulator',
       setupIcon: './assets/icon.ico',
