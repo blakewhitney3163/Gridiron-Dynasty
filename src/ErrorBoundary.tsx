@@ -26,7 +26,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
         background: '#0a0a0a', fontFamily: 'monospace', padding: 40,
       }}>
         <div style={{ fontSize: 10, color: '#e57373', letterSpacing: 3, marginBottom: 12 }}>
-          GRIDIRON DYNASTY — UNEXPECTED ERROR
+            SIDELINE TO SIDELINE — UNEXPECTED ERROR
         </div>
         <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 16 }}>
           Something went wrong.
