@@ -508,7 +508,7 @@ for (const contract of pending) {
 
 // ─── Migration Versioning ─────────────────────────────────────────────────────
 
-const CURRENT_SCHEMA_VERSION = 14;
+const CURRENT_SCHEMA_VERSION = 15;
 
 interface Migration { version: number; description: string; up: () => void; }
 
@@ -647,13 +647,14 @@ const MIGRATIONS: Migration[] = [
     },
   },
   {
-  version: 15,
-  up: (db: Database) => {
-    db.prepare(
-      "ALTER TABLE players ADD COLUMN archetype TEXT NOT NULL DEFAULT 'normal'"
-    ).run();
+    version: 15,
+    description: 'Add archetype column to players for personality system',
+    up: () => {
+      db.prepare(
+        "ALTER TABLE players ADD COLUMN archetype TEXT NOT NULL DEFAULT 'normal'"
+      ).run();
+    },
   },
-},
 ];
 
 function getSchemaVersion(): number {
