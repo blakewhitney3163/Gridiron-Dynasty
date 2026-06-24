@@ -3,7 +3,7 @@ import { db } from '../database';
 import fs from 'fs';
 import pathModule from 'path';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
-import { playerRepo, contractRepo, pickRepo, draftRepo } from '../repositories';
+import { playerRepo, contractRepo, pickRepo, draftRepo, settingsRepo } from '../repositories';
 import { logNewsEvent } from '../helpers/logNewsEvent';
 
 function generateCombine(position: string, ovr: number): {
@@ -211,15 +211,22 @@ export function registerDraftHandlers(): void {
     return { success: true };
   });
 
-  ipcMain.handle('scout-prospect', (_event: any, prospectId: number) => {
+    ipcMain.handle('scout-prospect', (_event: any, prospectId: number) => {
     const season = getCurrentSeason();
-    if (draftRepo.countScouted(season) >= 25) return { success: false, reason: 'No scouts remaining.' };
+    const prospect = draftRepo.getById(prospectId);
+    if (!prospect || prospect.scouted) return { success: false, reason: 'Already scouted.' };
+    const used = draftRepo.countScouted(season);
+    const budget = parseInt(settingsRepo.get(`scouting_budget_${season}`) ?? '25');
+    if (used >= budget) return { success: false, reason: 'No scouting budget remaining. Simulate more games to earn scouts.' };
     draftRepo.markScouted(prospectId);
     return { success: true };
   });
 
-  ipcMain.handle('get-scout-count', () => {
-    return draftRepo.countScouted(getCurrentSeason());
+    ipcMain.handle('get-scout-count', () => {
+    const season = getCurrentSeason();
+    const used = draftRepo.countScouted(season);
+    const budget = parseInt(settingsRepo.get(`scouting_budget_${season}`) ?? '25');
+    return { used, budget };
   });
 
   ipcMain.handle('run-cpu-round', (_event: any, { round, userTeamId }: { round: number; userTeamId: number }) => {
