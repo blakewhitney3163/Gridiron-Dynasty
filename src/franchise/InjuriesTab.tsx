@@ -97,7 +97,7 @@ export default function InjuriesTab() {
   const selectedPlayer = players.find(p => p.id === selectedId) ?? null;
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: T.bg }}>
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: T.bgPage }}>
 
       {/* Left panel — injury list */}
       <div style={{ width: 420, borderRight: `1px solid ${T.borderFaint}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
