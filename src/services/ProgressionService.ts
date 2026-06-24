@@ -36,12 +36,12 @@ function gradePerformance(stat: StatRow, position: string): number {
       const yds = s.pass_yards ?? 0;
       const tds = s.pass_tds ?? 0;
       const ints = s.interceptions ?? 0;
-      if (att < 5) return 50; // didn't really play
+      if (att < 5) return 50;
       const compPct = cmp / att;
       if (compPct >= 0.72) grade += 18;
       else if (compPct >= 0.62) grade += 10;
       else if (compPct < 0.50) grade -= 12;
-      grade += Math.min(yds / 15, 22); // up to +22 for 330 yards
+      grade += Math.min(yds / 15, 22);
       grade += tds * 9;
       grade -= ints * 16;
       grade += Math.min((s.rush_yards ?? 0) / 25, 5);
@@ -77,10 +77,8 @@ function gradePerformance(stat: StatRow, position: string): number {
       if (tgts > 5 && recs / tgts < 0.35) grade -= 10;
       break;
     }
-    case 'OL': {
-      // No direct stats — slight positive bias since blockers rarely get graded
+    case 'OL':
       return 58;
-    }
     case 'DL': {
       const tkl = (s.tackles ?? 0) + (s.assisted_tackles ?? 0) * 0.5;
       const sacks = s.sacks ?? 0;
@@ -130,36 +128,34 @@ function gradePerformance(stat: StatRow, position: string): number {
   return Math.max(0, Math.min(100, grade));
 }
 
-function calcDelta(grade: number, ovr: number, age: number, devTrait: string): number {
+function calcDelta(
+  grade: number,
+  ovr: number,
+  age: number,
+  devTrait: string,
+  archetype = 'normal'
+): number {
   const r = () => Math.random();
 
-  // Base delta from grade
   let delta = 0;
   if (grade >= 82) {
-    // Excellent: high chance of +1, small chance of +2
     if (r() < 0.62) delta = 1;
     if (delta === 1 && r() < 0.10) delta = 2;
   } else if (grade >= 67) {
-    // Good: moderate chance of +1
     if (r() < 0.30) delta = 1;
   } else if (grade >= 45) {
-    // Average: no change
     delta = 0;
   } else if (grade >= 32) {
-    // Below average: small chance of -1
     if (r() < 0.22) delta = -1;
   } else {
-    // Poor: higher chance of -1
     if (r() < 0.48) delta = -1;
   }
 
   // Age modifier
   if (delta > 0) {
     if (age <= 22) {
-      // Very young — bonus chance of extra gain
       if (r() < 0.20) delta += 1;
     } else if (age >= 34) {
-      // Older players rarely improve
       if (r() < 0.55) delta = 0;
     } else if (age >= 31) {
       if (r() < 0.30) delta = 0;
@@ -168,21 +164,25 @@ function calcDelta(grade: number, ovr: number, age: number, devTrait: string): n
 
   if (delta < 0) {
     if (age <= 24) {
-      // Young players are more resilient
       if (r() < 0.60) delta = 0;
     } else if (age >= 34) {
-      // Accelerated regression for veterans
       if (r() < 0.30) delta -= 1;
     }
   }
 
-  // Dev trait bonus on positive delta
+  // Dev trait bonus
   if (delta > 0) {
     const bonus = devTrait === 'X-Factor' ? 0.22
       : devTrait === 'Superstar' ? 0.14
       : devTrait === 'Star' ? 0.07
       : 0;
     if (bonus > 0 && r() < bonus) delta += 1;
+  }
+
+  // Archetype dev bonus — hard_worker and coachable grow faster
+  if (delta > 0) {
+    if (archetype === 'hard_worker' && r() < 0.20) delta += 1;
+    else if (archetype === 'coachable' && r() < 0.12) delta += 1;
   }
 
   // OVR ceiling — harder to gain at elite levels
@@ -205,7 +205,7 @@ export function progressPlayers(gameStats: StatRow[], season: number, week: numb
   const ph = playerIds.map(() => '?').join(',');
 
   const players = db.prepare(
-    `SELECT id, first_name, last_name, position, age, overall_rating, dev_trait, team_id
+    `SELECT id, first_name, last_name, position, age, overall_rating, dev_trait, team_id, archetype
      FROM players WHERE id IN (${ph})`
   ).all(...playerIds) as any[];
 
@@ -213,16 +213,21 @@ export function progressPlayers(gameStats: StatRow[], season: number, week: numb
 
   for (const stat of gameStats) {
     const player = playerMap.get(stat.player_id);
-    if (!player || !player.team_id) continue; // skip free agents / unknowns
+    if (!player || !player.team_id) continue;
 
     const grade = gradePerformance(stat, player.position);
-    const delta = calcDelta(grade, player.overall_rating, player.age, player.dev_trait);
+    const delta = calcDelta(
+      grade,
+      player.overall_rating,
+      player.age,
+      player.dev_trait,
+      player.archetype ?? 'normal'
+    );
     if (delta === 0) continue;
 
     const newOvr = Math.max(40, Math.min(99, player.overall_rating + delta));
     db.prepare('UPDATE players SET overall_rating = ? WHERE id = ?').run(newOvr, player.id);
 
-    // Breakout event: +2 OVR in a single game, or strong young player hitting a threshold
     const isBreakout =
       delta >= 2 ||
       (delta === 1 && player.age <= 24 && player.overall_rating >= 68 && grade >= 85);
