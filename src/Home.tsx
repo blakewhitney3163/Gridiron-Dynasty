@@ -97,8 +97,8 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [userScheme, setUserScheme] = useState<{ offenseScheme: string; defenseScheme: string } | null>(null);
   const [allStandings, setAllStandings] = useState<{ id: number; wins: number; losses: number }[]>([]);
   const [recentNews, setRecentNews] = useState<NewsEvent[]>([]);
-  const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: { id: number; week: number; delta: number; reason: string }[] } | null>(null);
-
+const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: { id: number; week: number; delta: number; reason: string }[]; archetypes: { archetype: string; count: number }[] } | null>(null);
+  
   const fetchRecentNews = async () => {
     const news = await window.api.getNewsFeed({ season: currentSeason, limit: 6 });
     setRecentNews(news ?? []);
@@ -625,7 +625,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         )}
 
         {teamChemistry && (
-  <ChemistryPanel chemistry={teamChemistry.chemistry} events={teamChemistry.events} />
+  <ChemistryPanel chemistry={teamChemistry.chemistry} events={teamChemistry.events} archetypes={teamChemistry.archetypes ?? []} />
 )}
 
 {/* Recent News */}
