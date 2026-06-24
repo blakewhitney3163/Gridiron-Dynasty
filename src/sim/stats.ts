@@ -35,20 +35,20 @@ export function generatePlayerStats(
   };
 
   // ── QB ──────────────────────────────────────────────────────────────────────
-  let passYardsGenerated = 250 * teamRatingFactor;
+  let passYardsGenerated = 220 * teamRatingFactor;
   if (qb) {
     const qbRatingFactor = qb.overall_rating / 75;
     const combinedFactor = (teamRatingFactor + qbRatingFactor) / 2;
-    const powerBonus = (attr(qb, 'throw_power') - 75) * 0.8;
-    const tdYardageBonus = passTDs * 7;
+    const powerBonus = (attr(qb, 'throw_power') - 75) * 0.7;
+    const tdYardageBonus = passTDs * 6;
 
     passYardsGenerated = clamp(
-      randomNormal((220 + powerBonus + tdYardageBonus) * combinedFactor, 48)
+      randomNormal((195 + powerBonus + tdYardageBonus) * combinedFactor, 52)
       * wx.passYards * gameScriptPassMod,
-      50, 460
+      50, 480
     );
 
-    const passAttempts = clamp(randomNormal(34 * gameScriptPassMod, 5), 18, 60);
+    const passAttempts = clamp(randomNormal(30 * gameScriptPassMod, 5), 16, 55);
     const throwAcc = attr(qb, 'throw_accuracy');
     const homePenalty = isHome ? 0.012 : -0.018;
     const compPct = Math.min(0.78, Math.max(0.42,
@@ -75,24 +75,24 @@ export function generatePlayerStats(
 
   // ── RBs ─────────────────────────────────────────────────────────────────────
   const totalRushAttempts = clamp(
-    randomNormal(26 * wx.rushAttempts * gameScriptRushMod, 5), 12, 48
+    randomNormal(29 * wx.rushAttempts * gameScriptRushMod, 5), 14, 50
   );
   const rbRatingWeights = rbs.map(rb => rb.overall_rating / 75);
   const rbWeightTotal = rbRatingWeights.reduce((a, b) => a + b, 0) || 1;
   const rb1Rating = rbs[0]?.overall_rating ?? 70;
   const rb2Rating = rbs[1]?.overall_rating ?? 60;
-  const workhorseBonus = Math.max(0, (rb1Rating - rb2Rating) / 10) * 0.06;
+  const workhorseBonus = Math.max(0, (rb1Rating - rb2Rating) / 10) * 0.12;
 
   rbs.forEach((rb, i) => {
     const baseShare = rbRatingWeights[i] / rbWeightTotal;
     const adjustedShare = i === 0
       ? baseShare + workhorseBonus
       : baseShare - workhorseBonus / (rbs.length - 1 || 1);
-    const share = clamp(randomNormal(adjustedShare * 100, 8), i === 0 ? 25 : 0, 82) / 100;
-    const carries = clamp(totalRushAttempts * share, i === 0 ? 6 : 0, 36);
+    const share = clamp(randomNormal(adjustedShare * 100, 7), i === 0 ? 35 : 0, 85) / 100;
+    const carries = clamp(totalRushAttempts * share, i === 0 ? 8 : 0, 38);
     const speedFactor = (attr(rb, 'speed') - 70) * 0.03;
-    const ypc = Math.max(2.4, randomNormal((4.2 + speedFactor) * wx.rushYards, 0.8));
-    const rushYards = clamp(carries * ypc, 0, 240);
+    const ypc = Math.max(2.8, randomNormal((4.5 + speedFactor) * wx.rushYards, 1.0));
+    const rushYards = clamp(carries * ypc, 0, 280);
     const rbRushTDs = i === 0 && rushTDs > 0 ? Math.ceil(rushTDs * 0.75) :
       i === 1 && rushTDs > 1 && Math.random() < 0.3 ? 1 : 0;
 
