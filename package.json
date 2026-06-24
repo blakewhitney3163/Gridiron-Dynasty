@@ -15,8 +15,8 @@
     "simulate": "npm rebuild better-sqlite3 && node src/simulateSeason.js && .\\node_modules\\.bin\\electron-rebuild -v 42.4.0 --force && rmdir /s /q .webpack 2>nul & npm start",
     "import-madden": "npm rebuild better-sqlite3 && node src/importFromMadden.js && .\\node_modules\\.bin\\electron-rebuild -v 42.4.0 --force",
     "update-ratings": "npm rebuild better-sqlite3 && node src/updateRatings.js && .\\node_modules\\.bin\\electron-rebuild -v 42.4.0 --force",
-    "import-players": "npm rebuild better-sqlite3 && node src/importPlayers.js && .\\node_modules\\.bin\\electron-rebuild -v 42.4.0 --force"
-"generate-icons": "node scripts/generate-icons.js"  
+    "import-players": "npm rebuild better-sqlite3 && node src/importPlayers.js && .\\node_modules\\.bin\\electron-rebuild -v 42.4.0 --force",
+    "generate-icons": "node scripts/generate-icons.js"
   },
   "keywords": [],
   "author": {
