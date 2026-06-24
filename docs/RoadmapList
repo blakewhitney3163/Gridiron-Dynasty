@@ -25,28 +25,22 @@ Features that would bring the game to a competitive level with top sports sims.
 
 NARRATIVE & STAKES
 ────────────────────────────────────────────────────────────────────────────────
-Team Chemistry / Locker Room System — team-level morale modifier on top of
-  individual player morale. Winning streaks boost it, losing streaks tank it,
-  star players leaving damages it. Affects sim ratings for the entire roster.
-
 Player Personality Archetypes — leadership, work ethic, and coachability
   ratings per player beyond dev trait. Affects development speed, locker room
-  health, and contract negotiation behavior.
+  health, and contract negotiation behavior. Archetypes (team_leader,
+  troublemaker, vocal_leader, selfish) will hook directly into the existing
+  chemistry system via the applyArchetypeModifiers() stub in ChemistryService.
 
 ROSTER / PLAYER MANAGEMENT
 ────────────────────────────────────────────────────────────────────────────────
-Injury History / Injury-Prone Trait — track career injury history per player.
-  Players with repeated injuries accumulate an injury-prone flag that increases
-  in-game injury probability and lowers market value.
-
 Scouting Department — hire scouts with regional specialties that improve draft
   prospect accuracy over time. Builds directly on the existing combine
   measurables and in-season scouting budget system.
 
 SIMULATION & SCHEDULE
 ────────────────────────────────────────────────────────────────────────────────
-Multi-Season Batch Simulation — "Sim N seasons" with a progress bar. Critical
-  for dynasty feel — users should be able to fast-forward through rebuilds.
+Multi-Season Batch Simulation — "Sim N seasons" with a progress bar. Deferred —
+  not a priority for current development phase.
 
 LEAGUE & FINANCIALS
 ────────────────────────────────────────────────────────────────────────────────
@@ -205,51 +199,49 @@ HIGH PRIORITY
 IMPORTANT — Fix before next major feature
 ────────────────────────────────────────────────────────────────────────────────
 [DONE June 20, 2026] Contract Salary Market Calibration
-
 [DONE June 20, 2026] Cap-Balanced Dynasty Start
-
 [DONE June 20, 2026] Contract Extension Pay-Cut Floor
-
 [DONE June 20, 2026] CPU Trade Accept/Decline Fix
-
 [DONE June 20, 2026] Save File Delete Resource Lock Fix
-
 [DONE June 20, 2026] My Team Player Clickability
-
 [DONE June 20, 2026] Double Game Record Fix
-
 [DONE June 20, 2026] Realistic Schedule Generation
-
 [DONE June 20, 2026] Split simulateGame.ts
-
 [DONE June 20, 2026] Reduce `any` in IPC Handlers
-
 [DONE June 20, 2026] Split preload.ts
 
 MAINTENANCE
 ────────────────────────────────────────────────────────────────────────────────
 [DONE June 20, 2026] Startup Migration Check Consolidation
-
 [DONE June 20, 2026] News Events Archiving
-
 [DONE June 20, 2026] Raw Stats Table Pruning
-
 [DONE June 20, 2026] career_stats_history team_id Column
 
 ================================================================================
 COMPLETED ITEMS
 ================================================================================
 
-[DONE June 24, 2026] Injury History / Injury-Prone Trait — permanent injury_history
-  table records every injury event (type, severity, weeks out) per player per game.
-  Players with 2+ moderate/severe injuries accumulate the injury-prone flag. IR
-  placement and activation supported with news events. Dedicated 🏥 Injuries tab
-  under My Team: split IR / active injured view, player detail panel with full
-  career injury history table and injury-prone badge.
+[DONE June 24, 2026] Team Chemistry / Locker Room System — team-level chemistry
+  value (0–100, default 50) stored in team_chemistry table (schema v14). Updated
+  automatically after every game result: big win +5, normal win +3, close win +2,
+  close loss −2, normal loss −3, blowout loss −5. Roster moves affect chemistry:
+  trading/releasing a star −8 to −10, signing a star FA +5, draft pick joins +2.
+  Chemistry modifier applied to sim ratings: 90+ = +3, 75+ = +2, 60+ = +1,
+  40–59 = 0, 30–39 = −2, <30 = −4. ChemistryPanel.tsx on Home tab shows meter,
+  label (Toxic → Electric), sim boost/penalty, and recent event history.
+  chemistry_events table logs every change with reason and delta.
+  applyArchetypeModifiers() stub ready for Player Personality Archetypes feature.
 
-[DONE June 24, 2026] Loading / Splash Screen — branded HTML splash screen renders
-  before React loads (zero blank flash). S2S badge, title stack, animated orange
-  progress bar. Fades out 0.5s after React mounts via window.__hideSplash().
+[DONE June 24, 2026] Injury History / Injury-Prone Trait — injury_history table
+  (schema v13) records every injury event per player (type, severity, weeks out).
+  Players with 2+ moderate/severe injuries get injury_prone flag. IR placement and
+  activation supported with news events. Dedicated 🏥 Injuries tab under My Team:
+  split IR / active injured view, player detail panel with full career injury
+  history table and injury-prone badge.
+
+[DONE June 24, 2026] Loading / Splash Screen — branded HTML splash renders before
+  React loads (zero blank flash). S2S badge, title stack, animated orange progress
+  bar. Fades out 0.5s after React mounts via window.__hideSplash().
 
 [DONE June 23, 2026] Commissioner Mode — save-level mode selected at dynasty
   creation. Franchise = standard single-team experience. Commissioner = unlocks
@@ -266,109 +258,64 @@ COMPLETED ITEMS
   Toast feedback on success/error.
 
 [DONE June 23, 2026] Owner Goals & Patience Meter — seasonal objective system
-  with real consequences. Goals auto-generated at season start based on team
-  OVR. Stored in owner_goals table (schema v12). Evaluated at season advance.
-  Owner patience (0–100, default 75) adjusts ±5 to ±20 per season based on
-  goal completion. Patience drops trigger news events. UI: OwnerGoalsPanel.tsx
-  on Home tab.
+  with real consequences. Goals auto-generated at season start based on team OVR.
+  Stored in owner_goals table (schema v12). Evaluated at season advance. Owner
+  patience (0–100, default 75) adjusts ±5 to ±20 per season based on goal
+  completion. Patience drops trigger news events. UI: OwnerGoalsPanel.tsx on Home.
 
 [DONE June 23, 2026] Draft Pre-Season Generation + In-Season Scouting —
   Draft class auto-generated at season start. Scouting budget accumulates by
   simulating games (+3 per full week, +1 per single game). Budget enforced on
   scout-prospect. Draft tab always visible year-round.
 
-[DONE June 23, 2026] Full Player Editor Tab — Commissioner Mode only.
-  Edit all player fields: name, position, age, OVR, dev trait, 14 attribute
-  sliders, salary, years remaining.
+[DONE June 23, 2026] Full Player Editor Tab — Commissioner Mode only. Edit all
+  player fields: name, position, age, OVR, dev trait, 14 attribute sliders,
+  salary, years remaining.
 
 [DONE June 23, 2026] TypeScript Prop and Module Fixes
-
 [DONE June 23, 2026] Depth Chart Improvements — phase headers, out-of-order
   warning system, starter highlight, Sort by OVR, Reset All.
-
 [DONE June 23, 2026] In-Season Player Progression — ProgressionService.ts,
   grade-to-OVR-delta system, age/dev trait modifiers, breakout news events.
-
 [DONE June 23, 2026] Full Waiver Wire System
-
 [DONE June 23, 2026] FA Pool Replenishment
-
 [DONE June 23, 2026] Player Retirement Control
-
 [DONE June 23, 2026] Playoff Simulation Fix
-
 [DONE June 21, 2026] Game Preview / Head-to-Head
-
 [DONE June 21, 2026] Practice Squad Promotion Alerts
-
 [DONE June 21, 2026] Position-Weighted Team Ratings
-
 [DONE June 20, 2026] Salaries Tab
-
 [DONE June 20, 2026] Contract Extension — Add Years (not Overwrite)
-
 [DONE June 20, 2026] Box Score Q1–Q4 + Team Names
-
 [DONE June 20, 2026] "End Regular Season" Button Label
-
 [DONE June 20, 2026] Standings Page Scrollable
-
 [DONE June 20, 2026] Wider Sidebar + Stat Leaders with Team Names
-
 [DONE June 20, 2026] Dynasty Name Input Visibility
-
 [DONE June 20, 2026] Team Selection Screen Readability
-
 [DONE June 20, 2026] Position Filter Bug Fix (Roster + Free Agents)
-
 [DONE June 20, 2026] Multiple Incoming CPU Trade Offers
-
 [DONE June 20, 2026] CPU Trade Frequency Reduction
-
 [DONE June 20, 2026] Franchise & League Records
-
 [DONE June 20, 2026] Trade Balance Fix
-
 [DONE June 19, 2026] LB Depth Chart Split (MLB / OLB)
-
 [DONE June 19, 2026] Full Player Stat Editability (14 attribute sliders)
-
 [DONE June 19, 2026] Dev Trait Ratio Rebalanced
-
 [DONE June 19, 2026] Home Page Redesign
-
 [DONE June 19, 2026] Contract Negotiation Fix
-
 [DONE June 19, 2026] Franchise Health Monitor
-
 [DONE June 19, 2026] Schemes System
-
 [DONE June 19, 2026] Draft Combine / Deeper Scouting
-
 [DONE June 19, 2026] Coaching Staff System
-
 [DONE June 19, 2026] Contract Negotiation Depth
-
 [DONE June 19, 2026] Surface Trade Offers on Main Screen
-
 [DONE June 19, 2026] Meet the Team Screen
-
 [DONE June 19, 2026] Franchise Tag + Tender System
-
 [DONE June 19, 2026] Player Morale System
-
 [DONE June 18, 2026] Season Awards
-
 [DONE June 18, 2026] Practice Squad Accelerated Development
-
 [DONE June 18, 2026] Contract Demand News Events
-
 [DONE June 18, 2026] Retirement + HOF News Events
-
 [DONE June 18, 2026] Multiple Save Files
-
 [DONE June 18, 2026] OL Ratings in Teams / Depth Chart
-
 [DONE] Player Editor — inline edit mode in PlayerProfile.tsx
-
 [DONE] Playoff UI Update — bracket-style visual
