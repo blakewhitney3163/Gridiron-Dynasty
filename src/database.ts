@@ -87,6 +87,7 @@ export function initDatabase(dbPath: string): void {
       waived_by_team_id INTEGER,
       waiver_placed_week INTEGER,
       morale INTEGER DEFAULT 75,
+      archetype TEXT NOT NULL DEFAULT 'normal',
       FOREIGN KEY (team_id) REFERENCES teams(id)
     );
     CREATE TABLE IF NOT EXISTS games (
