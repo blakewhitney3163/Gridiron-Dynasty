@@ -152,11 +152,11 @@ export function proposeTrade(params: {
 export function getCpuTradeOffers(userTeamId: number): any[] {
   const season = getCurrentSeason();
   const currentWeek = gameRepo.getCurrentWeek(season);
-  if (!currentWeek || currentWeek > 8) return [];
-  if (currentWeek < 2) return [];
+  if (!currentWeek || currentWeek > 14) return [];
+  if (currentWeek < 1) return [];
 
-  // ~35% chance of any offers on a given check
-  if (Math.random() > 0.35) return [];
+  // ~60% chance of any offers on a given check
+  if (Math.random() > 0.60) return [];
 
   const cpuTeams = db.prepare(`SELECT id, city, name FROM teams WHERE id != ? ORDER BY RANDOM()`).all(userTeamId) as any[];
 
@@ -206,7 +206,7 @@ export function getCpuTradeOffers(userTeamId: number): any[] {
 
       const wanted = userPlayersAll.find((p: any) =>
         !claimedUserPlayerIds.has(p.id) &&
-        cpuNeeds.includes(p.position) && p.overall_rating >= 75 && p.dev_trait !== 'X-Factor'
+        cpuNeeds.includes(p.position) && p.overall_rating >= 72 && p.dev_trait !== 'X-Factor'
       );
       if (!wanted) continue;
 
