@@ -427,7 +427,7 @@ export default function App() {
 
   // ── Main Game ─────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: T.bgPage, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100vh', background: T.bgPage, display: 'flex', flexDirection: 'column' }}>
 
       {/* Top bar */}
       <div style={{
@@ -493,7 +493,7 @@ export default function App() {
       </div>
 
       {/* Tab content — keep-alive */}
-      <div style={{ flex: 1, overflow: 'hidden' }}>
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         <Suspense fallback={<TabFallback />}>
           {isMounted('home') && (
             <div style={tabStyle('home')}>
