@@ -57,7 +57,13 @@ export function loadTeamData(teamId: number): TeamData {
     ).get(teamId) as SchemeRow ?? null;
   } catch { /* team_schemes not yet on this save */ }
 
-  return { teamId, players, coaches, scheme };
+    let chemistry = 50;
+  try {
+    const chemRow = db.prepare('SELECT chemistry FROM team_chemistry WHERE team_id = ?').get(teamId) as any;
+    chemistry = chemRow?.chemistry ?? 50;
+  } catch {}
+
+  return { teamId, players, coaches, scheme, chemistry };
 }
 
 // ─── In-Memory Position Filter ────────────────────────────────────────────────
@@ -184,6 +190,12 @@ export function computeTeamRatings(data: TeamData): TeamRatings {
     offenseRating += offMod;
     defenseRating += defMod;
   }
+
+    // Chemistry modifier — hooks into archetype system when Player Personality ships
+  const chem = data.chemistry ?? 50;
+  const chemMod = chem >= 90 ? 3 : chem >= 75 ? 2 : chem >= 60 ? 1 : chem >= 40 ? 0 : chem >= 30 ? -2 : -4;
+  offenseRating += chemMod;
+  defenseRating += chemMod;
 
   return { offenseRating, defenseRating };
 }
