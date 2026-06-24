@@ -202,10 +202,10 @@ export default function App() {
           DYNASTY SIMULATOR
         </div>
         <div style={{ fontSize: 40, fontWeight: 900, color: '#fff', letterSpacing: 6, lineHeight: 1 }}>
-          GRIDIRON
+          Sideline to Sideline
         </div>
         <div style={{ fontSize: 40, fontWeight: 900, color: '#FF8740', letterSpacing: 6, marginBottom: 36 }}>
-          DYNASTY
+          Football
         </div>
 
         <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
@@ -364,7 +364,7 @@ export default function App() {
         minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center',
         justifyContent: 'center', background: T.bgPage, fontFamily: 'monospace', gap: 16,
       }}>
-        <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 3 }}>GRIDIRON DYNASTY</div>
+        <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 3 }}>SIDELINE TO SIDELINE FOOTBALL</div>
         {userTeam && (
           <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', letterSpacing: 2 }}>
             {userTeam.city} {userTeam.name}
@@ -419,7 +419,7 @@ export default function App() {
         padding: '8px 16px', borderBottom: `1px solid ${T.borderFaint}`,
         background: T.bgCard, fontFamily: 'monospace', fontSize: 11,
       }}>
-        <span style={{ color: '#FF8740', fontWeight: 700, letterSpacing: 2, fontSize: 12 }}>GID</span>
+        <span style={{ color: '#FF8740', fontWeight: 700, letterSpacing: 2, fontSize: 12 }}>S2S</span>
         <span style={{ color: T.borderFaint }}>|</span>
         <span style={{ color: '#fff', fontWeight: 600, letterSpacing: 1 }}>
           {userTeam.city} {userTeam.name}
