@@ -9,6 +9,7 @@ import SeasonAwardsView from './home/SeasonAwardsView';
 import GamePreview from './home/GamePreview';
 import { useGameStore } from './store/gameStore';
 import TradeOfferCard from './home/TradeOfferCard';
+import ChemistryPanel from './home/ChemistryPanel';
 import { CpuOffer } from './trades/types';
 import { NewsEvent } from './newsCenter/types';
 
@@ -96,6 +97,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [userScheme, setUserScheme] = useState<{ offenseScheme: string; defenseScheme: string } | null>(null);
   const [allStandings, setAllStandings] = useState<{ id: number; wins: number; losses: number }[]>([]);
   const [recentNews, setRecentNews] = useState<NewsEvent[]>([]);
+  const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: { id: number; week: number; delta: number; reason: string }[] } | null>(null);
 
   const fetchRecentNews = async () => {
     const news = await window.api.getNewsFeed({ season: currentSeason, limit: 6 });
@@ -111,22 +113,23 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setPlayoffResults(null); setUserRecord(null); setInjuryReport([]);
       setSeasonAwards(null);
 
-      const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffers, tradeStatus, spots, health, psAlerts, announcingRets, news] = await Promise.all([
-        window.api.getCurrentWeek(),
-        window.api.getDashboard(currentSeason),
-        window.api.getChampions(),
-        window.api.getStandings(currentSeason),
-        window.api.getOffseasonStatus(),
-        window.api.getInjuryReport(userTeam.id),
-        window.api.getStats(currentSeason),
-        window.api.getCpuTradeOffer(),
-        window.api.getTeamStatus(userTeam.id),
-        window.api.getRosterSpots(userTeam.id),
-        window.api.getFranchiseHealth(userTeam.id),
-        window.api.getPSPromotionAlerts(userTeam.id),
-        window.api.getAnnouncingRetirements(),
-        window.api.getNewsFeed({ season: currentSeason, limit: 6 }),
-      ]);
+      const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffers, tradeStatus, spots, health, psAlerts, announcingRets, news, chemistry] = await Promise.all([
+  window.api.getCurrentWeek(),
+  window.api.getDashboard(currentSeason),
+  window.api.getChampions(),
+  window.api.getStandings(currentSeason),
+  window.api.getOffseasonStatus(),
+  window.api.getInjuryReport(userTeam.id),
+  window.api.getStats(currentSeason),
+  window.api.getCpuTradeOffer(),
+  window.api.getTeamStatus(userTeam.id),
+  window.api.getRosterSpots(userTeam.id),
+  window.api.getFranchiseHealth(userTeam.id),
+  window.api.getPSPromotionAlerts(userTeam.id),
+  window.api.getAnnouncingRetirements(),
+  window.api.getNewsFeed({ season: currentSeason, limit: 6 }),
+  window.api.getTeamChemistry(userTeam.id),
+]);
       if (cancelled) return;
 
       const seasonDone = status.hasSchedule && status.currentWeek === null;
@@ -150,6 +153,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setPSPromotionAlerts(psAlerts ?? []);
       setAnnouncingRetirements(announcingRets ?? []);
       setRecentNews(news ?? []);
+      setTeamChemistry(chemistry ?? null);
 
       if (offseason.playoffsComplete) setPlayoffsComplete(true);
 
@@ -620,7 +624,11 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
           </>
         )}
 
-        {/* Recent News */}
+        {teamChemistry && (
+  <ChemistryPanel chemistry={teamChemistry.chemistry} events={teamChemistry.events} />
+)}
+
+{/* Recent News */}
         <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '14px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, textTransform: 'uppercase' }}>Recent News</div>
