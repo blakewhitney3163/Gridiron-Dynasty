@@ -1,6 +1,6 @@
 GRIDIRON DYNASTY — ROADMAP
 Last Updated: June 24, 2026
-Repository: https://github.com/blakewhitney3163/Gridiron-Dynasty
+Repository: https://github.com/blakewhitney3163/Sideline-to-Sideline-Football
 ================================================================================
 
 TIER 3 — Polish & replayability
@@ -22,14 +22,6 @@ Preset Dynasty Templates — fictional franchise starter kits selectable at new
 GAMEPLAY DEPTH — OOTP-Tier Features
 ================================================================================
 Features that would bring the game to a competitive level with top sports sims.
-
-NARRATIVE & STAKES
-────────────────────────────────────────────────────────────────────────────────
-Player Personality Archetypes — leadership, work ethic, and coachability
-  ratings per player beyond dev trait. Affects development speed, locker room
-  health, and contract negotiation behavior. Archetypes (team_leader,
-  troublemaker, vocal_leader, selfish) will hook directly into the existing
-  chemistry system via the applyArchetypeModifiers() stub in ChemistryService.
 
 ROSTER / PLAYER MANAGEMENT
 ────────────────────────────────────────────────────────────────────────────────
@@ -90,65 +82,22 @@ HIGH PRIORITY — Will hurt reviews or crash reports if shipped as-is
 ────────────────────────────────────────────────────────────────────────────────
 
 [DONE June 24, 2026] Content Security Policy (index.html)
-    - CSP meta tag added to src/index.html
-    - Eliminates Electron security warnings on every launch
-
 [DONE June 24, 2026] win32metadata + productName in forge.config.ts
-    - executableName: 'SidelineToSidelineFootball'
-    - appCopyright: 'Copyright 2026 Blake Whitney'
-    - appCategoryType: 'public.app-category.games'
-    - MakerSquirrel: name, authors, description, setupIcon all set
-
 [DONE June 24, 2026] Error Boundary (React)
-    - src/ErrorBoundary.tsx created — class component wrapping <App />
-    - Catches render errors and shows branded fallback UI with Reload button
-    - renderer.ts updated to wrap App in ErrorBoundary
-
 [DONE June 24, 2026] Main Process Crash Logging
-    - process.on('uncaughtException') and process.on('unhandledRejection')
-      added to src/index.ts
-    - Writes timestamped crash.log to app.getPath('userData')
-
 [DONE June 24, 2026] Remove Unused Dependencies
-    - "better" and "sqlite3" removed from package.json dependencies
-    - Only better-sqlite3 remains as the SQLite driver
-
 [DONE June 24, 2026] squirrel-startup Guard in index.ts
-    - import started from 'electron-squirrel-startup'; if (started) process.exit(0)
-    - Added as first two lines of src/index.ts
-    - Prevents multiple app instances during Windows install/uninstall
 
 ────────────────────────────────────────────────────────────────────────────────
 MEDIUM PRIORITY — Expected polish for a Steam release
 ────────────────────────────────────────────────────────────────────────────────
 
 [DONE June 24, 2026] Minimum Window Size Enforcement
-    - BrowserWindow minWidth: 1100, minHeight: 650 added in src/index.ts
-
 [DONE June 24, 2026] Prevent Multiple App Instances
-    - app.requestSingleInstanceLock() added to src/index.ts
-    - second-instance event focuses existing window instead of opening a new one
-
 [DONE June 24, 2026] Renderer Error Logging
-    - window.onerror and window.onunhandledrejection handlers added to renderer.ts
-
 [DONE June 24, 2026] Keyboard Shortcut Cleanup
-    - globalShortcut blocks Ctrl+R, CommandOrControl+R, and F5 in production builds
-    - globalShortcut.unregisterAll() called on will-quit
-
 [DONE June 24, 2026] App Rename — Sideline to Sideline Football
-    - package.json: name, productName updated
-    - forge.config.ts: name, executableName, appBundleId updated
-    - src/index.html: title updated
-    - src/App.tsx: main menu branding updated (SIDELINE TO SIDELINE / FOOTBALL),
-      top bar badge changed from GID to S2S
-    - src/ErrorBoundary.tsx: error screen header updated
-
 [DONE June 24, 2026] Loading / Splash Screen
-    - Branded HTML splash renders instantly before React loads (zero blank flash)
-    - S2S badge, title, animated orange progress bar (~1.4s)
-    - Fades out in 0.5s once React mounts, then removes itself from DOM
-    - Implemented in src/index.html + src/renderer.ts via window.__hideSplash()
 
 ────────────────────────────────────────────────────────────────────────────────
 STEAM STORE LISTING REQUIREMENTS (before going live)
@@ -163,28 +112,11 @@ STEAM STORE LISTING REQUIREMENTS (before going live)
     - Library Logo:        transparent PNG, any size
 
 [ ] Screenshots — minimum 5 required
-    - Recommended: Home tab, Draft board, Playoff bracket, Franchise tab,
-      Commissioner mode (Team Editor or Player Editor)
-
 [ ] Trailer Video — strongly recommended, not required
-    - 30–90 seconds showing core gameplay loop
-
-[ ] Store Description
-    - Short description (up to 300 characters)
-    - Long description (full HTML-friendly detail page)
-    - Tags: Turn-Based Strategy, Sports, Management, Simulation
-
-[ ] Age Rating — IARC questionnaire (in Steamworks dashboard)
-    - Will likely rate E or E10+ (no violence, no explicit content)
-
+[ ] Store Description (short ≤300 chars + long HTML)
+[ ] Age Rating — IARC questionnaire (Steamworks dashboard)
 [ ] Privacy Policy URL
-    - Steam requires a privacy policy link even for single-player offline apps
-    - A simple one-page hosted policy (GitHub Pages or similar) is sufficient
-    - State that no personal data is collected, all saves are stored locally
-
-[ ] System Requirements (fill in Steamworks)
-    - Minimum: Windows 10 64-bit, 4GB RAM, 200MB disk
-    - Recommended: Windows 10/11 64-bit, 8GB RAM, SSD
+[ ] System Requirements (Minimum: Win10 64-bit, 4GB RAM, 200MB; Recommended: Win10/11, 8GB, SSD)
 
 ================================================================================
 SCALABILITY & CODE HEALTH
@@ -192,9 +124,7 @@ SCALABILITY & CODE HEALTH
 
 HIGH PRIORITY
 ────────────────────────────────────────────────────────────────────────────────
-[DONE June 20, 2026] Batch getTeamRatings() DB Queries — consolidated into
-  1-2 joined queries per team per game, reducing per-season DB calls from
-  ~5,760 down to ~1,700.
+[DONE June 20, 2026] Batch getTeamRatings() DB Queries
 
 IMPORTANT — Fix before next major feature
 ────────────────────────────────────────────────────────────────────────────────
@@ -221,62 +151,39 @@ MAINTENANCE
 COMPLETED ITEMS
 ================================================================================
 
-[DONE June 24, 2026] Team Chemistry / Locker Room System — team-level chemistry
-  value (0–100, default 50) stored in team_chemistry table (schema v14). Updated
-  automatically after every game result: big win +5, normal win +3, close win +2,
-  close loss −2, normal loss −3, blowout loss −5. Roster moves affect chemistry:
-  trading/releasing a star −8 to −10, signing a star FA +5, draft pick joins +2.
-  Chemistry modifier applied to sim ratings: 90+ = +3, 75+ = +2, 60+ = +1,
-  40–59 = 0, 30–39 = −2, <30 = −4. ChemistryPanel.tsx on Home tab shows meter,
-  label (Toxic → Electric), sim boost/penalty, and recent event history.
-  chemistry_events table logs every change with reason and delta.
-  applyArchetypeModifiers() stub ready for Player Personality Archetypes feature.
+[DONE June 24, 2026] Player Personality Archetypes — every player assigned one
+  of 7 archetypes at generation (normal 35%, hard_worker 20%, coachable 15%,
+  team_leader 10%, vocal_leader 8%, selfish 7%, troublemaker 5%). Stored in
+  archetype column (schema v15, DEFAULT 'normal' for existing players). Effects:
+  team_leader/vocal_leader shift chemistry +1/game (probabilistic); troublemaker/
+  selfish shift chemistry −1 to −2/game based on morale. hard_worker gets +20%
+  chance of extra OVR gain per game; coachable +12%. applyArchetypeModifiers()
+  called automatically inside processGameResult(). ChemistryPanel shows ROSTER
+  PERSONALITIES chip row. ArchetypeBadge.tsx reusable badge component. IPC:
+  get-player-archetype, set-player-archetype (commissioner mode ready).
+
+[DONE June 24, 2026] Team Chemistry / Locker Room System — team_chemistry and
+  chemistry_events tables (schema v14). Win/loss deltas applied after every game.
+  Roster move effects. Morale drag weekly. Chemistry modifier on sim ratings
+  (−4 to +3). ChemistryPanel.tsx on Home tab. applyArchetypeModifiers() stub
+  fully wired as of June 24 Archetypes feature.
 
 [DONE June 24, 2026] Injury History / Injury-Prone Trait — injury_history table
-  (schema v13) records every injury event per player (type, severity, weeks out).
-  Players with 2+ moderate/severe injuries get injury_prone flag. IR placement and
-  activation supported with news events. Dedicated 🏥 Injuries tab under My Team:
-  split IR / active injured view, player detail panel with full career injury
-  history table and injury-prone badge.
+  (schema v13). Severity tiers, injury_prone flag after 2+ moderate/severe
+  injuries. IR placement/activation with news events. 🏥 Injuries tab under
+  My Team with full career injury history table.
 
-[DONE June 24, 2026] Loading / Splash Screen — branded HTML splash renders before
-  React loads (zero blank flash). S2S badge, title stack, animated orange progress
-  bar. Fades out 0.5s after React mounts via window.__hideSplash().
+[DONE June 24, 2026] Loading / Splash Screen — branded HTML splash before React
+  loads. Animated orange progress bar, fades via window.__hideSplash().
 
-[DONE June 23, 2026] Commissioner Mode — save-level mode selected at dynasty
-  creation. Franchise = standard single-team experience. Commissioner = unlocks
-  Player Editor + Team Editor tabs. Mode persisted in settings and restored on
-  every save load. Dynasty mode selector added to main menu. Backed by:
-  commissionerMode in gameStore.ts, get/set-commissioner-mode IPC handlers,
-  settingsRepo persistence, and conditional tab rendering in App.tsx.
-
-[DONE June 23, 2026] Team Editor — dedicated 🏟 Teams tab (Commissioner Mode
-  only). Select any of 32 teams from a dropdown. Editable fields: city, team
-  name, abbreviation (4 chars max, auto-uppercased), conference (AFC/NFC),
-  division (North/South/East/West). Live preview bar. Saves via edit-team IPC
-  handler. Editing your own team updates the top bar immediately via game store.
-  Toast feedback on success/error.
-
-[DONE June 23, 2026] Owner Goals & Patience Meter — seasonal objective system
-  with real consequences. Goals auto-generated at season start based on team OVR.
-  Stored in owner_goals table (schema v12). Evaluated at season advance. Owner
-  patience (0–100, default 75) adjusts ±5 to ±20 per season based on goal
-  completion. Patience drops trigger news events. UI: OwnerGoalsPanel.tsx on Home.
-
-[DONE June 23, 2026] Draft Pre-Season Generation + In-Season Scouting —
-  Draft class auto-generated at season start. Scouting budget accumulates by
-  simulating games (+3 per full week, +1 per single game). Budget enforced on
-  scout-prospect. Draft tab always visible year-round.
-
-[DONE June 23, 2026] Full Player Editor Tab — Commissioner Mode only. Edit all
-  player fields: name, position, age, OVR, dev trait, 14 attribute sliders,
-  salary, years remaining.
-
+[DONE June 23, 2026] Commissioner Mode
+[DONE June 23, 2026] Team Editor
+[DONE June 23, 2026] Owner Goals & Patience Meter
+[DONE June 23, 2026] Draft Pre-Season Generation + In-Season Scouting
+[DONE June 23, 2026] Full Player Editor Tab
 [DONE June 23, 2026] TypeScript Prop and Module Fixes
-[DONE June 23, 2026] Depth Chart Improvements — phase headers, out-of-order
-  warning system, starter highlight, Sort by OVR, Reset All.
-[DONE June 23, 2026] In-Season Player Progression — ProgressionService.ts,
-  grade-to-OVR-delta system, age/dev trait modifiers, breakout news events.
+[DONE June 23, 2026] Depth Chart Improvements
+[DONE June 23, 2026] In-Season Player Progression
 [DONE June 23, 2026] Full Waiver Wire System
 [DONE June 23, 2026] FA Pool Replenishment
 [DONE June 23, 2026] Player Retirement Control
