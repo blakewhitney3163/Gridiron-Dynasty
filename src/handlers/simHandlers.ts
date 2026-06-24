@@ -14,11 +14,12 @@ import { logNewsEvent } from '../helpers/logNewsEvent';
 import { runCpuTrades } from '../services/TradeService';
 import { checkMilestones } from '../helpers/checkMilestones';
 import { Worker } from 'worker_threads';
+import { generateOwnerGoals } from '../services/OwnerGoalsService';
 import path from 'path';
 
 interface GameSummary {
   week: number;
-  homeTeamId: number;
+  homeTeamId: number;f
   awayTeamId: number;
   homeScore: number;
   awayScore: number;
@@ -307,6 +308,25 @@ export function registerSimHandlers(): void {
       }
     })();
 
+        // Auto-generate draft class for this season if not already present
+    const draftCheck = db.prepare(
+      'SELECT COUNT(*) as cnt FROM draft_prospects WHERE season = ?'
+    ).get(season) as any;
+    if ((draftCheck?.cnt ?? 0) === 0) {
+      // Kick off draft class generation inline (same logic as generate-draft-class handler)
+      ipcMain.emit('generate-draft-class-internal', season);
+    }
+
+    // Initialize scouting budget for this season
+    const budgetKey = `scouting_budget_${season}`;
+    if (!settingsRepo.get(budgetKey)) {
+      settingsRepo.set(budgetKey, '3');
+    }
+
+    // Generate owner goals for this season
+    const userTeamId = settingsRepo.getUserTeamId() ?? -1;
+    if (userTeamId > 0) generateOwnerGoals(season, userTeamId);
+
     return { season, created: true, alreadyExists: false };
   });
 
@@ -357,10 +377,16 @@ export function registerSimHandlers(): void {
       progressPlayers(weekStats, season, week);
     }
 
+        // Accumulate weekly scouting budget
+    const swSeason = getCurrentSeason();
+    const swKey = `scouting_budget_${swSeason}`;
+    const swBudget = parseInt(settingsRepo.get(swKey) ?? '0');
+    if (swBudget < 25) settingsRepo.set(swKey, String(Math.min(25, swBudget + 1)));
+
     return result;
   });
 
-  ipcMain.handle('simulate-game', (_event: IpcEvent, gameId: number) => {
+  ipcMain.handle('simulate-game',
     const game = db.prepare(`SELECT * FROM games WHERE id = ?`).get(gameId) as any;
     if (!game) return { success: false, reason: 'Game not found.' };
     if (game.is_simulated) return { success: false, reason: 'Game already simulated.' };
@@ -412,7 +438,17 @@ export function registerSimHandlers(): void {
 
     const rosterResult = processRosterAdjustments(newlyInjured, userTeamId);
     if (weekComplete) { playerRepo.advanceInjuryTimers(); processWaivers(userTeamId, game.week); }
+        // Accumulate scouting budget
+    const sgKey = `scouting_budget_${game.season}`;
+    const sgBudget = parseInt(settingsRepo.get(sgKey) ?? '0');
+    if (sgBudget < 25) settingsRepo.set(sgKey, String(Math.min(25, sgBudget + 1)));
+
     return {
+      success: true, gameId, weekComplete,
+      homeScore: gameResult.homeScore, awayScore: gameResult.awayScore,
+      callups: rosterResult.callups, userPSOpenSpots: rosterResult.userPSOpenSpots,
+    };
+  });
       success: true, gameId, weekComplete,
       homeScore: gameResult.homeScore, awayScore: gameResult.awayScore,
       callups: rosterResult.callups, userPSOpenSpots: rosterResult.userPSOpenSpots,
