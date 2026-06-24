@@ -22,6 +22,7 @@ export interface TeamData {
   players: PlayerRow[];
   coaches: CoachRow[];
   scheme: SchemeRow | null;
+  chemistry: number;
 }
 
 export interface TeamRatings { offenseRating: number; defenseRating: number; }
