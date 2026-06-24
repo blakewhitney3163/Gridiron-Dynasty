@@ -1,5 +1,9 @@
-import { app, BrowserWindow, Menu } from 'electron';
+import started from 'electron-squirrel-startup';
+if (started) process.exit(0);
+
+import { app, BrowserWindow, Menu, globalShortcut } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { db, generateContracts, isDatabaseInitialized } from './database';
 import { registerSaveHandlers, setActiveSaveName } from './handlers/saveHandlers';
 import { registerSettingsHandlers } from './handlers/settingsHandlers';
@@ -19,6 +23,31 @@ import { registerSchemeHandlers, seedTeamSchemes } from './handlers/schemeHandle
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
+
+// ─── Single Instance Lock ──────────────────────────────────────────────────────
+
+const lock = app.requestSingleInstanceLock();
+if (!lock) {
+  app.quit();
+  process.exit(0);
+}
+
+// ─── Crash Logging ─────────────────────────────────────────────────────────────
+
+function writeCrashLog(message: string): void {
+  try {
+    const logPath = path.join(app.getPath('userData'), 'crash.log');
+    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${message}\n`);
+  } catch { /* if logging itself fails, don't crash */ }
+}
+
+process.on('uncaughtException', (err) => {
+  writeCrashLog(`uncaughtException: ${err.stack ?? err.message}`);
+});
+
+process.on('unhandledRejection', (reason) => {
+  writeCrashLog(`unhandledRejection: ${String(reason)}`);
+});
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -108,13 +137,15 @@ const createWindow = (): void => {
   const mainWindow = new BrowserWindow({
     height: 700,
     width: 1200,
+    minWidth: 1100,
+    minHeight: 650,
     show: false,
     webPreferences: { preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY },
   });
 
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
-      mainWindow.once('ready-to-show', () => {
+  mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     mainWindow.setAlwaysOnTop(true);
     mainWindow.focus();
@@ -126,17 +157,28 @@ const createWindow = (): void => {
     mainWindow.webContents.focus();
   });
 
-    mainWindow.webContents.on('devtools-closed', () => {
+  mainWindow.webContents.on('devtools-closed', () => {
     setTimeout(() => {
       mainWindow.focus();
       mainWindow.webContents.focus();
     }, 250);
   });
 
-      if (process.env.NODE_ENV === 'development') {
+  if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 };
+
+// ─── Second Instance — focus existing window ──────────────────────────────────
+
+app.on('second-instance', () => {
+  const windows = BrowserWindow.getAllWindows();
+  if (windows.length > 0) {
+    const win = windows[0];
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  }
+});
 
 // ─── Register Handlers ────────────────────────────────────────────────────────
 
@@ -158,6 +200,24 @@ registerSchemeHandlers();
 
 // ─── App Lifecycle ────────────────────────────────────────────────────────────
 
-app.on('ready', createWindow);
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+app.on('ready', () => {
+  createWindow();
+
+  if (process.env.NODE_ENV !== 'development') {
+    globalShortcut.register('Control+R', () => {});
+    globalShortcut.register('CommandOrControl+R', () => {});
+    globalShortcut.register('F5', () => {});
+  }
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
