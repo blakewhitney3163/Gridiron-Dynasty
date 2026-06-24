@@ -2,11 +2,6 @@ GRIDIRON DYNASTY — ROADMAP
 Last Updated: June 21, 2026
 Repository: https://github.com/blakewhitney3163/Gridiron-Dynasty
 ================================================================================
-UPCOMING — Next to build
-────────────────────────────────────────────────────────────────────────────────
-Full Player Editor — dedicated tab or panel for editing player attributes with
- bulk search, sortable player list, and inline attribute sliders across the
- full roster (not just the profile panel).
 
 TIER 3 — Polish & replayability
 ────────────────────────────────────────────────────────────────────────────────
@@ -174,6 +169,29 @@ MAINTENANCE — Address before extended dynasty saves become common
 ================================================================================
 COMPLETED ITEMS
 ================================================================================
+
+[DONE June 23, 2026] Full Player Editor Tab — dedicated standalone ✏ Editor tab
+ in the main nav. Team selector (all 32 teams, alphabetical), position filter
+ buttons, live search, and roster list sorted by OVR. Clicking a player opens
+ an inline edit form covering every field: first/last name, position + position
+ label, age, overall rating, dev trait (color-coded buttons), all 14 attribute
+ sliders (40–99), annual salary, and years remaining. Saves via editPlayer +
+ editPlayerContract IPC handlers; refreshes roster and re-selects the updated
+ player after save. Backed by: PlayerEditor.tsx, extended edit-player handler
+ (23-field allowlist), new edit-player-contract IPC handler, extended preload
+ types, and ContractRepository.getByTeam returning all 14 attribute columns.
+
+[DONE June 23, 2026] TypeScript Prop and Module Fixes — resolved 7 compilation
+ errors across the Player Editor and depth chart work. depthUtils.ts utility
+ module created exporting POSITION_GROUPS, GROUP_LABELS, TRAIT_META, ovrColor,
+ injuryMeta; duplicate depthUtils.tsx removed. App.tsx: Home receives
+ onNavigate, SavePicker uses onSaveLoaded, MeetTheTeam receives team/season/
+ onStart, Draft uses onDraftComplete. Franchise.tsx: CoachingTab uses teamId +
+ onRefresh, SchemesTab uses teamId + teamName + onToast, SalariesTab deadCap
+ prop removed, PlayerProfile uses playerStats, OffseasonTab receives
+ setPlayerDecisions + setCpuFaDone + setCpuFaResult; tagWorking folded into
+ working prop.
+
 
 [DONE June 23, 2026] Depth Chart Improvements — Phase section headers group
  position tabs into OFFENSE / DEFENSE / SPECIAL TEAMS. Out-of-order warning
