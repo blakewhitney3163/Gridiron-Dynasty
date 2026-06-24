@@ -7,7 +7,7 @@ import { simulateGame } from '../simulateGame';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { getDifficultyFactor } from './settingsHandlers';
 import { MAX_ACTIVE_ROSTER } from '../constants';
-import { settingsRepo, playerRepo, contractRepo, gameRepo } from '../repositories';
+import { settingsRepo, playerRepo, contractRepo, gameRepo, draftRepo } from '../repositories';
 import { rollInjuries, processWaivers, processRosterAdjustments } from '../services/SimulationService';
 import { progressPlayers } from '../services/ProgressionService';
 import { logNewsEvent } from '../helpers/logNewsEvent';
@@ -119,6 +119,43 @@ function runSimWorker(data: object): Promise<any> {
       if (code !== 0) reject(new Error(`Sim worker exited with code ${code}`));
     });
   });
+}
+const DRAFT_FIRST = ['James','John','Robert','Michael','David','William','Joseph','Thomas','Charles','Christopher','Daniel','Matthew','Anthony','Mark','Steven','Paul','Andrew','Joshua','Kenneth','Kevin','Brian','Timothy','Jason','Jeffrey','Ryan','Jacob','Gary','Nicholas','Eric','Jonathan','Justin','Scott','Brandon','Benjamin','Samuel','Nathan','Zachary','Peter','Kyle','Noah','Ethan','Jeremy','Austin','Sean','Dylan','Jordan','Jesse','Bryan','Gabriel','Logan','Marcus','Malik','Darius','Terrell','Jamal','Xavier','Darnell','Lamar','Kendall','Jaylen','Jalen','Devonte','Trey','Kameron','Zion','Isaiah','Damien','Dominic','Julian','Elijah','Tyrese','DeAndre','Rashad','Corey','Marquise','Deon','Alonzo','Deshawn','Marquez','Keanu','Trevon','Devin','Javon','Treylon','Brock','Bryce','Drake','Garrett','Caleb','Quinton','Jaylon','Dontae','Tariq','Amon','Romeo','Tyjae'];
+const DRAFT_LAST = ['Smith','Johnson','Williams','Jones','Brown','Davis','Miller','Wilson','Moore','Taylor','Anderson','Thomas','Jackson','White','Harris','Martin','Thompson','Garcia','Robinson','Clark','Lewis','Lee','Walker','Hall','Allen','Young','King','Wright','Hill','Scott','Green','Adams','Baker','Nelson','Carter','Mitchell','Roberts','Turner','Phillips','Campbell','Parker','Evans','Edwards','Collins','Stewart','Morris','Rogers','Reed','Cook','Morgan','Bell','Murphy','Bailey','Cooper','Richardson','Cox','Howard','Ward','Peterson','Gray','James','Watson','Brooks','Kelly','Sanders','Price','Bennett','Wood','Barnes','Ross','Henderson','Coleman','Jenkins','Perry','Powell','Long','Patterson','Hughes','Washington','Butler','Simmons','Foster','Bryant','Alexander','Russell','Griffin','Hayes','Ford','Hamilton','Graham','Sullivan','Wallace','Woods','Cole','West','Jordan','Owens','Reynolds','Fisher','Harrison','Gibson','McDonald','Marshall','Murray','Freeman','Wells','Tucker','Porter','Hunter','Hicks','Henry','Boyd','Mason','Kennedy','Warren','Burns','Gordon','Shaw','Holmes','Rice','Robertson','Hunt','Daniels','Palmer','Nichols','Grant','Knight','Ferguson','Stone','Hawkins','Perkins','Hudson','Spencer','Gardner','Payne','Pierce','Berry','Matthews','Willis','Ray','Watkins','Carroll','Duncan','Hart','Cunningham','Bradley','Andrews','Harper','Fox','Riley','Armstrong','Greene','Lawrence','Elliott','Sims','Morrow','Ingram','Bates','Flowers','Moss','Lamb'];
+const DRAFT_POS_POOL = ['QB','RB','WR','WR','WR','TE','OL','OL','OL','DL','DL','DL','LB','LB','CB','CB','S','K'];
+
+function generateDraftClass(season: number): void {
+  if (draftRepo.countBySeason(season) > 0) return;
+  const getDevTrait = (ovr: number): string => {
+    const r = Math.random();
+    if (ovr >= 78) return r < 0.02 ? 'X-Factor' : r < 0.08 ? 'Superstar' : r < 0.40 ? 'Star' : 'Normal';
+    if (ovr >= 74) return r < 0.01 ? 'X-Factor' : r < 0.05 ? 'Superstar' : r < 0.25 ? 'Star' : 'Normal';
+    if (ovr >= 70) return r < 0.005 ? 'Superstar' : r < 0.12 ? 'Star' : 'Normal';
+    return r < 0.05 ? 'Star' : 'Normal';
+  };
+  const prospects: any[] = [];
+  for (let i = 0; i < 280; i++) {
+    let ovr: number;
+    if (i < 10)       ovr = Math.floor(Math.random() * 7) + 76;
+    else if (i < 32)  ovr = Math.floor(Math.random() * 7) + 71;
+    else if (i < 64)  ovr = Math.floor(Math.random() * 6) + 67;
+    else if (i < 96)  ovr = Math.floor(Math.random() * 6) + 64;
+    else if (i < 128) ovr = Math.floor(Math.random() * 5) + 61;
+    else if (i < 160) ovr = Math.floor(Math.random() * 5) + 59;
+    else if (i < 224) ovr = Math.floor(Math.random() * 5) + 57;
+    else              ovr = Math.floor(Math.random() * 6) + 52;
+    prospects.push({
+      season,
+      first_name: DRAFT_FIRST[Math.floor(Math.random() * DRAFT_FIRST.length)],
+      last_name:  DRAFT_LAST[Math.floor(Math.random() * DRAFT_LAST.length)],
+      position:   DRAFT_POS_POOL[Math.floor(Math.random() * DRAFT_POS_POOL.length)],
+      overall_rating: ovr,
+      dev_trait: getDevTrait(ovr),
+      age: Math.random() < 0.6 ? 21 : Math.random() < 0.6 ? 22 : 23,
+    });
+  }
+  draftRepo.insertClass(prospects);
+  console.log(`Draft class generated for season ${season}: ${prospects.length} prospects`);
 }
 
 export function registerSimHandlers(): void {
@@ -316,7 +353,7 @@ export function registerSimHandlers(): void {
     ).get(season) as any;
     if ((draftCheck?.cnt ?? 0) === 0) {
       // Kick off draft class generation inline (same logic as generate-draft-class handler)
-      ipcMain.emit('generate-draft-class-internal', season);
+            generateDraftClass(season);
     }
 
     // Initialize scouting budget for this season
