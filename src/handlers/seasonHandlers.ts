@@ -269,4 +269,22 @@ ipcMain.handle('dismiss-retirement', (_event: any, playerId: number) => {
 
   ipcMain.handle('open-free-agency', () =>
     openFreeAgency(settingsRepo.getUserTeamId() ?? -1));
+
+    ipcMain.handle('get-owner-goals', (_event: any, season: number) => {
+    const { getOwnerGoalsForSeason } = require('../services/OwnerGoalsService');
+    return getOwnerGoalsForSeason(season);
+  });
+
+  ipcMain.handle('get-owner-patience', () => {
+    const { getOwnerPatience } = require('../services/OwnerGoalsService');
+    return getOwnerPatience();
+  });
+
+  ipcMain.handle('generate-owner-goals', () => {
+    const { generateOwnerGoals } = require('../services/OwnerGoalsService');
+    const season = getCurrentSeason();
+    const userTeamId = settingsRepo.getUserTeamId() ?? -1;
+    if (userTeamId > 0) generateOwnerGoals(season, userTeamId);
+    return { success: true };
+  });
 }
