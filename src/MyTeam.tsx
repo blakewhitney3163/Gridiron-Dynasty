@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { T } from './theme';
 import Franchise from './Franchise';
 import DepthChart from './DepthChart';
+import InjuriesTab from './franchise/InjuriesTab';
 
-type View = 'franchise' | 'depth';
+type View = 'franchise' | 'depth' | 'injuries';
 
 export default function MyTeam() {
   const [view, setView] = useState<View>('franchise');
@@ -15,18 +16,20 @@ export default function MyTeam() {
   };
 
   const style = (v: View): React.CSSProperties =>
-    view === v ? { flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' } : { display: 'none' };
+    view === v
+      ? { flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }
+      : { display: 'none' };
+
+  const tabs: { id: View; label: string }[] = [
+    { id: 'franchise', label: 'TEAM MANAGEMENT' },
+    { id: 'depth',     label: 'DEPTH CHART' },
+    { id: 'injuries',  label: '🏥 INJURIES' },
+  ];
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{
-        display: 'flex', borderBottom: `1px solid ${T.borderMid}`,
-        background: T.bgDark, padding: '0 20px', flexShrink: 0,
-      }}>
-        {([
-          { id: 'franchise' as View, label: 'TEAM MANAGEMENT' },
-          { id: 'depth' as View, label: 'DEPTH CHART' },
-        ]).map(tab => (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', borderBottom: `1px solid ${T.borderFaint}`, background: T.bgCard }}>
+        {tabs.map(tab => (
           <button key={tab.id} onClick={() => handleView(tab.id)} style={{
             padding: '10px 22px', background: 'none', border: 'none',
             borderBottom: view === tab.id ? '2px solid #FF8740' : '2px solid transparent',
@@ -38,10 +41,10 @@ export default function MyTeam() {
           </button>
         ))}
       </div>
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {mounted.has('franchise') && <div style={style('franchise')}><Franchise /></div>}
-        {mounted.has('depth') && <div style={style('depth')}><DepthChart /></div>}
-      </div>
+
+      <div style={style('franchise')}>{mounted.has('franchise') && <Franchise />}</div>
+      <div style={style('depth')}>{mounted.has('depth') && <DepthChart />}</div>
+      <div style={style('injuries')}>{mounted.has('injuries') && <InjuriesTab />}</div>
     </div>
   );
 }
