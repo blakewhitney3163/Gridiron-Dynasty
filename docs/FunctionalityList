@@ -179,6 +179,29 @@ DEPTH CHART TAB
 - Injured players shown with strikethrough name in depth list
 - Depth chart drives target distribution in game simulation
 
+PLAYER EDITOR TAB
+────────────────────────────────────────────────────────────────────────────────
+- Standalone ✏ Editor tab in the main nav bar (always visible in-game)
+- Team selector dropdown — all 32 teams sorted alphabetically by city
+- Position filter buttons (ALL + active positions on selected roster)
+- Live search by player name
+- Roster list sorted by OVR descending; shows OVR badge, name, position label,
+  age, and dev trait badge (XF / SS / S)
+- Clicking a player opens a full edit form covering:
+    Identity: first name, last name, position (group), position label
+    Core: age, overall rating (large color-coded input), dev trait buttons
+    Contract: annual salary ($ M), years remaining (1–15) — shown only when
+      player has a contract
+    Attributes: all 14 sliders with 40–99 range, color-coded values:
+      Speed, Strength, Awareness, Throw Accuracy, Throw Power, Catching,
+      Route Running, Tackle Rating, Coverage, Pass Rush,
+      Run Blocking, Pass Blocking, Kick Power, Kick Accuracy
+- ✓ SAVE CHANGES writes via editPlayer (23 allowed fields) +
+  editPlayerContract IPC handlers
+- Roster list refreshes after save; updated player re-selected automatically
+- Toast feedback (success / error) after every save attempt
+
+
 FRANCHISE TAB (7 sub-tabs)
 ────────────────────────────────────────────────────────────────────────────────
 Roster Tab:
@@ -495,7 +518,7 @@ get-alltime-leaders get-season-records get-season-awards
 get-franchise-records get-team-needs check-setup-done
 reset-save get-news-feed get-news-seasons
 simulate-game list-saves open-save
-delete-save edit-player apply-franchise-tag
+edit-player edit-player-contract apply-franchise-tag
 remove-franchise-tag accept-counter-offer get-dead-cap
 open-free-agency get-coaching-staff get-available-coaches
 hire-coach fire-coach get-team-scheme
