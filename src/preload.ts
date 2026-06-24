@@ -8,6 +8,7 @@ import { draftApi } from './preload/draft';
 import { statsApi } from './preload/stats';
 import { coachingApi } from './preload/coaching';
 import { injuriesApi } from './preload/injuries';
+import { chemistryApi } from './preload/chemistry';
 
 contextBridge.exposeInMainWorld('api', {
   ...coreApi,
@@ -19,4 +20,5 @@ contextBridge.exposeInMainWorld('api', {
   ...statsApi,
   ...coachingApi,
   ...injuriesApi,
+  ...chemistryApi,
 });
