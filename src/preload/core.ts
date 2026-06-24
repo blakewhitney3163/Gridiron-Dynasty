@@ -67,4 +67,19 @@ export const coreApi = {
     annual_salary: number;
     years_remaining: number;
   }) => ipcRenderer.invoke('edit-player-contract', payload),
+
+  getCommissionerMode: (): Promise<boolean> =>
+    ipcRenderer.invoke('get-commissioner-mode'),
+
+  setCommissionerMode: (enabled: boolean) =>
+    ipcRenderer.invoke('set-commissioner-mode', enabled),
+
+  editTeam: (payload: {
+    teamId: number;
+    city?: string;
+    name?: string;
+    abbreviation?: string;
+    conference?: string;
+    division?: string;
+  }) => ipcRenderer.invoke('edit-team', payload),
 };
