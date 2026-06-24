@@ -47,17 +47,26 @@ export const seasonApi = {
     ipcRenderer.invoke('get-playoff-seeds'),
 
   getAnnouncingRetirements: () =>
-  ipcRenderer.invoke('get-announcing-retirements'),
+    ipcRenderer.invoke('get-announcing-retirements'),
 
-makeRetentionOffer: (playerId: number) =>
-  ipcRenderer.invoke('make-retention-offer', playerId),
+  makeRetentionOffer: (playerId: number) =>
+    ipcRenderer.invoke('make-retention-offer', playerId),
 
-dismissRetirement: (playerId: number) =>
-  ipcRenderer.invoke('dismiss-retirement', playerId),
+  dismissRetirement: (playerId: number) =>
+    ipcRenderer.invoke('dismiss-retirement', playerId),
 
   getChampions: () =>
     ipcRenderer.invoke('get-champions'),
 
   getSeasonAwards: (season: number) =>
     ipcRenderer.invoke('get-season-awards', season),
+
+  getOwnerGoals: (season: number) =>
+    ipcRenderer.invoke('get-owner-goals', season),
+
+  getOwnerPatience: () =>
+    ipcRenderer.invoke('get-owner-patience'),
+
+  generateOwnerGoals: () =>
+    ipcRenderer.invoke('generate-owner-goals'),
 };
