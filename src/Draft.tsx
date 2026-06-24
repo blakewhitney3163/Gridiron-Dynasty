@@ -34,7 +34,9 @@ export default function Draft({ onDraftComplete }: Props) {
   const [scoutBudget, setScoutBudget] = useState(25);
   const [scouting, setScouting] = useState<number | null>(null);
 
-  useEffect(() => { loadDraft(); }, [userTeam?.id]);
+    useEffect(() => { loadDraft(); }, [userTeam?.id]);
+
+  const loadDraft = async () => {
 
       const [cls, order, sc] = await Promise.all([
       window.api.getDraftClass(),
