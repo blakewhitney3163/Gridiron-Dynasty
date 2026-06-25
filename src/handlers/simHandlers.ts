@@ -140,6 +140,18 @@ const DRAFT_FIRST = ['James','John','Robert','Michael','David','William','Joseph
 const DRAFT_LAST  = ['Smith','Johnson','Williams','Jones','Brown','Davis','Miller','Wilson','Moore','Taylor','Anderson','Thomas','Jackson','White','Harris','Martin','Thompson','Garcia','Robinson','Clark','Lewis','Lee','Walker','Hall','Allen','Young','King','Wright','Hill','Scott','Green','Adams','Baker','Nelson','Carter','Mitchell','Roberts','Turner','Phillips','Campbell','Parker','Evans','Edwards','Collins','Stewart','Morris','Rogers','Reed','Cook','Morgan','Bell','Murphy','Bailey','Cooper','Richardson','Cox','Howard','Ward','Peterson','Gray','James','Watson','Brooks','Kelly','Sanders','Price','Bennett','Wood','Barnes','Ross','Henderson','Coleman','Jenkins','Perry','Powell','Long','Patterson','Hughes','Washington','Butler','Simmons','Foster','Bryant','Alexander','Russell','Griffin','Hayes','Ford','Hamilton','Graham','Sullivan','Wallace','Woods','Cole','West','Jordan','Owens','Reynolds','Fisher','Harrison','Gibson','McDonald','Marshall','Murray','Freeman','Wells','Tucker','Porter','Hunter','Hicks','Henry','Boyd','Mason','Kennedy','Warren','Burns','Gordon','Shaw','Holmes','Rice','Robertson','Hunt','Daniels','Palmer','Nichols','Grant','Knight','Ferguson','Stone','Hawkins','Perkins','Hudson','Spencer','Gardner','Payne','Pierce','Berry','Matthews','Willis','Ray','Watkins','Carroll','Duncan','Hart','Cunningham','Bradley','Andrews','Harper','Fox','Riley','Armstrong','Greene','Lawrence','Elliott','Sims','Morrow','Ingram','Bates','Flowers','Moss','Lamb'];
 const DRAFT_POS_POOL = ['QB','RB','WR','WR','WR','TE','OL','OL','OL','DL','DL','DL','LB','LB','CB','CB','S','K'];
 
+function simpleCombine(ovr: number) {
+  const f = (ovr - 50) / 50;
+  const n = (r: number) => (Math.random() - 0.5) * r;
+  return {
+    forty_time:    Math.round(Math.max(4.22, Math.min(5.40, 5.10 - f * 0.65 + n(0.28))) * 100) / 100,
+    bench_press:   Math.round(Math.max(5,    Math.min(35,   16   + f * 12   + n(9)))),
+    vertical_jump: Math.round(Math.max(24,   Math.min(45,   32   + f * 10   + n(7)))  * 10) / 10,
+    broad_jump:    Math.round(Math.max(96,   Math.min(142,  114  + f * 20   + n(14)))),
+    cone_time:     Math.round(Math.max(6.50, Math.min(8.20, 7.90 - f * 0.90 + n(0.45))) * 100) / 100,
+  };
+}
+
 function generateDraftClass(season: number): void {
   if (draftRepo.countBySeason(season) > 0) return;
   const getDevTrait = (ovr: number): string => {
@@ -160,7 +172,7 @@ function generateDraftClass(season: number): void {
     else if (i < 160) ovr = Math.floor(Math.random() * 5) + 59;
     else if (i < 224) ovr = Math.floor(Math.random() * 5) + 57;
     else              ovr = Math.floor(Math.random() * 6) + 52;
-    prospects.push({
+        prospects.push({
       season,
       first_name: DRAFT_FIRST[Math.floor(Math.random() * DRAFT_FIRST.length)],
       last_name:  DRAFT_LAST[Math.floor(Math.random() * DRAFT_LAST.length)],
@@ -168,6 +180,7 @@ function generateDraftClass(season: number): void {
       overall_rating: ovr,
       dev_trait: getDevTrait(ovr),
       age: Math.random() < 0.6 ? 21 : Math.random() < 0.6 ? 22 : 23,
+      ...simpleCombine(ovr),
     });
   }
   draftRepo.insertClass(prospects);
@@ -738,5 +751,49 @@ export function registerSimHandlers(): void {
         })
         .sort((a: any, b: any) => b.wins - a.wins).slice(0, 7);
     return { afc: getSeeds('AFC'), nfc: getSeeds('NFC') };
+  });
+
+    ipcMain.handle('apply-dynasty-template', () => {
+    const userTeamId = settingsRepo.getUserTeamId();
+    if (!userTeamId) return { success: false };
+
+    const template = settingsRepo.get('dynasty_template') ?? 'contender';
+
+    const players = db.prepare(
+      "SELECT id, overall_rating FROM players WHERE team_id = ? AND roster_status = 'active' ORDER BY overall_rating DESC"
+    ).all(userTeamId) as any[];
+
+    if (players.length === 0) return { success: true, template };
+
+    db.transaction(() => {
+      if (template === 'rebuild') {
+        for (const p of players) {
+          const drop = Math.floor(Math.random() * 9) + 10;
+          db.prepare('UPDATE players SET overall_rating = ? WHERE id = ?')
+            .run(Math.max(50, p.overall_rating - drop), p.id);
+        }
+        db.prepare(
+          'UPDATE contracts SET annual_salary = MAX(1.0, ROUND(annual_salary * 0.55, 1)) WHERE team_id = ?'
+        ).run(userTeamId);
+      } else if (template === 'contender') {
+        const half = Math.floor(players.length / 2);
+        for (const p of players.slice(half)) {
+          const drop = Math.floor(Math.random() * 5) + 2;
+          db.prepare('UPDATE players SET overall_rating = ? WHERE id = ?')
+            .run(Math.max(62, p.overall_rating - drop), p.id);
+        }
+        db.prepare(
+          'UPDATE contracts SET annual_salary = MAX(1.0, ROUND(annual_salary * 0.80, 1)) WHERE team_id = ?'
+        ).run(userTeamId);
+      } else if (template === 'dynasty') {
+        for (const p of players.slice(0, 15)) {
+          const boost = Math.floor(Math.random() * 5) + 3;
+          db.prepare('UPDATE players SET overall_rating = ? WHERE id = ?')
+            .run(Math.min(99, p.overall_rating + boost), p.id);
+        }
+      }
+    })();
+
+    return { success: true, template };
   });
 }
