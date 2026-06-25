@@ -63,7 +63,6 @@ class ScoutRepository {
     return (db.prepare('SELECT COUNT(*) as cnt FROM scouts WHERE team_id IS NULL').get() as any).cnt;
   }
 
-  /** Weekly scouting points = sum of ceil(rating/15) for all team scouts. */
   getWeeklyPoints(teamId: number): number {
     const scouts = this.getByTeam(teamId);
     if (scouts.length === 0) return 1;
