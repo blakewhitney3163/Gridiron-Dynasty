@@ -7,6 +7,7 @@ import PlayoffSeedingsView from './home/PlayoffSeedingsView';
 import PlayoffResultsView from './home/PlayoffResultsView';
 import SeasonAwardsView from './home/SeasonAwardsView';
 import GamePreview from './home/GamePreview';
+import GameWeekPrep from './home/GameWeekPrep';
 import { useGameStore } from './store/gameStore';
 import TradeOfferCard from './home/TradeOfferCard';
 import ChemistryPanel from './home/ChemistryPanel';
@@ -97,8 +98,8 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [userScheme, setUserScheme] = useState<{ offenseScheme: string; defenseScheme: string } | null>(null);
   const [allStandings, setAllStandings] = useState<{ id: number; wins: number; losses: number }[]>([]);
   const [recentNews, setRecentNews] = useState<NewsEvent[]>([]);
-const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: { id: number; week: number; delta: number; reason: string }[]; archetypes: { archetype: string; count: number }[] } | null>(null);
-  
+  const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: { id: number; week: number; delta: number; reason: string }[]; archetypes: { archetype: string; count: number }[] } | null>(null);
+
   const fetchRecentNews = async () => {
     const news = await window.api.getNewsFeed({ season: currentSeason, limit: 6 });
     setRecentNews(news ?? []);
@@ -114,22 +115,22 @@ const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: 
       setSeasonAwards(null);
 
       const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffers, tradeStatus, spots, health, psAlerts, announcingRets, news, chemistry] = await Promise.all([
-  window.api.getCurrentWeek(),
-  window.api.getDashboard(currentSeason),
-  window.api.getChampions(),
-  window.api.getStandings(currentSeason),
-  window.api.getOffseasonStatus(),
-  window.api.getInjuryReport(userTeam.id),
-  window.api.getStats(currentSeason),
-  window.api.getCpuTradeOffer(),
-  window.api.getTeamStatus(userTeam.id),
-  window.api.getRosterSpots(userTeam.id),
-  window.api.getFranchiseHealth(userTeam.id),
-  window.api.getPSPromotionAlerts(userTeam.id),
-  window.api.getAnnouncingRetirements(),
-  window.api.getNewsFeed({ season: currentSeason, limit: 6 }),
-  window.api.getTeamChemistry(userTeam.id),
-]);
+        window.api.getCurrentWeek(),
+        window.api.getDashboard(currentSeason),
+        window.api.getChampions(),
+        window.api.getStandings(currentSeason),
+        window.api.getOffseasonStatus(),
+        window.api.getInjuryReport(userTeam.id),
+        window.api.getStats(currentSeason),
+        window.api.getCpuTradeOffer(),
+        window.api.getTeamStatus(userTeam.id),
+        window.api.getRosterSpots(userTeam.id),
+        window.api.getFranchiseHealth(userTeam.id),
+        window.api.getPSPromotionAlerts(userTeam.id),
+        window.api.getAnnouncingRetirements(),
+        window.api.getNewsFeed({ season: currentSeason, limit: 6 }),
+        window.api.getTeamChemistry(userTeam.id),
+      ]);
       if (cancelled) return;
 
       const seasonDone = status.hasSchedule && status.currentWeek === null;
@@ -298,22 +299,22 @@ const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: 
   };
 
   const handleSimulatePlayoffs = async () => {
-  setSimulatingPlayoffs(true);
-  await window.api.simulatePlayoffs(currentSeason);
-  const [results, champs] = await Promise.all([
-    window.api.getPlayoffs(currentSeason),
-    window.api.getChampions(),
-  ]);
-  setPlayoffResults(results);
-  setChampions(champs);
-  const champForSeason = champs.find((c: Champion) => c.season === currentSeason);
-  if (champForSeason) {
-    setPlayoffsComplete(true);
-    setSeasonAwards(await window.api.getSeasonAwards(currentSeason));
-  }
-  await fetchRecentNews();
-  setSimulatingPlayoffs(false);
-};
+    setSimulatingPlayoffs(true);
+    await window.api.simulatePlayoffs(currentSeason);
+    const [results, champs] = await Promise.all([
+      window.api.getPlayoffs(currentSeason),
+      window.api.getChampions(),
+    ]);
+    setPlayoffResults(results);
+    setChampions(champs);
+    const champForSeason = champs.find((c: Champion) => c.season === currentSeason);
+    if (champForSeason) {
+      setPlayoffsComplete(true);
+      setSeasonAwards(await window.api.getSeasonAwards(currentSeason));
+    }
+    await fetchRecentNews();
+    setSimulatingPlayoffs(false);
+  };
 
   const handleAdvance = async () => {
     setAdvancing(true);
@@ -390,7 +391,6 @@ const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: 
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-        {/* Pending Trade Offers */}
         {cpuOffers.map((offer, i) => (
           <TradeOfferCard
             key={i}
@@ -408,6 +408,15 @@ const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: 
             <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, marginBottom: 16, textTransform: 'uppercase' }}>
               Your Game — Week {currentWeek}
             </div>
+            {!isGameSimmed && userTeam && (
+              <GameWeekPrep
+                season={currentSeason}
+                week={currentWeek}
+                opponentTeamId={isHome ? userGame.away_team_id : userGame.home_team_id}
+                opponentName={oppTeamName ?? 'Opponent'}
+                injuredPlayers={injuryReport ?? []}
+              />
+            )}
             {!isGameSimmed ? (
               <>
                 {oppHealth && userScheme && oppScheme && userRecord && franchiseHealth ? (
@@ -625,10 +634,9 @@ const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: 
         )}
 
         {teamChemistry && (
-  <ChemistryPanel chemistry={teamChemistry.chemistry} events={teamChemistry.events} archetypes={teamChemistry.archetypes ?? []} />
-)}
+          <ChemistryPanel chemistry={teamChemistry.chemistry} events={teamChemistry.events} archetypes={teamChemistry.archetypes ?? []} />
+        )}
 
-{/* Recent News */}
         <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '14px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, textTransform: 'uppercase' }}>Recent News</div>
