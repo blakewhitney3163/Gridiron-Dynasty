@@ -482,12 +482,14 @@ export function registerSimHandlers(): void {
           pass_tds:     s.pass_tds     ?? 0,
           rec_tds:      s.rec_tds      ?? 0,
         }));
-        const playLog = generatePlayLog(
-          getTeamName(game.home_team_id), getTeamName(game.away_team_id),
-          gameResult.homeScore, gameResult.awayScore,
-          buildInfos(gameResult.homePlayerStats),
-          buildInfos(gameResult.awayPlayerStats),
-        );
+                const playLog = generatePlayLog({
+          homeTeamName: getTeamName(game.home_team_id),
+          awayTeamName: getTeamName(game.away_team_id),
+          homeScore: gameResult.homeScore,
+          awayScore: gameResult.awayScore,
+          homePlayers: buildInfos(gameResult.homePlayerStats),
+          awayPlayers: buildInfos(gameResult.awayPlayerStats),
+        });
         settingsRepo.set(`game_play_log_${game.id}`, JSON.stringify(playLog));
       }
     } catch (e) {
