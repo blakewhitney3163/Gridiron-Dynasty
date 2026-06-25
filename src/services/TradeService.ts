@@ -156,10 +156,10 @@ export function getCpuTradeOffers(userTeamId: number): any[] {
     if (!currentWeek || currentWeek > 10) return [];
   if (currentWeek < 1) return [];
 
-  // Season cap: max 3 offers delivered total this season
-  const sentKey = `trade_offers_sent_${season}`;
-  const sentCount = parseInt(settingsRepo.get(sentKey) ?? '0');
-  if (sentCount >= 3) return [];
+    // Weekly cap: max 2 CPU offers per week
+  const weekKey = `trade_offers_week_${season}_${currentWeek}`;
+  const weekCount = parseInt(settingsRepo.get(weekKey) ?? '0');
+  if (weekCount >= 2) return [];
 
   // Base 18% chance per week; +15% deadline urgency bump in weeks 6-8 for contenders
   const baseChance = 0.18;
@@ -281,10 +281,10 @@ export function getCpuTradeOffers(userTeamId: number): any[] {
       });
     }
   }
-  if (offers.length > 0) {
-    const sentKey = `trade_offers_sent_${season}`;
-    const prev = parseInt(settingsRepo.get(sentKey) ?? '0');
-    settingsRepo.set(sentKey, String(prev + offers.length));
+    if (offers.length > 0) {
+    const weekKey = `trade_offers_week_${season}_${currentWeek}`;
+    const prev = parseInt(settingsRepo.get(weekKey) ?? '0');
+    settingsRepo.set(weekKey, String(prev + offers.length));
   }
   
   return offers;
