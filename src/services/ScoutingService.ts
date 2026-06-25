@@ -51,28 +51,18 @@ export function generateAllScouts(): void {
 
   db.transaction(() => {
     for (const team of teams) {
-      // Each team starts with 2 scouts of varied quality
       const tiers: Array<'team_low' | 'team_mid' | 'team_high'> = ['team_low', 'team_mid', 'team_high'];
-      const numScouts = 2;
-      for (let i = 0; i < numScouts; i++) {
+      for (let i = 0; i < 2; i++) {
         const tier = tiers[Math.min(i, tiers.length - 1)];
         const rating = generateScoutRating(tier);
         const { first, last } = randName();
-        scoutRepo.create(
-          team.id, first, last, rating,
-          randSpecialty(), salaryForRating(rating), Math.floor(Math.random() * 4)
-        );
+        scoutRepo.create(team.id, first, last, rating, randSpecialty(), salaryForRating(rating), Math.floor(Math.random() * 4));
       }
     }
-
-    // Free-agent pool: 40 scouts of varying quality
     for (let i = 0; i < 40; i++) {
       const rating = generateScoutRating('pool');
       const { first, last } = randName();
-      scoutRepo.create(
-        null, first, last, rating,
-        randSpecialty(), salaryForRating(rating), 0
-      );
+      scoutRepo.create(null, first, last, rating, randSpecialty(), salaryForRating(rating), 0);
     }
   })();
 
@@ -107,24 +97,12 @@ export function replenishScoutPool(): void {
   }
 }
 
-export function getScoutsByTeam(teamId: number): Scout[] {
-  return scoutRepo.getByTeam(teamId);
-}
-
-export function getAvailableScouts(): Scout[] {
-  return scoutRepo.getAvailable();
-}
-
 export function getWeeklyScoutPoints(teamId: number): number {
   return scoutRepo.getWeeklyPoints(teamId);
 }
 
-/** Called each offseason — grow scouts by 1-3 OVR, increase years_on_staff. */
 export function progressScouts(): void {
-  const allTeamScouts = db.prepare(
-    'SELECT * FROM scouts WHERE team_id IS NOT NULL'
-  ).all() as Scout[];
-
+  const allTeamScouts = db.prepare('SELECT * FROM scouts WHERE team_id IS NOT NULL').all() as Scout[];
   const update = db.prepare('UPDATE scouts SET overall_rating = ?, years_on_staff = ? WHERE id = ?');
   db.transaction(() => {
     for (const scout of allTeamScouts) {
