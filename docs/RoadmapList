@@ -6,17 +6,17 @@ Repository: https://github.com/blakewhitney3163/Sideline-to-Sideline-Football
 TIER 3 — Polish & replayability
 ────────────────────────────────────────────────────────────────────────────────
 League Customization — expansion teams, relocation, custom team names beyond
-  the Team Editor. Relocation wizard, stadium naming, fan base effects.
+ the Team Editor. Relocation wizard, stadium naming, fan base effects.
 
 In-Game Narrative / Play-by-Play — text play-by-play during simulation.
-  Stats-only output today limits immersion significantly.
+ Stats-only output today limits immersion significantly.
 
 Preset Dynasty Templates — fictional franchise starter kits selectable at new
-  dynasty creation. Each template ships as a pre-built CSV: roster of fictional
-  players, team ratings, historical records, and league configuration. Examples:
-  "Rebuild Mode" (60–70 OVR roster, tight cap), "Contender Window" (stacked but
-  aging), "Dynasty Peak" (league powerhouse, high expectations). Lowers barrier
-  to entry and provides structured challenge modes.
+ dynasty creation. Each template ships as a pre-built CSV: roster of fictional
+ players, team ratings, historical records, and league configuration. Examples:
+ "Rebuild Mode" (60–70 OVR roster, tight cap), "Contender Window" (stacked but
+ aging), "Dynasty Peak" (league powerhouse, high expectations). Lowers barrier
+ to entry and provides structured challenge modes.
 
 ================================================================================
 GAMEPLAY DEPTH — OOTP-Tier Features
@@ -25,20 +25,20 @@ Features that would bring the game to a competitive level with top sports sims.
 
 ROSTER / PLAYER MANAGEMENT
 ────────────────────────────────────────────────────────────────────────────────
-Scouting Department — hire scouts with regional specialties that improve draft
-  prospect accuracy over time. Builds directly on the existing combine
-  measurables and in-season scouting budget system.
+[DONE June 24, 2026] Scouting Department — hire scouts with regional specialties
+ that improve draft prospect accuracy over time. Builds directly on the existing
+ combine measurables and in-season scouting budget system.
 
 SIMULATION & SCHEDULE
 ────────────────────────────────────────────────────────────────────────────────
 Multi-Season Batch Simulation — "Sim N seasons" with a progress bar. Deferred —
-  not a priority for current development phase.
+ not a priority for current development phase.
 
 LEAGUE & FINANCIALS
 ────────────────────────────────────────────────────────────────────────────────
 Financial System Beyond Cap — market size per team affecting revenue, stadium
-  attendance, and owner budget. Large market vs. small market affecting cap
-  floor and FA appeal.
+ attendance, and owner budget. Large market vs. small market affecting cap
+ floor and FA appeal.
 
 ================================================================================
 PRE-STEAM TECHNICAL CHECKLIST
@@ -62,11 +62,11 @@ BLOCKING — App cannot ship without these
     - better-sqlite3 is a native Node module that must compile per-platform
     - No CI currently exists (.github/workflows/ folder is missing)
     - Create a workflow that:
-        1. Checks out the repo on windows-latest runner
-        2. Runs npm ci
-        3. Runs npm test (Vitest suite)
-        4. Runs npm run make to produce a packaged .exe
-        5. Uploads the artifact for QA download
+      1. Checks out the repo on windows-latest runner
+      2. Runs npm ci
+      3. Runs npm test (Vitest suite)
+      4. Runs npm run make to produce a packaged .exe
+      5. Uploads the artifact for QA download
     - This must pass cleanly before any build is submitted to Steam
 
 [DONE June 24, 2026] App Icon (.ico and .icns)
@@ -104,12 +104,12 @@ STEAM STORE LISTING REQUIREMENTS (before going live)
 ────────────────────────────────────────────────────────────────────────────────
 
 [ ] Store Artwork (all required by Valve)
-    - Header Capsule:      460 × 215 px
-    - Small Capsule:       231 × 87 px
-    - Main Capsule:        616 × 353 px
-    - Library Capsule:     600 × 900 px
-    - Library Hero:        3840 × 1240 px (can submit 1920 × 620 minimum)
-    - Library Logo:        transparent PNG, any size
+    - Header Capsule: 460 × 215 px
+    - Small Capsule: 231 × 87 px
+    - Main Capsule: 616 × 353 px
+    - Library Capsule: 600 × 900 px
+    - Library Hero: 3840 × 1240 px (can submit 1920 × 620 minimum)
+    - Library Logo: transparent PNG, any size
 
 [ ] Screenshots — minimum 5 required
 [ ] Trailer Video — strongly recommended, not required
@@ -151,30 +151,65 @@ MAINTENANCE
 COMPLETED ITEMS
 ================================================================================
 
+[DONE June 24, 2026] Scouting Department — hireable scouts stored in scouts
+ table (schema v16). ScoutRepository + ScoutingService. Each scout has an
+ overall_rating, specialty (Offense / Defense / College / National / Regional),
+ salary, and years_on_staff. Weekly scouting points = sum of ceil(rating/15)
+ across all team scouts, capped at 70/season. Scouting points accrued after
+ every simulated week or game and applied to the scouting_budget setting.
+ CoachingTab includes a full Scouting Department section: current scouts with
+ quality, pts/week, salary, release button; Hire Scout panel showing available
+ free agents. 2 scouts seeded per team + 40 free-agent scouts on first launch.
+ IPC: get-scouts, get-available-scouts, hire-scout, fire-scout,
+ get-weekly-scout-pts.
+
+[DONE June 24, 2026] Weekly Game Prep Panel (GameWeekPrep.tsx) — displayed
+ above the game preview on Home tab for any week with an unsimulated user game.
+ Three sections: (1) Opponent Scout — reveals top 5 opponent players, their
+ offensive tendency (run/pass rate from last 3 weeks), and scheme; scouted
+ state persisted via is-opponent-scouted IPC. (2) Game Plan — offense mode
+ selector (balanced / spread / power_run / west_coast / play_action) and
+ defense mode selector (base / blitz / zone_coverage / press / prevent);
+ selection saved via set-gameplan IPC and loaded into simulateGame() as
+ GamePlanOptions, applying rating multipliers to team offense/defense.
+ (3) Injury Preview — current injury report inline.
+
+[DONE June 24, 2026] Realistic Trade Offer Frequency — CPU trade offer
+ generation reduced from 60% weekly chance to 18%; capped at 3 offers per
+ season total; active only weeks 1–10; deadline urgency bump of +15% during
+ weeks 6–8. Offer counter persisted in settingsRepo
+ (trade_offers_sent_{season}).
+
+[DONE June 24, 2026] GamePlanOptions in simulateGame — simulateGame() now
+ accepts an optional GamePlanOptions param ({ offense, defense }). Offense
+ modes apply multipliers to scoring drives and pass/rush rates. Defense modes
+ apply modifiers to opponent scoring drives. Loaded automatically from settings
+ when the user simulates their own game via simulate-game IPC.
+
 [DONE June 24, 2026] Player Personality Archetypes — every player assigned one
-  of 7 archetypes at generation (normal 35%, hard_worker 20%, coachable 15%,
-  team_leader 10%, vocal_leader 8%, selfish 7%, troublemaker 5%). Stored in
-  archetype column (schema v15, DEFAULT 'normal' for existing players). Effects:
-  team_leader/vocal_leader shift chemistry +1/game (probabilistic); troublemaker/
-  selfish shift chemistry −1 to −2/game based on morale. hard_worker gets +20%
-  chance of extra OVR gain per game; coachable +12%. applyArchetypeModifiers()
-  called automatically inside processGameResult(). ChemistryPanel shows ROSTER
-  PERSONALITIES chip row. ArchetypeBadge.tsx reusable badge component. IPC:
-  get-player-archetype, set-player-archetype (commissioner mode ready).
+ of 7 archetypes at generation (normal 35%, hard_worker 20%, coachable 15%,
+ team_leader 10%, vocal_leader 8%, selfish 7%, troublemaker 5%). Stored in
+ archetype column (schema v15, DEFAULT 'normal' for existing players). Effects:
+ team_leader/vocal_leader shift chemistry +1/game (probabilistic); troublemaker/
+ selfish shift chemistry −1 to −2/game based on morale. hard_worker gets +20%
+ chance of extra OVR gain per game; coachable +12%. applyArchetypeModifiers()
+ called automatically inside processGameResult(). ChemistryPanel shows ROSTER
+ PERSONALITIES chip row. ArchetypeBadge.tsx reusable badge component. IPC:
+ get-player-archetype, set-player-archetype (commissioner mode ready).
 
 [DONE June 24, 2026] Team Chemistry / Locker Room System — team_chemistry and
-  chemistry_events tables (schema v14). Win/loss deltas applied after every game.
-  Roster move effects. Morale drag weekly. Chemistry modifier on sim ratings
-  (−4 to +3). ChemistryPanel.tsx on Home tab. applyArchetypeModifiers() stub
-  fully wired as of June 24 Archetypes feature.
+ chemistry_events tables (schema v14). Win/loss deltas applied after every game.
+ Roster move effects. Morale drag weekly. Chemistry modifier on sim ratings
+ (−4 to +3). ChemistryPanel.tsx on Home tab. applyArchetypeModifiers() stub
+ fully wired as of June 24 Archetypes feature.
 
 [DONE June 24, 2026] Injury History / Injury-Prone Trait — injury_history table
-  (schema v13). Severity tiers, injury_prone flag after 2+ moderate/severe
-  injuries. IR placement/activation with news events. 🏥 Injuries tab under
-  My Team with full career injury history table.
+ (schema v13). Severity tiers, injury_prone flag after 2+ moderate/severe
+ injuries. IR placement/activation with news events. 🏥 Injuries tab under
+ My Team with full career injury history table.
 
 [DONE June 24, 2026] Loading / Splash Screen — branded HTML splash before React
-  loads. Animated orange progress bar, fades via window.__hideSplash().
+ loads. Animated orange progress bar, fades via window.__hideSplash().
 
 [DONE June 23, 2026] Commissioner Mode
 [DONE June 23, 2026] Team Editor
