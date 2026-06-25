@@ -16,10 +16,10 @@ const SavePicker   = lazy(() => import('./SavePicker'));
 const MeetTheTeam  = lazy(() => import('./MeetTheTeam'));
 const PlayerEditor = lazy(() => import('./PlayerEditor'));
 const TeamEditor = lazy(() => import('./TeamEditor'));
+const TemplateSelect = lazy(() => import('./TemplateSelect'));
 
 type Tab = 'home' | 'myteam' | 'league' | 'trades' | 'draft' | 'news' | 'import' | 'editor' | 'teameditor';
-type Screen = 'main-menu' | 'loading' | 'custom-setup' | 'save-picker' | 'team-select' | 'setup' | 'meet-team' | 'game';
-
+type Screen = 'main-menu' | 'loading' | 'custom-setup' | 'save-picker' | 'team-select' | 'template-select' | 'setup' | 'meet-team' | 'game';
 interface SetupStep  { label: string; done: boolean; }
 type ImportStatus    = 'idle' | 'running' | 'done' | 'error';
 interface ImportState { status: ImportStatus; message: string; }
@@ -339,7 +339,7 @@ export default function App() {
           />
         </div>
         <button
-          onClick={() => setScreen('team-select')}
+          onClick={() => setScreen('template-select')}
           style={{
             padding: '12px 28px', fontSize: 12, fontWeight: 'bold', letterSpacing: 2,
             background: '#FF8740', color: '#000', border: 'none', borderRadius: 4,
@@ -401,6 +401,14 @@ export default function App() {
       </div>
     );
   }
+
+  if (screen === 'template-select') {
+  return (
+    <Suspense fallback={<div style={{ color: '#555', padding: 40 }}>Loading...</div>}>
+      <TemplateSelect onSelect={() => setScreen('team-select')} />
+    </Suspense>
+  );
+}
 
   if (screen === 'meet-team') {
     return (
