@@ -87,9 +87,10 @@ export default function App() {
     });
   };
 
-  const runSetup = async () => {
+    const runSetup = async () => {
     markStep('Finalizing dynasty setup...', false);
     await window.api.balanceRosters();
+    await window.api.applyDynastyTemplate?.();
     await new Promise(r => setTimeout(r, 800));
     markStep('Finalizing dynasty setup...', true);
     setSetupComplete(true);
@@ -200,6 +201,9 @@ export default function App() {
       }}>
 
         {/* Title */}
+                <div style={{ fontSize: 10, color: '#4FC3F7', letterSpacing: 3, marginBottom: 8 }}>
+          WELCOME, COACH
+        </div>
         <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 3, marginBottom: 8 }}>
           DYNASTY SIMULATOR
         </div>
@@ -403,13 +407,16 @@ export default function App() {
   }
 
   if (screen === 'template-select') {
-  return (
-    <Suspense fallback={<div style={{ color: '#555', padding: 40 }}>Loading...</div>}>
-      <TemplateSelect onSelect={() => setScreen('team-select')} />
-    </Suspense>
-  );
-}
-
+    return (
+      <Suspense fallback={<div style={{ color: '#555', padding: 40 }}>Loading...</div>}>
+        <TemplateSelect
+          onSelect={() => setScreen('team-select')}
+          onBack={() => setScreen('custom-setup')}
+        />
+      </Suspense>
+    );
+  }
+  
   if (screen === 'meet-team') {
     return (
       <Suspense fallback={<TabFallback />}>
