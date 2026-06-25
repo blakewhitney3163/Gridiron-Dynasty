@@ -275,6 +275,24 @@ ipcMain.handle('dismiss-retirement', (_event: any, playerId: number) => {
     return getOwnerGoalsForSeason(season);
   });
 
+  ipcMain.handle('get-team-finances', (_event: any, teamId: number) => {
+  let row = db.prepare('SELECT * FROM team_finances WHERE team_id = ?').get(teamId) as any;
+  if (!row) {
+    db.prepare('INSERT OR IGNORE INTO team_finances (team_id) VALUES (?)').run(teamId);
+    row = db.prepare('SELECT * FROM team_finances WHERE team_id = ?').get(teamId);
+  }
+  return row ?? null;
+});
+
+ipcMain.handle('get-all-team-finances', () =>
+  db.prepare(`
+    SELECT tf.*, t.city, t.name
+    FROM team_finances tf
+    JOIN teams t ON t.id = tf.team_id
+    ORDER BY tf.season_revenue DESC
+  `).all()
+);
+
   ipcMain.handle('get-owner-patience', () => {
     const { getOwnerPatience } = require('../services/OwnerGoalsService');
     return getOwnerPatience();
