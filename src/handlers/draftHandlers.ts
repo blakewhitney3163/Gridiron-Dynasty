@@ -206,15 +206,30 @@ export function registerDraftHandlers(): void {
  });
 
  ipcMain.handle('scout-prospect', (_event: any, prospectId: number) => {
- const season = getCurrentSeason();
- const prospect = draftRepo.getById(prospectId);
- if (!prospect || prospect.scouted) return { success: false, reason: 'Already scouted.' };
- const used = draftRepo.countScouted(season);
- const budget = parseInt(settingsRepo.get(`scouting_budget_${season}`) ?? '25');
- if (used >= budget) return { success: false, reason: 'No scouting budget remaining. Simulate more games to earn scouts.' };
- draftRepo.markScouted(prospectId);
- return { success: true };
- });
+  const season = getCurrentSeason();
+  const prospect = draftRepo.getById(prospectId);
+  if (!prospect || prospect.scouted) return { success: false, reason: 'Already scouted.' };
+  const used = draftRepo.countScouted(season);
+  const rawBudget = parseInt(settingsRepo.get(`scouting_budget_${season}`) ?? '25');
+  const userTeamId = settingsRepo.getUserTeamId() ?? -1;
+  const myScouts = userTeamId > 0 ? (scoutRepo.getByTeam(userTeamId) as any[]) : [];
+  const hasCollegeScout = myScouts.some((s: any) => s.specialty === 'College');
+  const effectiveBudget = hasCollegeScout ? Math.floor(rawBudget / 0.7) : rawBudget;
+  if (used >= effectiveBudget) return { success: false, reason: 'No scouting budget remaining.' };
+  draftRepo.markScouted(prospectId);
+  return { success: true };
+});
+
+ipcMain.handle('get-scout-count', () => {
+  const season = getCurrentSeason();
+  const used = draftRepo.countScouted(season);
+  const rawBudget = parseInt(settingsRepo.get(`scouting_budget_${season}`) ?? '25');
+  const userTeamId = settingsRepo.getUserTeamId() ?? -1;
+  const myScouts = userTeamId > 0 ? (scoutRepo.getByTeam(userTeamId) as any[]) : [];
+  const hasCollegeScout = myScouts.some((s: any) => s.specialty === 'College');
+  const budget = hasCollegeScout ? Math.floor(rawBudget / 0.7) : rawBudget;
+  return { used, budget, hasCollegeScout };
+});
 
  ipcMain.handle('get-scout-count', () => {
  const season = getCurrentSeason();
