@@ -17,6 +17,7 @@ import { Worker } from 'worker_threads';
 import { generateOwnerGoals } from '../services/OwnerGoalsService';
 import { recordInjuryHistory } from '../services/InjuryService';
 import { processGameResult } from '../services/ChemistryService';
+import { generatePlayLog } from '../sim/playbyplay';
 import path from 'path';
 
 interface GameSummary {
@@ -33,33 +34,49 @@ function getTeamName(teamId: number): string {
   return t ? `${t.city} ${t.name}` : 'Unknown Team';
 }
 
+function getCpuGamePlan(teamId: number): GamePlanOptions {
+  const scheme = db.prepare('SELECT offense_scheme, defense_scheme FROM team_schemes WHERE team_id = ?').get(teamId) as any;
+  if (!scheme) return { offense: 'balanced', defense: 'base' };
+  const OFF: Record<string, string> = {
+    'West Coast': 'pass_attack', 'Air Raid': 'bombs_away', 'Pro Style': 'balanced',
+    'Power Run': 'run_heavy', 'Spread': 'pass_attack',
+  };
+  const DEF: Record<string, string> = {
+    '4-3': 'base', '3-4': 'zone', 'Nickel': 'press_man', 'Dime': 'zone', '46': 'blitz',
+  };
+  return {
+    offense: OFF[scheme.offense_scheme] ?? 'balanced',
+    defense: DEF[scheme.defense_scheme] ?? 'base',
+  };
+}
+
 function logGameNews(season: number, game: GameSummary, userTeamId: number): void {
   const homeTeamName = getTeamName(game.homeTeamId);
   const awayTeamName = getTeamName(game.awayTeamId);
   const margin = Math.abs(game.homeScore - game.awayScore);
   const winnerName = game.homeScore > game.awayScore ? homeTeamName : awayTeamName;
-  const loserName = game.homeScore > game.awayScore ? awayTeamName : homeTeamName;
+  const loserName  = game.homeScore > game.awayScore ? awayTeamName : homeTeamName;
   const winnerScore = Math.max(game.homeScore, game.awayScore);
-  const loserScore = Math.min(game.homeScore, game.awayScore);
+  const loserScore  = Math.min(game.homeScore, game.awayScore);
   const involvesUser = game.homeTeamId === userTeamId || game.awayTeamId === userTeamId;
 
   if (involvesUser) {
     const isHome = game.homeTeamId === userTeamId;
     const userScore = isHome ? game.homeScore : game.awayScore;
-    const oppScore = isHome ? game.awayScore : game.homeScore;
-    const oppName = isHome ? awayTeamName : homeTeamName;
+    const oppScore  = isHome ? game.awayScore : game.homeScore;
+    const oppName   = isHome ? awayTeamName : homeTeamName;
     logNewsEvent({
       season, category: 'game',
-      title: `Week ${game.week}: ${winnerName} ${winnerScore}, ${loserName} ${loserScore}`,
-      body: userScore > oppScore
+      headline: `Week ${game.week}: ${winnerName} ${winnerScore}, ${loserName} ${loserScore}`,
+      detail: userScore > oppScore
         ? `Your team defeated ${oppName} ${userScore}–${oppScore}`
         : `Your team fell to ${oppName} ${oppScore}–${userScore}`,
     });
   } else if (margin >= 21) {
     logNewsEvent({
       season, category: 'game',
-      title: `Blowout — ${winnerName} ${winnerScore}, ${loserName} ${loserScore}`,
-      body: `Week ${game.week} | ${winnerName} win by ${margin}`,
+      headline: `Blowout — ${winnerName} ${winnerScore}, ${loserName} ${loserScore}`,
+      detail: `Week ${game.week} | ${winnerName} win by ${margin}`,
     });
   }
 
@@ -68,27 +85,25 @@ function logGameNews(season: number, game: GameSummary, userTeamId: number): voi
     const isRBStar = stat.rush_yards >= 150;
     const isWRStar = stat.rec_yards >= 120 || stat.rec_tds >= 2;
     if (!isQBStar && !isRBStar && !isWRStar) continue;
-
-    const p = db.prepare('SELECT first_name, last_name FROM players WHERE id = ?').get(stat.player_id) as { first_name: string; last_name: string } | undefined;
+    const p = db.prepare('SELECT first_name, last_name FROM players WHERE id = ?').get(stat.player_id) as any;
     if (!p) continue;
     const teamName = getTeamName(stat.team_id);
-
     if (isQBStar) {
       const parts: string[] = [];
-      if (stat.pass_yards) parts.push(`${stat.pass_yards} pass yds`);
-      if (stat.pass_tds) parts.push(`${stat.pass_tds} TD`);
+      if (stat.pass_yards)    parts.push(`${stat.pass_yards} pass yds`);
+      if (stat.pass_tds)      parts.push(`${stat.pass_tds} TD`);
       if (stat.interceptions) parts.push(`${stat.interceptions} INT`);
-      logNewsEvent({ season, category: 'game', title: `${p.first_name} ${p.last_name} — standout QB performance`, body: `Week ${game.week} | ${parts.join(', ')} | ${teamName}` });
+      logNewsEvent({ season, category: 'game', headline: `${p.first_name} ${p.last_name} — standout QB performance`, detail: `Week ${game.week} | ${parts.join(', ')} | ${teamName}` });
     } else if (isRBStar) {
       const parts = [`${stat.rush_yards} rush yds`];
       if (stat.rush_tds) parts.push(`${stat.rush_tds} TD`);
-      logNewsEvent({ season, category: 'game', title: `${p.first_name} ${p.last_name} — standout rushing performance`, body: `Week ${game.week} | ${parts.join(', ')} | ${teamName}` });
+      logNewsEvent({ season, category: 'game', headline: `${p.first_name} ${p.last_name} — standout rushing performance`, detail: `Week ${game.week} | ${parts.join(', ')} | ${teamName}` });
     } else if (isWRStar) {
       const parts: string[] = [];
       if (stat.receptions) parts.push(`${stat.receptions} rec`);
-      if (stat.rec_yards) parts.push(`${stat.rec_yards} yds`);
-      if (stat.rec_tds) parts.push(`${stat.rec_tds} TD`);
-      logNewsEvent({ season, category: 'game', title: `${p.first_name} ${p.last_name} — standout receiving performance`, body: `Week ${game.week} | ${parts.join(', ')} | ${teamName}` });
+      if (stat.rec_yards)  parts.push(`${stat.rec_yards} yds`);
+      if (stat.rec_tds)    parts.push(`${stat.rec_tds} TD`);
+      logNewsEvent({ season, category: 'game', headline: `${p.first_name} ${p.last_name} — standout receiving performance`, detail: `Week ${game.week} | ${parts.join(', ')} | ${teamName}` });
     }
   }
 }
@@ -100,9 +115,9 @@ function logInjuryNews(season: number, newlyInjured: InjuredPlayer[], userTeamId
       ? `Out ${p.weeks_out} week${p.weeks_out > 1 ? 's' : ''}`
       : (p.injury_status?.toUpperCase() ?? 'Injured');
     logNewsEvent({
-      season, category: 'injury',
-      title: `Injury: ${p.first_name} ${p.last_name} (${p.position})`,
-      body: `${p.injury_type ?? 'Injury'} | ${weeksOut} | OVR ${p.overall_rating}`,
+      season, category: 'injuries',
+      headline: `Injury: ${p.first_name} ${p.last_name} (${p.position})`,
+      detail: `${p.injury_type ?? 'Injury'} | ${weeksOut} | OVR ${p.overall_rating}`,
     });
   }
 }
@@ -122,7 +137,7 @@ function runSimWorker(data: object): Promise<any> {
 }
 
 const DRAFT_FIRST = ['James','John','Robert','Michael','David','William','Joseph','Thomas','Charles','Christopher','Daniel','Matthew','Anthony','Mark','Steven','Paul','Andrew','Joshua','Kenneth','Kevin','Brian','Timothy','Jason','Jeffrey','Ryan','Jacob','Gary','Nicholas','Eric','Jonathan','Justin','Scott','Brandon','Benjamin','Samuel','Nathan','Zachary','Peter','Kyle','Noah','Ethan','Jeremy','Austin','Sean','Dylan','Jordan','Jesse','Bryan','Gabriel','Logan','Marcus','Malik','Darius','Terrell','Jamal','Xavier','Darnell','Lamar','Kendall','Jaylen','Jalen','Devonte','Trey','Kameron','Zion','Isaiah','Damien','Dominic','Julian','Elijah','Tyrese','DeAndre','Rashad','Corey','Marquise','Deon','Alonzo','Deshawn','Marquez','Keanu','Trevon','Devin','Javon','Treylon','Brock','Bryce','Drake','Garrett','Caleb','Quinton','Jaylon','Dontae','Tariq','Amon','Romeo','Tyjae'];
-const DRAFT_LAST = ['Smith','Johnson','Williams','Jones','Brown','Davis','Miller','Wilson','Moore','Taylor','Anderson','Thomas','Jackson','White','Harris','Martin','Thompson','Garcia','Robinson','Clark','Lewis','Lee','Walker','Hall','Allen','Young','King','Wright','Hill','Scott','Green','Adams','Baker','Nelson','Carter','Mitchell','Roberts','Turner','Phillips','Campbell','Parker','Evans','Edwards','Collins','Stewart','Morris','Rogers','Reed','Cook','Morgan','Bell','Murphy','Bailey','Cooper','Richardson','Cox','Howard','Ward','Peterson','Gray','James','Watson','Brooks','Kelly','Sanders','Price','Bennett','Wood','Barnes','Ross','Henderson','Coleman','Jenkins','Perry','Powell','Long','Patterson','Hughes','Washington','Butler','Simmons','Foster','Bryant','Alexander','Russell','Griffin','Hayes','Ford','Hamilton','Graham','Sullivan','Wallace','Woods','Cole','West','Jordan','Owens','Reynolds','Fisher','Harrison','Gibson','McDonald','Marshall','Murray','Freeman','Wells','Tucker','Porter','Hunter','Hicks','Henry','Boyd','Mason','Kennedy','Warren','Burns','Gordon','Shaw','Holmes','Rice','Robertson','Hunt','Daniels','Palmer','Nichols','Grant','Knight','Ferguson','Stone','Hawkins','Perkins','Hudson','Spencer','Gardner','Payne','Pierce','Berry','Matthews','Willis','Ray','Watkins','Carroll','Duncan','Hart','Cunningham','Bradley','Andrews','Harper','Fox','Riley','Armstrong','Greene','Lawrence','Elliott','Sims','Morrow','Ingram','Bates','Flowers','Moss','Lamb'];
+const DRAFT_LAST  = ['Smith','Johnson','Williams','Jones','Brown','Davis','Miller','Wilson','Moore','Taylor','Anderson','Thomas','Jackson','White','Harris','Martin','Thompson','Garcia','Robinson','Clark','Lewis','Lee','Walker','Hall','Allen','Young','King','Wright','Hill','Scott','Green','Adams','Baker','Nelson','Carter','Mitchell','Roberts','Turner','Phillips','Campbell','Parker','Evans','Edwards','Collins','Stewart','Morris','Rogers','Reed','Cook','Morgan','Bell','Murphy','Bailey','Cooper','Richardson','Cox','Howard','Ward','Peterson','Gray','James','Watson','Brooks','Kelly','Sanders','Price','Bennett','Wood','Barnes','Ross','Henderson','Coleman','Jenkins','Perry','Powell','Long','Patterson','Hughes','Washington','Butler','Simmons','Foster','Bryant','Alexander','Russell','Griffin','Hayes','Ford','Hamilton','Graham','Sullivan','Wallace','Woods','Cole','West','Jordan','Owens','Reynolds','Fisher','Harrison','Gibson','McDonald','Marshall','Murray','Freeman','Wells','Tucker','Porter','Hunter','Hicks','Henry','Boyd','Mason','Kennedy','Warren','Burns','Gordon','Shaw','Holmes','Rice','Robertson','Hunt','Daniels','Palmer','Nichols','Grant','Knight','Ferguson','Stone','Hawkins','Perkins','Hudson','Spencer','Gardner','Payne','Pierce','Berry','Matthews','Willis','Ray','Watkins','Carroll','Duncan','Hart','Cunningham','Bradley','Andrews','Harper','Fox','Riley','Armstrong','Greene','Lawrence','Elliott','Sims','Morrow','Ingram','Bates','Flowers','Moss','Lamb'];
 const DRAFT_POS_POOL = ['QB','RB','WR','WR','WR','TE','OL','OL','OL','DL','DL','DL','LB','LB','CB','CB','S','K'];
 
 function generateDraftClass(season: number): void {
@@ -137,7 +152,7 @@ function generateDraftClass(season: number): void {
   const prospects: any[] = [];
   for (let i = 0; i < 280; i++) {
     let ovr: number;
-    if (i < 10)       ovr = Math.floor(Math.random() * 7) + 76;
+    if      (i < 10)  ovr = Math.floor(Math.random() * 7) + 76;
     else if (i < 32)  ovr = Math.floor(Math.random() * 7) + 71;
     else if (i < 64)  ovr = Math.floor(Math.random() * 6) + 67;
     else if (i < 96)  ovr = Math.floor(Math.random() * 6) + 64;
@@ -156,7 +171,6 @@ function generateDraftClass(season: number): void {
     });
   }
   draftRepo.insertClass(prospects);
-  console.log(`Draft class generated for season ${season}: ${prospects.length} prospects`);
 }
 
 export function registerSimHandlers(): void {
@@ -199,21 +213,20 @@ export function registerSimHandlers(): void {
     `);
 
     const simGame = (home: any, away: any, week: number, roundLabel: string) => {
-      const r = simulateGame(home.id, away.id);
-      insertGame.run(
-        s, week, home.id, away.id, r.homeScore, r.awayScore,
+      const r = simulateGame(home.id, away.id, week, -1, 0,
+        undefined, getCpuGamePlan(home.id), getCpuGamePlan(away.id));
+      insertGame.run(s, week, home.id, away.id, r.homeScore, r.awayScore,
         r.homeQuarters[0], r.homeQuarters[1], r.homeQuarters[2], r.homeQuarters[3],
         r.awayQuarters[0], r.awayQuarters[1], r.awayQuarters[2], r.awayQuarters[3],
-        r.weather ?? 'clear'
-      );
+        r.weather ?? 'clear');
       const winner = r.homeScore > r.awayScore ? home : away;
-      const loser = r.homeScore > r.awayScore ? away : home;
-      const winnerScore = Math.max(r.homeScore, r.awayScore);
-      const loserScore = Math.min(r.homeScore, r.awayScore);
+      const loser  = r.homeScore > r.awayScore ? away : home;
+      const ws = Math.max(r.homeScore, r.awayScore);
+      const ls = Math.min(r.homeScore, r.awayScore);
       logNewsEvent({
         season: s, category: 'game',
-        title: `${roundLabel}: ${winner.city} ${winner.name} ${winnerScore}, ${loser.city} ${loser.name} ${loserScore}`,
-        body: `${winner.city} ${winner.name} advance`,
+        headline: `${roundLabel}: ${winner.city} ${winner.name} ${ws}, ${loser.city} ${loser.name} ${ls}`,
+        detail: `${winner.city} ${winner.name} advance`,
       });
       return { home, away, homeScore: r.homeScore, awayScore: r.awayScore, winner };
     };
@@ -221,8 +234,8 @@ export function registerSimHandlers(): void {
     const afcTeams = seedTeams('AFC');
     const nfcTeams = seedTeams('NFC');
 
-    const afcWC = [simGame(afcTeams[1], afcTeams[6], 18, 'AFC Wild Card'), simGame(afcTeams[2], afcTeams[5], 18, 'AFC Wild Card'), simGame(afcTeams[3], afcTeams[4], 18, 'AFC Wild Card')];
-    const nfcWC = [simGame(nfcTeams[1], nfcTeams[6], 18, 'NFC Wild Card'), simGame(nfcTeams[2], nfcTeams[5], 18, 'NFC Wild Card'), simGame(nfcTeams[3], nfcTeams[4], 18, 'NFC Wild Card')];
+    const afcWC  = [simGame(afcTeams[1], afcTeams[6], 18, 'AFC Wild Card'), simGame(afcTeams[2], afcTeams[5], 18, 'AFC Wild Card'), simGame(afcTeams[3], afcTeams[4], 18, 'AFC Wild Card')];
+    const nfcWC  = [simGame(nfcTeams[1], nfcTeams[6], 18, 'NFC Wild Card'), simGame(nfcTeams[2], nfcTeams[5], 18, 'NFC Wild Card'), simGame(nfcTeams[3], nfcTeams[4], 18, 'NFC Wild Card')];
     const afcDiv = [simGame(afcTeams[0], afcWC[2].winner, 19, 'AFC Divisional'), simGame(afcWC[0].winner, afcWC[1].winner, 19, 'AFC Divisional')];
     const nfcDiv = [simGame(nfcTeams[0], nfcWC[2].winner, 19, 'NFC Divisional'), simGame(nfcWC[0].winner, nfcWC[1].winner, 19, 'NFC Divisional')];
     const afcChamp = simGame(afcDiv[0].winner, afcDiv[1].winner, 20, 'AFC Championship');
@@ -234,11 +247,11 @@ export function registerSimHandlers(): void {
     const champ = gridironCup.winner;
     const runnerUp = gridironCup.winner.id === afcChamp.winner.id ? nfcChamp.winner : afcChamp.winner;
     const champScore = gridironCup.homeScore > gridironCup.awayScore ? gridironCup.homeScore : gridironCup.awayScore;
-    const ruScore = gridironCup.homeScore > gridironCup.awayScore ? gridironCup.awayScore : gridironCup.homeScore;
+    const ruScore    = gridironCup.homeScore > gridironCup.awayScore ? gridironCup.awayScore : gridironCup.homeScore;
     logNewsEvent({
       season: s, category: 'game',
-      title: `🏆 ${champ.city} ${champ.name} are Gridiron Cup Champions!`,
-      body: `Defeated ${runnerUp.city} ${runnerUp.name} ${champScore}–${ruScore} in the Gridiron Cup`,
+      headline: `🏆 ${champ.city} ${champ.name} are Gridiron Cup Champions!`,
+      detail: `Defeated ${runnerUp.city} ${runnerUp.name} ${champScore}–${ruScore} in the Gridiron Cup`,
     });
 
     return {
@@ -253,9 +266,7 @@ export function registerSimHandlers(): void {
     if (gameRepo.countBySeason(season) > 0) return { alreadyExists: true, season };
 
     interface TeamRow { id: number; conference: string; division: string; }
-    const teamRows = db.prepare(
-      'SELECT id, conference, division FROM teams ORDER BY conference, division, id'
-    ).all() as TeamRow[];
+    const teamRows = db.prepare('SELECT id, conference, division FROM teams ORDER BY conference, division, id').all() as TeamRow[];
 
     const divMap: Record<string, number[]> = {};
     for (const t of teamRows) {
@@ -309,24 +320,19 @@ export function registerSimHandlers(): void {
       [[0,3],[1,2],[0,1],[2,3]],
     ];
     const confPairs = intraPairings[season % 3];
-
     for (let stack = 0; stack < 2; stack++) {
       const [pA, pB] = [confPairs[stack * 2], confPairs[stack * 2 + 1]];
       const [afcA, afcB] = [divMap[afcDivs[pA[0]]] ?? [], divMap[afcDivs[pA[1]]] ?? []];
       const [afcC, afcD] = [divMap[afcDivs[pB[0]]] ?? [], divMap[afcDivs[pB[1]]] ?? []];
       const [nfcA, nfcB] = [divMap[nfcDivs[pA[0]]] ?? [], divMap[nfcDivs[pA[1]]] ?? []];
       const [nfcC, nfcD] = [divMap[nfcDivs[pB[0]]] ?? [], divMap[nfcDivs[pB[1]]] ?? []];
-
       for (let r = 0; r < 4; r++) {
         weeks.push([
-          ...k44Round(afcA, afcB, r, season),
-          ...k44Round(afcC, afcD, r, season),
-          ...k44Round(nfcA, nfcB, r, season),
-          ...k44Round(nfcC, nfcD, r, season),
+          ...k44Round(afcA, afcB, r, season), ...k44Round(afcC, afcD, r, season),
+          ...k44Round(nfcA, nfcB, r, season), ...k44Round(nfcC, nfcD, r, season),
         ]);
       }
     }
-
     for (let r = 0; r < 3; r++) {
       const week: { home: number; away: number }[] = [];
       for (let i = 0; i < 4; i++) {
@@ -337,9 +343,7 @@ export function registerSimHandlers(): void {
       weeks.push(week);
     }
 
-    const insertGame = db.prepare(
-      'INSERT INTO games (season, week, home_team_id, away_team_id, is_simulated) VALUES (?, ?, ?, ?, 0)'
-    );
+    const insertGame = db.prepare('INSERT INTO games (season, week, home_team_id, away_team_id, is_simulated) VALUES (?, ?, ?, ?, 0)');
     db.transaction(() => {
       for (let w = 0; w < 17; w++) {
         for (const g of weeks[w]) {
@@ -388,10 +392,8 @@ export function registerSimHandlers(): void {
     if (games.length === 0) return { week, season, gamesSimulated: 0 };
 
     const result = await runSimWorker({
-      type: 'simulate-week',
-      week, season, games, userTeamId,
-      difficultyFactor: getDifficultyFactor(),
-      dbPath: getDbPath(),
+      type: 'simulate-week', week, season, games, userTeamId,
+      difficultyFactor: getDifficultyFactor(), dbPath: getDbPath(),
     });
 
     if (games.length > 0) {
@@ -411,7 +413,7 @@ export function registerSimHandlers(): void {
 
   ipcMain.handle('simulate-game', async (_event: IpcEvent, gameId: number) => {
     const game = db.prepare(`SELECT * FROM games WHERE id = ?`).get(gameId) as any;
-    if (!game) return { success: false, reason: 'Game not found.' };
+    if (!game)            return { success: false, reason: 'Game not found.' };
     if (game.is_simulated) return { success: false, reason: 'Game already simulated.' };
 
     const insertStat = db.prepare(`
@@ -436,8 +438,17 @@ export function registerSimHandlers(): void {
     const gpRaw = settingsRepo.get(`gameplan_${game.season}_${game.week}`);
     const gamePlan: GamePlanOptions | undefined = gpRaw ? JSON.parse(gpRaw) : undefined;
 
+    const homeIsUser = game.home_team_id === userTeamId;
+    const cpuOpponentId = homeIsUser ? game.away_team_id : game.home_team_id;
+    const cpuPlan = userTeamId !== -1 ? getCpuGamePlan(cpuOpponentId) : undefined;
+
     db.transaction(() => {
-      gameResult = simulateGame(game.home_team_id, game.away_team_id, game.week ?? 1, userTeamId, getDifficultyFactor(), gamePlan);
+      gameResult = simulateGame(
+        game.home_team_id, game.away_team_id, game.week ?? 1, userTeamId,
+        getDifficultyFactor(), gamePlan,
+        homeIsUser ? undefined : cpuPlan,
+        homeIsUser ? cpuPlan  : undefined,
+      );
       gameRepo.updateResult(game.id, gameResult.homeScore, gameResult.awayScore, gameResult.homeQuarters, gameResult.awayQuarters, gameResult.weather ?? 'clear');
       for (const stat of [...gameResult.homePlayerStats, ...gameResult.awayPlayerStats]) {
         insertStat.run({ game_id: game.id, season: game.season, week: game.week ?? 1, is_playoff: game.is_playoff ?? 0, ...stat });
@@ -447,18 +458,47 @@ export function registerSimHandlers(): void {
 
     logGameNews(getCurrentSeason(), {
       week: game.week ?? 1,
-      homeTeamId: game.home_team_id,
-      awayTeamId: game.away_team_id,
-      homeScore: gameResult.homeScore,
-      awayScore: gameResult.awayScore,
+      homeTeamId: game.home_team_id, awayTeamId: game.away_team_id,
+      homeScore: gameResult.homeScore, awayScore: gameResult.awayScore,
       stats: allStats,
     }, userTeamId);
+
+    // Generate and store play-by-play log
+    try {
+      const allPlayerIds = [...new Set(allStats.map((s: any) => s.player_id as number))];
+      if (allPlayerIds.length > 0) {
+        const ph2 = allPlayerIds.map(() => '?').join(',');
+        const playerData = db.prepare(`SELECT id, first_name || ' ' || last_name as name, position FROM players WHERE id IN (${ph2})`).all(...allPlayerIds) as any[];
+        const pMap = new Map(playerData.map(p => [p.id, p]));
+        const buildInfos = (stats: any[]) => stats.map(s => ({
+          name:         pMap.get(s.player_id)?.name     ?? 'Player',
+          position:     pMap.get(s.player_id)?.position ?? 'UNK',
+          pass_yards:   s.pass_yards   ?? 0,
+          rush_yards:   s.rush_yards   ?? 0,
+          rec_yards:    s.rec_yards    ?? 0,
+          interceptions: s.interceptions ?? 0,
+          sacks:        s.sacks        ?? 0,
+          rush_tds:     s.rush_tds     ?? 0,
+          pass_tds:     s.pass_tds     ?? 0,
+          rec_tds:      s.rec_tds      ?? 0,
+        }));
+        const playLog = generatePlayLog(
+          getTeamName(game.home_team_id), getTeamName(game.away_team_id),
+          gameResult.homeScore, gameResult.awayScore,
+          buildInfos(gameResult.homePlayerStats),
+          buildInfos(gameResult.awayPlayerStats),
+        );
+        settingsRepo.set(`game_play_log_${game.id}`, JSON.stringify(playLog));
+      }
+    } catch (e) {
+      // play log is non-critical
+    }
 
     const weekComplete = gameRepo.countPendingInWeek(game.season, game.week) === 0;
     const newlyInjured = rollInjuries(allStats);
     recordInjuryHistory(newlyInjured as any[], game.week ?? 1, game.season);
     const homeDiff = gameResult.homeScore - gameResult.awayScore;
-    processGameResult(game.home_team_id, homeDiff > 0, homeDiff, game.season, game.week ?? 1);
+    processGameResult(game.home_team_id, homeDiff > 0, homeDiff,  game.season, game.week ?? 1);
     processGameResult(game.away_team_id, homeDiff < 0, -homeDiff, game.season, game.week ?? 1);
     logInjuryNews(getCurrentSeason(), newlyInjured, userTeamId);
     const milestonePlayerIds = [...new Set(allStats.map((s: any) => s.player_id as number))];
@@ -500,39 +540,129 @@ export function registerSimHandlers(): void {
     return raw ? JSON.parse(raw) : { offense: 'balanced', defense: 'base' };
   });
 
+  // ─── Scout Opponent IPC ───────────────────────────────────────────────────
+
   ipcMain.handle('scout-opponent', (_event: IpcEvent, payload: { opponentTeamId: number; season: number; week: number }) => {
     const { opponentTeamId, season, week } = payload;
-    const team = db.prepare('SELECT city, name FROM teams WHERE id = ?').get(opponentTeamId) as any;
-    const scheme = db.prepare('SELECT offense_scheme, defense_scheme FROM team_schemes WHERE team_id = ?').get(opponentTeamId) as any;
-    const topPlayers = db.prepare(`
-      SELECT first_name, last_name, position, overall_rating, dev_trait
-      FROM players WHERE team_id = ? AND roster_status = 'active'
-      ORDER BY overall_rating DESC LIMIT 5
-    `).all(opponentTeamId) as any[];
+    const userTeamId = settingsRepo.getUserTeamId() ?? -1;
+    const myScouts = scoutRepo.getByTeam(userTeamId);
 
+    const specialties = new Set(myScouts.map((s: any) => s.specialty));
+    const hasAnyScout     = myScouts.length > 0;
+    const hasOffenseScout = specialties.has('Offense');
+    const hasDefenseScout = specialties.has('Defense');
+    const hasNationalScout = specialties.has('National');
+    const hasRegionalScout = specialties.has('Regional');
+
+    const team   = db.prepare('SELECT city, name, conference FROM teams WHERE id = ?').get(opponentTeamId) as any;
+    const scheme = db.prepare('SELECT offense_scheme, defense_scheme FROM team_schemes WHERE team_id = ?').get(opponentTeamId) as any;
+
+    const SCHEME_TENDENCY: Record<string, string> = {
+      'Air Raid':   'Air Raid offense — expect a high-volume passing attack',
+      'West Coast': 'West Coast offense — quick short passes, precise timing',
+      'Power Run':  'Power Run offense — physical, ground-and-pound attack',
+      'Spread':     'Spread offense — multiple formations, big-play potential',
+      'Pro Style':  'Pro Style offense — balanced, hard to predict',
+    };
+    const schemeTendency = SCHEME_TENDENCY[scheme?.offense_scheme ?? ''] ?? null;
+
+    const statWindow = hasNationalScout ? 5 : 3;
     const recentStats = db.prepare(`
       SELECT SUM(s.rush_attempts) as rush_att, SUM(s.pass_attempts) as pass_att
       FROM stats s
       JOIN games g ON s.game_id = g.id
       WHERE g.season = ? AND (g.home_team_id = ? OR g.away_team_id = ?)
-        AND s.team_id = ? AND g.week < ?
-      ORDER BY g.week DESC LIMIT 3
-    `).get(season, opponentTeamId, opponentTeamId, opponentTeamId, week) as any;
+        AND s.team_id = ? AND g.week < ? AND g.week >= ?
+    `).get(season, opponentTeamId, opponentTeamId, opponentTeamId, week, week - statWindow) as any;
 
-    let tendency = 'Balanced attack — no clear offensive tendency.';
+    let tendency = schemeTendency ?? 'Tendency unclear — no recent game data.';
     if (recentStats?.rush_att && recentStats?.pass_att) {
       const total = recentStats.rush_att + recentStats.pass_att;
       const rushRate = recentStats.rush_att / total;
-      if (rushRate >= 0.55) tendency = `Heavy run team — ${Math.round(rushRate * 100)}% rush rate last 3 weeks.`;
-      else if (rushRate <= 0.38) tendency = `Pass-heavy offense — ${Math.round((1 - rushRate) * 100)}% pass rate last 3 weeks.`;
+      if (rushRate >= 0.55)      tendency = `Heavy run team — ${Math.round(rushRate * 100)}% rush rate (last ${statWindow} wks)`;
+      else if (rushRate <= 0.38) tendency = `Pass-heavy — ${Math.round((1 - rushRate) * 100)}% pass rate (last ${statWindow} wks)`;
+      else                       tendency = schemeTendency ?? `Balanced attack — ${Math.round(rushRate * 100)}% run rate (last ${statWindow} wks)`;
+    }
+
+    let topPlayers: any[] = [];
+    if (hasAnyScout) {
+      topPlayers = db.prepare(`
+        SELECT first_name, last_name, position, overall_rating, dev_trait
+        FROM players WHERE team_id = ? AND roster_status = 'active'
+        ORDER BY overall_rating DESC LIMIT 5
+      `).all(opponentTeamId);
+    }
+
+    let offensiveStats: any[] = [];
+    if (hasOffenseScout) {
+      offensiveStats = db.prepare(`
+        SELECT p.first_name || ' ' || p.last_name as name, p.position,
+               SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
+               SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds,
+               SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
+               SUM(s.receptions) as receptions
+        FROM stats s
+        JOIN players p ON s.player_id = p.id
+        JOIN games g ON s.game_id = g.id
+        WHERE g.season = ? AND s.team_id = ? AND g.week < ?
+          AND (s.pass_yards > 0 OR s.rush_yards > 0 OR s.rec_yards > 0)
+        GROUP BY s.player_id
+        ORDER BY (SUM(s.pass_yards) + SUM(s.rush_yards) + SUM(s.rec_yards)) DESC
+        LIMIT 5
+      `).all(season, opponentTeamId, week);
+    }
+
+    let defensiveStats: any[] = [];
+    if (hasDefenseScout) {
+      defensiveStats = db.prepare(`
+        SELECT p.first_name || ' ' || p.last_name as name, p.position,
+               SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as ast_tackles,
+               SUM(s.sacks) as sacks, SUM(s.def_interceptions) as ints,
+               SUM(s.tfl) as tfl, SUM(s.pass_deflections) as pds
+        FROM stats s
+        JOIN players p ON s.player_id = p.id
+        JOIN games g ON s.game_id = g.id
+        WHERE g.season = ? AND s.team_id = ? AND g.week < ?
+          AND (s.tackles > 0 OR s.sacks > 0 OR s.def_interceptions > 0)
+        GROUP BY s.player_id
+        ORDER BY (SUM(s.tackles) + SUM(s.sacks)*3 + SUM(s.def_interceptions)*4) DESC
+        LIMIT 5
+      `).all(season, opponentTeamId, week);
+    }
+
+    let homeAwaySplit: any = null;
+    if (hasRegionalScout) {
+      const userTeamConf = db.prepare('SELECT conference FROM teams WHERE id = ?').get(userTeamId) as any;
+      if (userTeamConf?.conference === team?.conference) {
+        homeAwaySplit = db.prepare(`
+          SELECT
+            SUM(CASE WHEN g.home_team_id = ? AND g.home_score > g.away_score THEN 1 ELSE 0 END) as homeWins,
+            SUM(CASE WHEN g.home_team_id = ? AND g.home_score < g.away_score THEN 1 ELSE 0 END) as homeLosses,
+            SUM(CASE WHEN g.away_team_id = ? AND g.away_score > g.home_score THEN 1 ELSE 0 END) as awayWins,
+            SUM(CASE WHEN g.away_team_id = ? AND g.away_score < g.home_score THEN 1 ELSE 0 END) as awayLosses
+          FROM games g
+          WHERE g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
+            AND (g.home_team_id = ? OR g.away_team_id = ?)
+        `).get(opponentTeamId, opponentTeamId, opponentTeamId, opponentTeamId, season, opponentTeamId, opponentTeamId);
+      }
     }
 
     settingsRepo.set(`scouted_opponent_${season}_${week}`, '1');
-    return { team, scheme, topPlayers, tendency };
+    return {
+      team, scheme, topPlayers, tendency, schemeTendency,
+      offensiveStats, defensiveStats, homeAwaySplit,
+      scoutLevel: hasAnyScout ? 'full' : 'basic',
+      hasOffenseScout, hasDefenseScout, hasNationalScout, hasRegionalScout,
+    };
   });
 
   ipcMain.handle('is-opponent-scouted', (_event: IpcEvent, payload: { season: number; week: number }) =>
     settingsRepo.get(`scouted_opponent_${payload.season}_${payload.week}`) === '1');
+
+  ipcMain.handle('get-game-play-log', (_event: IpcEvent, gameId: number) => {
+    const raw = settingsRepo.get(`game_play_log_${gameId}`);
+    return raw ? JSON.parse(raw) : [];
+  });
 
   // ─── Scout Management IPC ─────────────────────────────────────────────────
 
@@ -545,7 +675,7 @@ export function registerSimHandlers(): void {
   ipcMain.handle('hire-scout', (_event: IpcEvent, payload: { teamId: number; scoutId: number }) => {
     const { teamId, scoutId } = payload;
     const scout = scoutRepo.getById(scoutId);
-    if (!scout) return { success: false, reason: 'Scout not found.' };
+    if (!scout)              return { success: false, reason: 'Scout not found.' };
     if (scout.team_id !== null) return { success: false, reason: 'Scout is already on a staff.' };
     scoutRepo.assignToTeam(scoutId, teamId);
     return { success: true };
@@ -553,7 +683,7 @@ export function registerSimHandlers(): void {
 
   ipcMain.handle('fire-scout', (_event: IpcEvent, scoutId: number) => {
     const scout = scoutRepo.getById(scoutId);
-    if (!scout) return { success: false, reason: 'Scout not found.' };
+    if (!scout)             return { success: false, reason: 'Scout not found.' };
     if (scout.team_id === null) return { success: false, reason: 'Scout is already a free agent.' };
     scoutRepo.release(scoutId);
     return { success: true };
