@@ -25,6 +25,9 @@ export const coreApi = {
   getDifficulty: () =>
     ipcRenderer.invoke('get-difficulty'),
 
+  getTeamFinances:    (teamId: number) => ipcRenderer.invoke('get-team-finances', teamId),
+getAllTeamFinances:  () => ipcRenderer.invoke('get-all-team-finances'),
+
   setDifficulty: (level: string) =>
     ipcRenderer.invoke('set-difficulty', level),
 
