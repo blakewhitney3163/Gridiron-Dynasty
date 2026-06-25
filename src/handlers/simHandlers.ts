@@ -3,11 +3,11 @@ import type { InjuredPlayer } from '../types';
 import type { GamePlayerStat } from '../sim/types';
 import { ipcMain } from 'electron';
 import { db, getDbPath } from '../database';
-import { simulateGame } from '../simulateGame';
+import { simulateGame, GamePlanOptions } from '../simulateGame';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { getDifficultyFactor } from './settingsHandlers';
 import { MAX_ACTIVE_ROSTER } from '../constants';
-import { settingsRepo, playerRepo, contractRepo, gameRepo, draftRepo } from '../repositories';
+import { settingsRepo, playerRepo, contractRepo, gameRepo, draftRepo, scoutRepo } from '../repositories';
 import { rollInjuries, processWaivers, processRosterAdjustments } from '../services/SimulationService';
 import { progressPlayers } from '../services/ProgressionService';
 import { logNewsEvent } from '../helpers/logNewsEvent';
@@ -120,6 +120,7 @@ function runSimWorker(data: object): Promise<any> {
     });
   });
 }
+
 const DRAFT_FIRST = ['James','John','Robert','Michael','David','William','Joseph','Thomas','Charles','Christopher','Daniel','Matthew','Anthony','Mark','Steven','Paul','Andrew','Joshua','Kenneth','Kevin','Brian','Timothy','Jason','Jeffrey','Ryan','Jacob','Gary','Nicholas','Eric','Jonathan','Justin','Scott','Brandon','Benjamin','Samuel','Nathan','Zachary','Peter','Kyle','Noah','Ethan','Jeremy','Austin','Sean','Dylan','Jordan','Jesse','Bryan','Gabriel','Logan','Marcus','Malik','Darius','Terrell','Jamal','Xavier','Darnell','Lamar','Kendall','Jaylen','Jalen','Devonte','Trey','Kameron','Zion','Isaiah','Damien','Dominic','Julian','Elijah','Tyrese','DeAndre','Rashad','Corey','Marquise','Deon','Alonzo','Deshawn','Marquez','Keanu','Trevon','Devin','Javon','Treylon','Brock','Bryce','Drake','Garrett','Caleb','Quinton','Jaylon','Dontae','Tariq','Amon','Romeo','Tyjae'];
 const DRAFT_LAST = ['Smith','Johnson','Williams','Jones','Brown','Davis','Miller','Wilson','Moore','Taylor','Anderson','Thomas','Jackson','White','Harris','Martin','Thompson','Garcia','Robinson','Clark','Lewis','Lee','Walker','Hall','Allen','Young','King','Wright','Hill','Scott','Green','Adams','Baker','Nelson','Carter','Mitchell','Roberts','Turner','Phillips','Campbell','Parker','Evans','Edwards','Collins','Stewart','Morris','Rogers','Reed','Cook','Morgan','Bell','Murphy','Bailey','Cooper','Richardson','Cox','Howard','Ward','Peterson','Gray','James','Watson','Brooks','Kelly','Sanders','Price','Bennett','Wood','Barnes','Ross','Henderson','Coleman','Jenkins','Perry','Powell','Long','Patterson','Hughes','Washington','Butler','Simmons','Foster','Bryant','Alexander','Russell','Griffin','Hayes','Ford','Hamilton','Graham','Sullivan','Wallace','Woods','Cole','West','Jordan','Owens','Reynolds','Fisher','Harrison','Gibson','McDonald','Marshall','Murray','Freeman','Wells','Tucker','Porter','Hunter','Hicks','Henry','Boyd','Mason','Kennedy','Warren','Burns','Gordon','Shaw','Holmes','Rice','Robertson','Hunt','Daniels','Palmer','Nichols','Grant','Knight','Ferguson','Stone','Hawkins','Perkins','Hudson','Spencer','Gardner','Payne','Pierce','Berry','Matthews','Willis','Ray','Watkins','Carroll','Duncan','Hart','Cunningham','Bradley','Andrews','Harper','Fox','Riley','Armstrong','Greene','Lawrence','Elliott','Sims','Morrow','Ingram','Bates','Flowers','Moss','Lamb'];
 const DRAFT_POS_POOL = ['QB','RB','WR','WR','WR','TE','OL','OL','OL','DL','DL','DL','LB','LB','CB','CB','S','K'];
@@ -347,22 +348,12 @@ export function registerSimHandlers(): void {
       }
     })();
 
-        // Auto-generate draft class for this season if not already present
-    const draftCheck = db.prepare(
-      'SELECT COUNT(*) as cnt FROM draft_prospects WHERE season = ?'
-    ).get(season) as any;
-    if ((draftCheck?.cnt ?? 0) === 0) {
-      // Kick off draft class generation inline (same logic as generate-draft-class handler)
-            generateDraftClass(season);
-    }
+    const draftCheck = db.prepare('SELECT COUNT(*) as cnt FROM draft_prospects WHERE season = ?').get(season) as any;
+    if ((draftCheck?.cnt ?? 0) === 0) generateDraftClass(season);
 
-    // Initialize scouting budget for this season
     const budgetKey = `scouting_budget_${season}`;
-    if (!settingsRepo.get(budgetKey)) {
-      settingsRepo.set(budgetKey, '3');
-    }
+    if (!settingsRepo.get(budgetKey)) settingsRepo.set(budgetKey, '3');
 
-    // Generate owner goals for this season
     const userTeamId = settingsRepo.getUserTeamId() ?? -1;
     if (userTeamId > 0) generateOwnerGoals(season, userTeamId);
 
@@ -398,34 +389,27 @@ export function registerSimHandlers(): void {
 
     const result = await runSimWorker({
       type: 'simulate-week',
-      week,
-      season,
-      games,
-      userTeamId,
+      week, season, games, userTeamId,
       difficultyFactor: getDifficultyFactor(),
       dbPath: getDbPath(),
     });
 
-    // Run progression for all CPU games just simulated
     if (games.length > 0) {
       const gameIds = games.map((g: any) => g.id);
       const ph = gameIds.map(() => '?').join(',');
-      const weekStats = db.prepare(
-        `SELECT * FROM stats WHERE game_id IN (${ph})`
-      ).all(...gameIds) as any[];
+      const weekStats = db.prepare(`SELECT * FROM stats WHERE game_id IN (${ph})`).all(...gameIds) as any[];
       progressPlayers(weekStats, season, week);
     }
 
-        // Accumulate weekly scouting budget
-    const swSeason = getCurrentSeason();
-    const swKey = `scouting_budget_${swSeason}`;
+    const swKey = `scouting_budget_${season}`;
     const swBudget = parseInt(settingsRepo.get(swKey) ?? '0');
-    if (swBudget < 25) settingsRepo.set(swKey, String(Math.min(25, swBudget + 1)));
+    const swPts = scoutRepo.getWeeklyPoints(userTeamId);
+    if (swBudget < 70) settingsRepo.set(swKey, String(Math.min(70, swBudget + swPts)));
 
     return result;
   });
 
-    ipcMain.handle('simulate-game', async (_event: IpcEvent, gameId: number) => {
+  ipcMain.handle('simulate-game', async (_event: IpcEvent, gameId: number) => {
     const game = db.prepare(`SELECT * FROM games WHERE id = ?`).get(gameId) as any;
     if (!game) return { success: false, reason: 'Game not found.' };
     if (game.is_simulated) return { success: false, reason: 'Game already simulated.' };
@@ -449,8 +433,11 @@ export function registerSimHandlers(): void {
     const allStats: any[] = [];
     const userTeamId = settingsRepo.getUserTeamId() ?? -1;
 
+    const gpRaw = settingsRepo.get(`gameplan_${game.season}_${game.week}`);
+    const gamePlan: GamePlanOptions | undefined = gpRaw ? JSON.parse(gpRaw) : undefined;
+
     db.transaction(() => {
-      gameResult = simulateGame(game.home_team_id, game.away_team_id, game.week ?? 1, userTeamId, getDifficultyFactor());
+      gameResult = simulateGame(game.home_team_id, game.away_team_id, game.week ?? 1, userTeamId, getDifficultyFactor(), gamePlan);
       gameRepo.updateResult(game.id, gameResult.homeScore, gameResult.awayScore, gameResult.homeQuarters, gameResult.awayQuarters, gameResult.weather ?? 'clear');
       for (const stat of [...gameResult.homePlayerStats, ...gameResult.awayPlayerStats]) {
         insertStat.run({ game_id: game.id, season: game.season, week: game.week ?? 1, is_playoff: game.is_playoff ?? 0, ...stat });
@@ -470,21 +457,20 @@ export function registerSimHandlers(): void {
     const weekComplete = gameRepo.countPendingInWeek(game.season, game.week) === 0;
     const newlyInjured = rollInjuries(allStats);
     recordInjuryHistory(newlyInjured as any[], game.week ?? 1, game.season);
-      const homeDiff = gameResult.homeScore - gameResult.awayScore;
-processGameResult(game.home_team_id, homeDiff > 0, homeDiff, game.season, game.week ?? 1);
-processGameResult(game.away_team_id, homeDiff < 0, -homeDiff, game.season, game.week ?? 1);
+    const homeDiff = gameResult.homeScore - gameResult.awayScore;
+    processGameResult(game.home_team_id, homeDiff > 0, homeDiff, game.season, game.week ?? 1);
+    processGameResult(game.away_team_id, homeDiff < 0, -homeDiff, game.season, game.week ?? 1);
     logInjuryNews(getCurrentSeason(), newlyInjured, userTeamId);
     const milestonePlayerIds = [...new Set(allStats.map((s: any) => s.player_id as number))];
     checkMilestones(getCurrentSeason(), game.week ?? 1, milestonePlayerIds);
-
     progressPlayers(allStats, game.season, game.week ?? 1);
-
     const rosterResult = processRosterAdjustments(newlyInjured, userTeamId);
     if (weekComplete) { playerRepo.advanceInjuryTimers(); processWaivers(userTeamId, game.week); }
-        // Accumulate scouting budget
+
     const sgKey = `scouting_budget_${game.season}`;
     const sgBudget = parseInt(settingsRepo.get(sgKey) ?? '0');
-    if (sgBudget < 25) settingsRepo.set(sgKey, String(Math.min(25, sgBudget + 1)));
+    const sgPts = scoutRepo.getWeeklyPoints(userTeamId);
+    if (sgBudget < 70) settingsRepo.set(sgKey, String(Math.min(70, sgBudget + sgPts)));
 
     return {
       success: true, gameId, weekComplete,
@@ -501,6 +487,80 @@ processGameResult(game.away_team_id, homeDiff < 0, -homeDiff, game.season, game.
       WHERE p.team_id = ? AND p.injury_status != 'healthy'
       ORDER BY CASE p.injury_status WHEN 'ir' THEN 1 WHEN 'out' THEN 2 ELSE 3 END, p.overall_rating DESC
     `).all(teamId));
+
+  // ─── Game Plan IPC ────────────────────────────────────────────────────────
+
+  ipcMain.handle('set-gameplan', (_event: IpcEvent, payload: { season: number; week: number; offense: string; defense: string }) => {
+    settingsRepo.set(`gameplan_${payload.season}_${payload.week}`, JSON.stringify({ offense: payload.offense, defense: payload.defense }));
+    return { success: true };
+  });
+
+  ipcMain.handle('get-gameplan', (_event: IpcEvent, payload: { season: number; week: number }) => {
+    const raw = settingsRepo.get(`gameplan_${payload.season}_${payload.week}`);
+    return raw ? JSON.parse(raw) : { offense: 'balanced', defense: 'base' };
+  });
+
+  ipcMain.handle('scout-opponent', (_event: IpcEvent, payload: { opponentTeamId: number; season: number; week: number }) => {
+    const { opponentTeamId, season, week } = payload;
+    const team = db.prepare('SELECT city, name FROM teams WHERE id = ?').get(opponentTeamId) as any;
+    const scheme = db.prepare('SELECT offense_scheme, defense_scheme FROM team_schemes WHERE team_id = ?').get(opponentTeamId) as any;
+    const topPlayers = db.prepare(`
+      SELECT first_name, last_name, position, overall_rating, dev_trait
+      FROM players WHERE team_id = ? AND roster_status = 'active'
+      ORDER BY overall_rating DESC LIMIT 5
+    `).all(opponentTeamId) as any[];
+
+    const recentStats = db.prepare(`
+      SELECT SUM(s.rush_attempts) as rush_att, SUM(s.pass_attempts) as pass_att
+      FROM stats s
+      JOIN games g ON s.game_id = g.id
+      WHERE g.season = ? AND (g.home_team_id = ? OR g.away_team_id = ?)
+        AND s.team_id = ? AND g.week < ?
+      ORDER BY g.week DESC LIMIT 3
+    `).get(season, opponentTeamId, opponentTeamId, opponentTeamId, week) as any;
+
+    let tendency = 'Balanced attack — no clear offensive tendency.';
+    if (recentStats?.rush_att && recentStats?.pass_att) {
+      const total = recentStats.rush_att + recentStats.pass_att;
+      const rushRate = recentStats.rush_att / total;
+      if (rushRate >= 0.55) tendency = `Heavy run team — ${Math.round(rushRate * 100)}% rush rate last 3 weeks.`;
+      else if (rushRate <= 0.38) tendency = `Pass-heavy offense — ${Math.round((1 - rushRate) * 100)}% pass rate last 3 weeks.`;
+    }
+
+    settingsRepo.set(`scouted_opponent_${season}_${week}`, '1');
+    return { team, scheme, topPlayers, tendency };
+  });
+
+  ipcMain.handle('is-opponent-scouted', (_event: IpcEvent, payload: { season: number; week: number }) =>
+    settingsRepo.get(`scouted_opponent_${payload.season}_${payload.week}`) === '1');
+
+  // ─── Scout Management IPC ─────────────────────────────────────────────────
+
+  ipcMain.handle('get-scouts', (_event: IpcEvent, teamId: number) =>
+    scoutRepo.getByTeam(teamId));
+
+  ipcMain.handle('get-available-scouts', () =>
+    scoutRepo.getAvailable());
+
+  ipcMain.handle('hire-scout', (_event: IpcEvent, payload: { teamId: number; scoutId: number }) => {
+    const { teamId, scoutId } = payload;
+    const scout = scoutRepo.getById(scoutId);
+    if (!scout) return { success: false, reason: 'Scout not found.' };
+    if (scout.team_id !== null) return { success: false, reason: 'Scout is already on a staff.' };
+    scoutRepo.assignToTeam(scoutId, teamId);
+    return { success: true };
+  });
+
+  ipcMain.handle('fire-scout', (_event: IpcEvent, scoutId: number) => {
+    const scout = scoutRepo.getById(scoutId);
+    if (!scout) return { success: false, reason: 'Scout not found.' };
+    if (scout.team_id === null) return { success: false, reason: 'Scout is already a free agent.' };
+    scoutRepo.release(scoutId);
+    return { success: true };
+  });
+
+  ipcMain.handle('get-weekly-scout-pts', (_event: IpcEvent, teamId: number) =>
+    scoutRepo.getWeeklyPoints(teamId));
 
   ipcMain.handle('get-ps-promotion-alerts', (_event: IpcEvent, teamId: number) =>
     playerRepo.getPSPromotionAlerts(teamId));
