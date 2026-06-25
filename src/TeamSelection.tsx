@@ -47,7 +47,7 @@ export default function TeamSelection({ onSelect }: Props) {
       overflowY: 'auto',
     }}>
       <div style={{ marginBottom: 28, textAlign: 'center' }}>
-        <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: 6, color: '#4FC3F7' }}>GRIDIRON DYNASTY</div>
+        <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: 6, color: '#4FC3F7' }}>SIDELINE TO SIDELINE FOOTBALL</div>
         <div style={{ fontSize: 13, color: T.textSecondary, marginBottom: 8 }}>Choose Your Franchise</div>
         <div style={{ fontSize: 12, color: T.textMuted }}>You'll manage this team throughout the dynasty</div>
       </div>
