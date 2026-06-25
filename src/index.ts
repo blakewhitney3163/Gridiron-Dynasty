@@ -19,6 +19,7 @@ import { balanceRosters } from './helpers/balanceRosters';
 import { registerImportHandlers } from './handlers/importHandlers';
 import { registerCoachingHandlers } from './handlers/coachingHandlers';
 import { generateAllCoachingStaff } from './services/CoachingService';
+import { generateAllScouts } from './services/ScoutingService';
 import { registerSchemeHandlers, seedTeamSchemes } from './handlers/schemeHandlers';
 import { registerInjuryHandlers } from './handlers/injuryHandlers';
 import { registerChemistryHandlers } from './handlers/chemistryHandlers';
@@ -129,6 +130,9 @@ function bootstrapDatabase(isNew: boolean): void {
 
   const schemeCount = (db.prepare('SELECT COUNT(*) as cnt FROM team_schemes').get() as any)?.cnt ?? 0;
   if (schemeCount === 0) seedTeamSchemes();
+
+    const scoutCount = (db.prepare('SELECT COUNT(*) as cnt FROM scouts').get() as any)?.cnt ?? 0;
+  if (scoutCount === 0) generateAllScouts();
 }
 
 // ─── App Window ───────────────────────────────────────────────────────────────
