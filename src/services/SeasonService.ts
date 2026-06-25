@@ -16,28 +16,73 @@ function isHOFEligible(position: string, career: any): boolean {
 }
 
 export function openFreeAgency(userTeamId: number): { newFas: number; cpuResigns: number } {
- const season = getCurrentSeason();
- const key = `fa_open_${season}`;
- const already = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as any;
- if (already) return { newFas: 0, cpuResigns: 0 };
+  const season = getCurrentSeason();
+  const key = `fa_open_${season}`;
+  const already = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as any;
+  if (already) return { newFas: 0, cpuResigns: 0 };
 
- cpuRosterCuts(userTeamId);
- const { resigned: cpuResigns } = cpuResignAttempts(userTeamId);
+  // Snapshot notable CPU active players before cuts
+  const notableBefore = new Map(
+    (db.prepare(`
+      SELECT p.id, p.first_name || ' ' || p.last_name as name,
+             p.position, p.overall_rating, p.team_id,
+             t.city || ' ' || t.name as team_name
+      FROM players p
+      JOIN teams t ON t.id = p.team_id
+      WHERE p.team_id != ? AND p.overall_rating >= 74
+        AND p.roster_status = 'active' AND p.is_free_agent = 0
+    `).all(userTeamId) as any[]).map(p => [p.id, p])
+  );
 
- contractRepo.decrementYears();
- let newFas = 0;
- db.transaction(() => {
- for (const { player_id } of db.prepare(
- 'SELECT player_id FROM contracts WHERE years_remaining <= 0'
- ).all() as any[]) {
- contractRepo.delete(player_id);
- playerRepo.releaseToFA(player_id);
- newFas++;
- }
- })();
+  cpuRosterCuts(userTeamId);
 
- db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, '1')").run(key);
- return { newFas, cpuResigns };
+  // Log notable CPU releases (OVR >= 75)
+  for (const [id, p] of notableBefore) {
+    if (p.overall_rating < 75) continue;
+    const now = db.prepare('SELECT is_free_agent FROM players WHERE id = ?').get(id) as any;
+    if (now?.is_free_agent === 1) {
+      logNewsEvent({
+        eventType: 'release', category: 'transactions',
+        headline: `${p.name} Released`,
+        detail: `${p.position} · ${p.overall_rating} OVR — cut by ${p.team_name}. Now a free agent.`,
+        playerId: id, season,
+      });
+    }
+  }
+
+  const { resigned: cpuResigns } = cpuResignAttempts(userTeamId);
+
+  // Log notable CPU re-signings (OVR >= 80, still on same team, confirmed new deal)
+  for (const [id, p] of notableBefore) {
+    if (p.overall_rating < 80) continue;
+    const now = db.prepare('SELECT is_free_agent, team_id FROM players WHERE id = ?').get(id) as any;
+    if (now?.is_free_agent === 0 && now?.team_id === p.team_id) {
+      const contract = db.prepare('SELECT years_remaining, annual_salary FROM contracts WHERE player_id = ?').get(id) as any;
+      if (contract && contract.years_remaining >= 2) {
+        logNewsEvent({
+          eventType: 'cpu_signing', category: 'transactions',
+          headline: `${p.name} Re-Signs`,
+          detail: `${p.position} · ${p.overall_rating} OVR — returns to ${p.team_name} on a new deal ($${contract.annual_salary?.toFixed(1)}M/yr).`,
+          playerId: id, teamId: p.team_id, season,
+        });
+      }
+    }
+  }
+
+  contractRepo.decrementYears();
+  let newFas = 0;
+  db.transaction(() => {
+    for (const { player_id } of db.prepare(
+      'SELECT player_id FROM contracts WHERE years_remaining <= 0'
+    ).all() as any[]) {
+      contractRepo.delete(player_id);
+      playerRepo.releaseToFA(player_id);
+      newFas++;
+    }
+  })();
+
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, '1')").run(key);
+  return { newFas, cpuResigns };
 }
 
 export async function advanceSeason(): Promise<AdvanceSeasonResult> {
