@@ -81,8 +81,8 @@ describe('signFreeAgentAcceptChance', () => {
   });
 
   it('age 33–35 adds +0.15 bonus', () => {
-    const base   = signFreeAgentAcceptChance(8.5, 10, 28, 'Normal', 0.5, 8); // 0.90
-    const older  = signFreeAgentAcceptChance(8.5, 10, 34, 'Normal', 0.5, 8); // 0.90 + 0.15
+    const base   = signFreeAgentAcceptChance(7.0, 10, 28, 'Normal', 0.5, 8); // 0.60
+    const older  = signFreeAgentAcceptChance(7.0, 10, 34, 'Normal', 0.5, 8); // 0.60 + 0.15
     expect(older).toBeCloseTo(base + 0.15, 5);
   });
 
@@ -105,10 +105,11 @@ describe('signFreeAgentAcceptChance', () => {
   });
 
   it('winning team (65%+ winPct, 4+ games) adds +0.08', () => {
-    const base    = signFreeAgentAcceptChance(7.0, 10, 28, 'Normal', 0.60, 10);
-    const noBonus = signFreeAgentAcceptChance(7.0, 10, 28, 'Normal', 0.60,  3); // < 4 games
+    const base    = signFreeAgentAcceptChance(7.0, 10, 28, 'Normal', 0.66, 10);
+    const noBonus = signFreeAgentAcceptChance(7.0, 10, 28, 'Normal', 0.66,  3);
     expect(base).toBeCloseTo(noBonus + 0.08, 5);
   });
+
 
   it('chance is always clamped to [0, 1]', () => {
     // Age bonus on a 1.0 base shouldn't exceed 1.0
@@ -160,7 +161,7 @@ describe('cpuTeamType', () => {
   });
 
   it('Seller: low winPct + old roster', () => {
-    expect(cpuTeamType(0.30, 14, 77, 28.5)).toBe('Seller');
+    expect(cpuTeamType(0.30, 14, 74, 28.5)).toBe('Seller');
   });
 
   it('Rebuilding: low winPct + low OVR', () => {
