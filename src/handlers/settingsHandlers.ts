@@ -50,6 +50,9 @@ export function registerSettingsHandlers(): void {
     db.prepare('DELETE FROM draft_prospects').run();
     db.prepare('DELETE FROM career_stats_history').run();
     db.prepare('DELETE FROM player_milestones').run();
+    db.prepare('DELETE FROM injury_history').run();
+    db.prepare('DELETE FROM dead_cap_entries').run();
+    db.prepare('DELETE FROM chemistry_events').run();
     db.prepare('DELETE FROM hall_of_fame').run();
     db.prepare('DELETE FROM news_events').run();
     db.prepare('DELETE FROM players').run();
@@ -75,6 +78,9 @@ export function registerSettingsHandlers(): void {
     db.prepare('DELETE FROM draft_prospects').run();
     db.prepare('DELETE FROM career_stats_history').run();
     db.prepare('DELETE FROM player_milestones').run();
+    db.prepare('DELETE FROM injury_history').run();
+    db.prepare('DELETE FROM dead_cap_entries').run();
+    db.prepare('DELETE FROM chemistry_events').run();
     db.prepare('DELETE FROM hall_of_fame').run();
     db.prepare('DELETE FROM news_events').run();
     db.prepare('DELETE FROM players').run();
@@ -135,7 +141,6 @@ export function registerSettingsHandlers(): void {
         const newOvr = Math.max(50, p.overall_rating - drop);
         db.prepare('UPDATE players SET overall_rating = ? WHERE id = ?').run(newOvr, p.id);
       }
-      // Target ~$32M cap space
       scaleSalariesToTarget(getSalaryCap() - 32);
 
     } else if (template === 'contender') {
@@ -148,7 +153,6 @@ export function registerSettingsHandlers(): void {
         const newOvr = Math.max(55, p.overall_rating - drop);
         db.prepare('UPDATE players SET overall_rating = ? WHERE id = ?').run(newOvr, p.id);
       }
-      // Target ~$15M cap space
       scaleSalariesToTarget(getSalaryCap() - 15);
 
     } else if (template === 'dynasty') {
@@ -160,7 +164,6 @@ export function registerSettingsHandlers(): void {
         const newOvr = Math.min(99, p.overall_rating + boost);
         db.prepare('UPDATE players SET overall_rating = ? WHERE id = ?').run(newOvr, p.id);
       }
-      // Target ~$8M cap space (tight cap for a dynasty squad)
       scaleSalariesToTarget(getSalaryCap() - 8);
     }
 
