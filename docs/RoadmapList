@@ -38,7 +38,7 @@ DONE - Preset Dynasty Templates — fictional franchise starter kits selectable 
 ================================================================================
 GAMEPLAY DEPTH — OOTP-Tier Features
 ================================================================================
-Features that would bring the game to a competitive level with top sports sims.
+Features that bring the game to a competitive level with top sports sims.
 
 ROSTER / PLAYER MANAGEMENT
 ────────────────────────────────────────────────────────────────────────────────
@@ -46,27 +46,109 @@ ROSTER / PLAYER MANAGEMENT
  that improve draft prospect accuracy over time. Builds directly on the existing
  combine measurables and in-season scouting budget system.
 
+[DONE June 26, 2026] Rookie Contracts — slotted 4-year deals auto-generated at
+ draft time based on round/pick number. First-round picks flagged for 5th-year
+ option (pick up or decline in OffseasonTab). Rookie deal and 5th-year option
+ badges displayed in SalariesTab and OffseasonTab. Schema v20 adds is_rookie_deal,
+ fifth_year_option_eligible, fifth_year_option_picked_up on contracts.
+ IPCs: pick-up-fifth-year-option, decline-fifth-year-option.
+
+[DONE June 26, 2026] Player Holdouts & Trade Demands — players with low morale
+ in final contract years may enter holdout (holdout_status) or demand a trade
+ (trade_demand). Triggered in checkHoldoutsAndDemands() at season advance.
+ User resolves via OffseasonTab: Pay Up (grant raise), Wait It Out (-5 morale),
+ or Trade Request. Schema v20 adds holdout_status, holdout_weeks, trade_demand
+ to players. IPCs: get-holdout-players, resolve-holdout.
+
 SIMULATION & SCHEDULE
 ────────────────────────────────────────────────────────────────────────────────
+[DONE June 26, 2026] Game-by-Game Playoff Simulation — Playoffs.tsx rewritten
+ to support individual game simulation. "Start Playoffs" creates Wild Card
+ matchups as pending (is_simulated=0) games. Each pending game shows a "Sim"
+ or "▶ Play" button (user's game highlighted). Simulating a game auto-creates
+ the next round's matchups when all games in the round are done. "Simulate All
+ Remaining" loops through all pending rounds. Seeds stored in settings and
+ used to reconstruct bracket positions. Backward-compatible with bulk sim from
+ Home tab. New IPCs: init-playoffs, get-playoff-state, simulate-playoff-game.
+ Duplicate handler conflict in seasonHandlers.ts fixed (broken PlayoffService
+ stubs removed).
+
 Multi-Season Batch Simulation — "Sim N seasons" with a progress bar. Deferred —
  not a priority for current development phase.
 
+Preseason Games — 2–4 preseason games before the regular season to evaluate
+ depth chart and practice squad before Week 1. Pending.
+
 LEAGUE & FINANCIALS
 ────────────────────────────────────────────────────────────────────────────────
-DONE - Financial System Beyond Cap — team_finances table (schema v18): market_size
- (large/medium/small), stadium_capacity, season_revenue, owner_budget. 32 teams
- seeded with differentiated market data (8 large, 16 medium, 8 small market).
- FinancesTab component (src/franchise/FinancesTab.tsx) wired as 8th tab in
- Franchise nav: market size badge, stadium capacity, season revenue, owner
- budget progress bar, league-wide market table. IPCs: get-team-finances,
+[DONE June 25, 2026] Financial System Beyond Cap — team_finances table (schema
+ v18): market_size, stadium_capacity, season_revenue, owner_budget. 32 teams
+ seeded with differentiated market data (8 large / 16 medium / 8 small).
+ FinancesTab.tsx component built and wired. IPCs: get-team-finances,
  get-all-team-finances.
+
+[DONE June 26, 2026] Dynamic Revenue & Attendance — season_revenue recalculated
+ each offseason in recalculateTeamFinances() within SeasonService. Revenue
+ scales with market_size, win percentage, and attendance_rate. attendance_rate
+ column added in schema v20 and displayed in FinancesTab with a grade tile.
+ Large-market teams benefit more from winning; small-market teams are more
+ attendance-stable. IPC: get-team-finances.
+
+[DONE June 26, 2026] CPU GM Personalities — gm_personality column on teams
+ (schema v20) with values: aggressive, conservative, balanced, rebuilder,
+ win_now. Seeded randomly across all 32 teams at v20 migration. ContractService
+ applies personality multipliers to CPU FA bidding and resign negotiations.
+ Displayed in FinancesTab as a badge with personality description. IPC:
+ get-all-gm-personalities.
+
+[DONE June 26, 2026] Random League Events — LeagueEventsService.ts defines 10
+ narrative events that fire at 45% chance each offseason. Events affect
+ attendance_rate, revenue, draft class strength, or are purely narrative.
+ Recent events displayed in LeagueOffice.tsx panel. IPC: get-recent-league-events.
+
+[DONE June 26, 2026] Draft Class Strength — per-position composite class ratings
+ generated and stored at draft class creation (settings key
+ class_strength_{season}). Displayed in Draft.tsx scouting season view as
+ position grid with Elite/Strong/Average/Weak/Poor labels. IPC:
+ get-draft-class-strength.
+
+[DONE June 26, 2026] In-Draft Trading — "🔄 Trade Pick" button during draft day.
+ User selects a pick to offer, a CPU team, and the CPU's pick they want.
+ calcPickTradeValue() evaluates round + season with small random noise.
+ Accepted/declined response shown inline. Round pick slots refresh on accept.
+ IPC: propose-draft-trade.
+
+Stadium Upgrades — spend owner budget to increase stadium capacity and
+ base revenue over multiple seasons, tying the financial system into a
+ long-term investment loop. Pending.
+
+================================================================================
+NEXT OOTP-TIER FEATURES (queued)
+================================================================================
+
+[ ] Coaching Development — coaches improve overall_rating year over year
+    based on team performance; coordinators develop into HC candidates over time.
+
+[ ] Preseason Games — 2–4 preseason games before Week 1 to evaluate depth
+    chart placement and practice squad development.
+
+[ ] Stadium Upgrades — spend owner budget to increase stadium_capacity and
+    base revenue; ties Finances tab into a long-term investment loop.
+
+[ ] Player Goals & Contract Demands — individual players demand starter roles,
+    specific salary figures, or particular teams based on morale + OVR beyond
+    the existing holdout flag system.
+
+[ ] Trade Deadline Ticker — CPU-vs-CPU trades shown as a live news-style
+    ticker around the trade deadline, making the world feel active.
+
+[ ] Multi-Season Batch Sim — "Sim N seasons" with a progress bar for
+    fast-forwarding dynasties. Low priority until core OOTP loop is polished.
 
 ================================================================================
 PRE-STEAM TECHNICAL CHECKLIST
 ================================================================================
 Everything required before the app is ready for Steam distribution.
-Steam distributes through the Steam client so Windows code signing is not
-required. macOS Gatekeeper signing is also deferred — Windows-first release.
 
 ────────────────────────────────────────────────────────────────────────────────
 BLOCKING — App cannot ship without these
@@ -91,12 +173,6 @@ BLOCKING — App cannot ship without these
     - This must pass cleanly before any build is submitted to Steam
 
 [DONE June 24, 2026] App Icon (.ico and .icns)
-    - assets/icon.svg designed with GD branding and orange accent
-    - assets/icon.ico generated (multi-size: 16–256px) via to-ico
-    - assets/icon.icns generated for macOS via png2icons
-    - assets/icon.png (1024×1024 source) committed to repo
-    - forge.config.ts icon: './assets/icon' wired in packagerConfig
-    - scripts/generate-icons.js added for regenerating icons from SVG source
 
 ────────────────────────────────────────────────────────────────────────────────
 HIGH PRIORITY — Will hurt reviews or crash reports if shipped as-is
@@ -171,6 +247,25 @@ MAINTENANCE
 ================================================================================
 COMPLETED ITEMS
 ================================================================================
+
+[DONE June 26, 2026] Game-by-Game Playoff Simulation — Playoffs.tsx rewritten
+ with individual game simulate buttons; "Start Playoffs" creates pending Wild
+ Card games; each round auto-creates next round on completion; "Simulate All
+ Remaining" bulk option available. Duplicate IPC handler conflict in
+ seasonHandlers.ts fixed. New IPCs: init-playoffs, get-playoff-state,
+ simulate-playoff-game. get-playoffs added to simHandlers.ts for Home.tsx display.
+
+[DONE June 26, 2026] OOTP Feature Set (schema v20) — six features:
+ (1) Rookie Contracts with slotted salary scale + 5th-year option for R1 picks;
+ (2) Holdouts & Trade Demands triggered by morale + contract status at season
+ advance, resolved via OffseasonTab; (3) CPU GM Personalities (aggressive /
+ conservative / balanced / rebuilder / win_now) affecting FA bidding and trade
+ logic; (4) Dynamic Revenue & Attendance recalculated each offseason based on
+ market size and win percentage; (5) Draft Class Strength per-position ratings
+ displayed in Draft.tsx scouting panel; (6) Random League Events (45%/season,
+ 10 predefined events) displayed in LeagueOffice.tsx; plus in-draft pick trading
+ modal in Draft.tsx. Schema v20 adds 7 new columns across contracts, players,
+ and team_finances tables.
 
 [DONE June 26, 2026] League Customization — OFFICE tab (LeagueOffice.tsx) added
  to League view. Three panels: Salary Cap (dynamic cap stored in settings,
@@ -348,7 +443,6 @@ COMPLETED ITEMS
 [DONE June 20, 2026] Multiple Incoming CPU Trade Offers
 [DONE June 20, 2026] CPU Trade Frequency Reduction
 [DONE June 20, 2026] Franchise & League Records
-[DONE June 20, 2026] Trade Balance Fix
 [DONE June 19, 2026] LB Depth Chart Split (MLB / OLB)
 [DONE June 19, 2026] Full Player Stat Editability (14 attribute sliders)
 [DONE June 19, 2026] Dev Trait Ratio Rebalanced
