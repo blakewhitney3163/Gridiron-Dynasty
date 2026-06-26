@@ -17,9 +17,10 @@ const SavePicker   = lazy(() => import('./SavePicker'));
 const MeetTheTeam  = lazy(() => import('./MeetTheTeam'));
 const PlayerEditor = lazy(() => import('./PlayerEditor'));
 const TeamEditor = lazy(() => import('./TeamEditor'));
+const TemplateSelect = lazy(() => import('./TemplateSelect'));
 
 type Tab = 'home' | 'myteam' | 'league' | 'trades' | 'draft' | 'news' | 'import' | 'editor' | 'teameditor';
-type Screen = 'main-menu' | 'loading' | 'custom-setup' | 'save-picker' | 'team-select' | 'setup' | 'meet-team' | 'game';
+type Screen = 'main-menu' | 'loading' | 'custom-setup' | 'save-picker' | 'team-select' | 'template-select' | 'setup' | 'meet-team' | 'game';
 
 interface SetupStep  { label: string; done: boolean; }
 type ImportStatus    = 'idle' | 'running' | 'done' | 'error';
@@ -64,10 +65,10 @@ export default function App() {
   const [dynastyName, setDynastyName]   = useState('');
   const [dynastyNameFocused, setDynastyNameFocused] = useState(false);
   const [importTeams,   setImportTeams]   = useState<ImportState>(IDLE);
-    const [importPlayers, setImportPlayers] = useState<ImportState>(IDLE);
-    const [dynastyMode, setDynastyMode] = useState<'franchise' | 'commissioner'>('franchise');
+  const [importPlayers, setImportPlayers] = useState<ImportState>(IDLE);
+  const [dynastyMode, setDynastyMode] = useState<'franchise' | 'commissioner'>('franchise');
 
-    const {
+  const {
     currentSeason, setCurrentSeason,
     userTeam, setUserTeam,
     playoffsComplete, setPlayoffsComplete,
@@ -108,11 +109,11 @@ export default function App() {
     const name = dynastyName.trim() || 'Dynasty';
     setScreen('loading');
     await window.api.openSave(name);
-        await window.api.setCommissionerMode(dynastyMode === 'commissioner');
+    await window.api.setCommissionerMode(dynastyMode === 'commissioner');
     setCommissionerMode(dynastyMode === 'commissioner');
     await window.api.resetSave();
     if (mode === 'standard') {
-      setScreen('team-select');
+      setScreen('template-select');
     } else {
       setImportTeams(IDLE);
       setImportPlayers(IDLE);
@@ -128,7 +129,7 @@ export default function App() {
       window.api.getOffseasonStatus(),
       window.api.getDifficulty(),
     ]);
-        const commMode = await window.api.getCommissionerMode();
+    const commMode = await window.api.getCommissionerMode();
     setCommissionerMode(commMode === true);
     await window.api.generateOwnerGoals();
     setCurrentSeason(season);
@@ -181,7 +182,7 @@ export default function App() {
     }
   };
 
-    const tabs = [
+  const tabs = [
     ...BASE_TABS,
     { id: 'draft' as Tab, label: playoffsComplete ? '⚡ Draft' : '📋 Draft' },
     ...(commissionerMode ? [
@@ -195,7 +196,7 @@ export default function App() {
   const tabStyle  = (id: Tab): React.CSSProperties => activeTab === id ? {} : { display: 'none' };
 
   // ── Main Menu ─────────────────────────────────────────────────────────────
-    if (screen === 'main-menu') {
+  if (screen === 'main-menu') {
     return (
       <div style={{
         minHeight: '100vh', display: 'flex', flexDirection: 'column',
@@ -297,6 +298,7 @@ export default function App() {
       </div>
     );
   }
+
   if (screen === 'loading') {
     return (
       <div style={{
@@ -343,7 +345,7 @@ export default function App() {
           />
         </div>
         <button
-          onClick={() => setScreen('team-select')}
+          onClick={() => setScreen('template-select')}
           style={{
             padding: '12px 28px', fontSize: 12, fontWeight: 'bold', letterSpacing: 2,
             background: '#FF8740', color: '#000', border: 'none', borderRadius: 4,
@@ -366,6 +368,17 @@ export default function App() {
     return (
       <Suspense fallback={<TabFallback />}>
         <SavePicker onBack={() => setScreen('main-menu')} onSaveLoaded={handleSaveLoaded} />
+      </Suspense>
+    );
+  }
+
+  if (screen === 'template-select') {
+    return (
+      <Suspense fallback={<div style={{ color: '#555', padding: 40 }}>Loading...</div>}>
+        <TemplateSelect
+          onSelect={() => setScreen('team-select')}
+          onBack={() => setScreen('custom-setup')}
+        />
       </Suspense>
     );
   }
@@ -537,7 +550,7 @@ export default function App() {
               <Trades />
             </div>
           )}
-                    {isMounted('news') && (
+          {isMounted('news') && (
             <div style={tabStyle('news')}>
               <NewsFeed />
             </div>
