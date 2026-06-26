@@ -168,6 +168,30 @@ const RESIGN_PREMIUM: Record<string, number> = {
   Contender: 1.10, Buyer: 1.02, Neutral: 0.95, Seller: 0.87, Rebuilding: 0.78,
 };
 
+export function demoteToPS(playerId: number, teamId: number): SuccessResult {
+  if (playerRepo.getPSCount(teamId) >= MAX_PRACTICE_SQUAD)
+    return { success: false, reason: `Practice squad is full (${MAX_PRACTICE_SQUAD}/${MAX_PRACTICE_SQUAD}). No open PS slots.` };
+
+  const player = playerRepo.getById(playerId);
+  if (!player || player.roster_status !== 'active')
+    return { success: false, reason: 'Player not on active roster.' };
+
+  playerRepo.updateRosterStatus(playerId, 'practice_squad');
+  contractRepo.update(playerId, 1, 1.165, 0, 0);
+  return { success: true };
+}
+
+export function cutFromPS(playerId: number): SuccessResult {
+  const player = playerRepo.getById(playerId);
+  if (!player || player.roster_status !== 'practice_squad')
+    return { success: false, reason: 'Player not on practice squad.' };
+
+  db.prepare('UPDATE players SET team_id = NULL, roster_status = ?, is_free_agent = 1 WHERE id = ?')
+    .run('free_agent', playerId);
+  db.prepare('DELETE FROM contracts WHERE player_id = ?').run(playerId);
+  return { success: true };
+}
+
 function getCpuTeamType(teamId: number): string {
   const season = getCurrentSeason();
   const record = gameRepo.getTeamRecord(teamId, season);
