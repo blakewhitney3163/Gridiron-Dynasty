@@ -647,7 +647,7 @@ const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: 
           </>
         )}
 
-        {teamChemistry && (
+                {teamChemistry && hasSchedule && (
   <ChemistryPanel chemistry={teamChemistry.chemistry} events={teamChemistry.events} archetypes={teamChemistry.archetypes ?? []} />
 )}
 
