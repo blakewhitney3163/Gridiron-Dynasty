@@ -292,46 +292,112 @@ export function registerStatsHandlers(): void {
 
   // ─── Season / Team Stats ───────────────────────────────────────────────────
 
-  ipcMain.handle('get-stats', (_event: any, season: number) =>
-    db.prepare(`
-      SELECT p.id, p.first_name, p.last_name, p.position, p.position_label,
+  ipcMain.handle('get-stats', (_event: any, season: number) => {
+    const rows = db.prepare(`
+      SELECT p.id AS player_id,
+             (p.first_name || ' ' || p.last_name) AS player_name,
+             p.position, p.position_label,
              p.overall_rating, p.age, p.dev_trait,
              t.name AS team_name, t.city AS team_city, t.id AS team_id,
              COUNT(DISTINCT s.game_id) AS games,
-             SUM(s.pass_yards) AS pass_yards, SUM(s.pass_tds) AS pass_tds,
-             SUM(s.interceptions) AS interceptions,
-             SUM(s.completions) AS completions, SUM(s.pass_attempts) AS pass_attempts,
-             SUM(s.rush_yards) AS rush_yards, SUM(s.rush_tds) AS rush_tds,
-             SUM(s.rush_attempts) AS rush_attempts,
-             SUM(s.rec_yards) AS rec_yards, SUM(s.rec_tds) AS rec_tds,
-             SUM(s.receptions) AS receptions,
-             SUM(s.tackles) AS tackles, SUM(s.assisted_tackles) AS assisted_tackles,
-             SUM(s.sacks) AS sacks, SUM(s.def_interceptions) AS def_interceptions,
-             SUM(s.pass_deflections) AS pass_deflections,
-             SUM(s.forced_fumbles) AS forced_fumbles
+             SUM(s.pass_yards)        AS pass_yards,
+             SUM(s.pass_tds)          AS pass_tds,
+             SUM(s.interceptions)     AS interceptions,
+             SUM(s.completions)       AS completions,
+             SUM(s.pass_attempts)     AS pass_attempts,
+             SUM(s.rush_yards)        AS rush_yards,
+             SUM(s.rush_tds)          AS rush_tds,
+             SUM(s.rush_attempts)     AS rush_attempts,
+             SUM(s.targets)           AS targets,
+             SUM(s.receptions)        AS receptions,
+             SUM(s.rec_yards)         AS rec_yards,
+             SUM(s.rec_tds)           AS rec_tds,
+             SUM(s.tackles)           AS tackles,
+             SUM(s.assisted_tackles)  AS assisted_tackles,
+             SUM(s.sacks)             AS sacks,
+             SUM(s.tfl)               AS tfl,
+             SUM(s.forced_fumbles)    AS forced_fumbles,
+             SUM(s.fumble_recoveries) AS fumble_recoveries,
+             SUM(s.def_interceptions) AS def_interceptions,
+             SUM(s.pass_deflections)  AS pass_deflections,
+             SUM(s.def_tds)           AS def_tds,
+             SUM(s.fg_made)           AS fg_made,
+             SUM(s.fg_att)            AS fg_att,
+             SUM(s.xp_made)           AS xp_made,
+             SUM(s.xp_att)            AS xp_att
       FROM stats s
       JOIN players p ON s.player_id = p.id
       LEFT JOIN teams t ON p.team_id = t.id
       WHERE s.season = ? AND s.is_playoff = 0
       GROUP BY p.id
-      ORDER BY pass_yards DESC
-    `).all(season)
-  );
+    `).all(season) as any[];
+
+    const passing = [...rows]
+      .filter(p => (p.pass_attempts ?? 0) > 0)
+      .sort((a, b) => (b.pass_yards ?? 0) - (a.pass_yards ?? 0));
+    const rushing = [...rows]
+      .filter(p => (p.rush_attempts ?? 0) > 0)
+      .sort((a, b) => (b.rush_yards ?? 0) - (a.rush_yards ?? 0));
+    const receiving = [...rows]
+      .filter(p => (p.targets ?? 0) > 0)
+      .sort((a, b) => (b.rec_yards ?? 0) - (a.rec_yards ?? 0));
+    const tackles = [...rows]
+      .filter(p => ((p.tackles ?? 0) + (p.assisted_tackles ?? 0)) > 0)
+      .sort((a, b) => ((b.tackles ?? 0) + (b.assisted_tackles ?? 0)) - ((a.tackles ?? 0) + (a.assisted_tackles ?? 0)));
+    const sacks = [...rows]
+      .filter(p => (p.sacks ?? 0) > 0)
+      .sort((a, b) => (b.sacks ?? 0) - (a.sacks ?? 0));
+    const defInterceptions = [...rows]
+      .filter(p => (p.def_interceptions ?? 0) > 0 || (p.pass_deflections ?? 0) > 0)
+      .sort((a, b) => (b.def_interceptions ?? 0) - (a.def_interceptions ?? 0));
+    const kickers = [...rows]
+      .filter(p => (p.fg_att ?? 0) > 0)
+      .sort((a, b) => (b.fg_made ?? 0) - (a.fg_made ?? 0));
+
+    return { passing, rushing, receiving, tackles, sacks, defInterceptions, kickers };
+  });
 
   ipcMain.handle('get-team-stats', (_event: any, teamId: number, season?: number) => {
     const { getCurrentSeason } = require('../helpers/getCurrentSeason');
     const s = season ?? getCurrentSeason();
     return db.prepare(`
-      SELECT
-        SUM(s.pass_yards) AS pass_yards, SUM(s.pass_tds) AS pass_tds,
-        SUM(s.rush_yards) AS rush_yards, SUM(s.rush_tds) AS rush_tds,
-        SUM(s.rec_yards) AS rec_yards, SUM(s.rec_tds) AS rec_tds,
-        SUM(s.tackles) AS tackles, SUM(s.sacks) AS sacks,
-        SUM(s.def_interceptions) AS def_interceptions,
-        COUNT(DISTINCT s.game_id) AS games
+      SELECT p.id AS player_id,
+             (p.first_name || ' ' || p.last_name) AS player_name,
+             p.position, p.position_label,
+             p.overall_rating, p.age, p.dev_trait,
+             t.name AS team_name, t.city AS team_city, t.id AS team_id,
+             COUNT(DISTINCT s.game_id) AS games,
+             SUM(s.pass_yards)        AS pass_yards,
+             SUM(s.pass_tds)          AS pass_tds,
+             SUM(s.interceptions)     AS interceptions,
+             SUM(s.completions)       AS completions,
+             SUM(s.pass_attempts)     AS pass_attempts,
+             SUM(s.rush_yards)        AS rush_yards,
+             SUM(s.rush_tds)          AS rush_tds,
+             SUM(s.rush_attempts)     AS rush_attempts,
+             SUM(s.targets)           AS targets,
+             SUM(s.receptions)        AS receptions,
+             SUM(s.rec_yards)         AS rec_yards,
+             SUM(s.rec_tds)           AS rec_tds,
+             SUM(s.tackles)           AS tackles,
+             SUM(s.assisted_tackles)  AS assisted_tackles,
+             SUM(s.sacks)             AS sacks,
+             SUM(s.tfl)               AS tfl,
+             SUM(s.forced_fumbles)    AS forced_fumbles,
+             SUM(s.fumble_recoveries) AS fumble_recoveries,
+             SUM(s.def_interceptions) AS def_interceptions,
+             SUM(s.pass_deflections)  AS pass_deflections,
+             SUM(s.def_tds)           AS def_tds,
+             SUM(s.fg_made)           AS fg_made,
+             SUM(s.fg_att)            AS fg_att,
+             SUM(s.xp_made)           AS xp_made,
+             SUM(s.xp_att)            AS xp_att
       FROM stats s
+      JOIN players p ON s.player_id = p.id
+      LEFT JOIN teams t ON p.team_id = t.id
       WHERE s.team_id = ? AND s.season = ? AND s.is_playoff = 0
-    `).get(teamId, s);
+      GROUP BY p.id
+    `).all(teamId, s);
   });
 
   ipcMain.handle('get-team-season-stats', (_event: any, season?: number) => {
