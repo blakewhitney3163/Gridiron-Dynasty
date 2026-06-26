@@ -53,13 +53,13 @@ export default function Trades({ isActive }: Props) {
       window.api.getCurrentWeek(),
       window.api.getTradeablePicks(userTeam.id),
       window.api.getCpuTradeOffer(),
-    ]).then(([allTeams, roster, n, wi, picks, offers]: any[]) => {
+        ]).then(([allTeams, roster, n, wi, picks, offers]: any[]) => {
       setTeams(allTeams.filter((t: Team) => t.id !== userTeam.id));
-      setMyRoster(roster); setNeeds(n); setWeekInfo(wi);
+      setMyRoster(roster); setNeeds(Array.isArray(n) ? n : []); setWeekInfo(wi);
       setMyPicks(picks);
       setCpuOffers(Array.isArray(offers) ? offers : offers ? [offers] : []);
       setOfferIndex(0);
-    });
+    }).catch(() => {});
   }, [userTeam?.id]);
 
   useEffect(() => {
