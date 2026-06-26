@@ -3,7 +3,7 @@ import { SALARY_CAP, MAX_ACTIVE_ROSTER, MAX_PRACTICE_SQUAD } from '../constants'
 import { CapSummary, RosterSpots } from '../types';
 import { settingsRepo, playerRepo, contractRepo } from '../repositories';
 import {
-  calcFairMarket, signFreeAgent, resignPlayer, promoteFromPS, cpuFASigning,
+  calcFairMarket, signFreeAgent, resignPlayer, promoteFromPS, demoteToPS, cutFromPS, cpuFASigning,
   signFreeAgentToPS, extendPlayer, restructurePlayer, releasePlayer,
   getOffseasonStatus, applyFranchiseTag, removeFranchiseTag, acceptCounterOffer,
 } from '../services/ContractService';
@@ -66,6 +66,16 @@ export function registerContractHandlers(): void {
     const teamId = settingsRepo.getUserTeamId();
     if (!teamId) return { success: false, reason: 'No franchise selected.' };
     return promoteFromPS(playerId, teamId);
+  });
+
+    ipcMain.handle('demote-to-ps', (_event: IpcEvent, playerId: number) => {
+    const teamId = settingsRepo.getUserTeamId();
+    if (!teamId) return { success: false, reason: 'No franchise selected.' };
+    return demoteToPS(playerId, teamId);
+  });
+
+  ipcMain.handle('cut-from-ps', (_event: IpcEvent, playerId: number) => {
+    return cutFromPS(playerId);
   });
 
   ipcMain.handle('sign-free-agent', (_event: IpcEvent, { playerId, years, salary }: { playerId: number; years: number; salary: number }) => {
