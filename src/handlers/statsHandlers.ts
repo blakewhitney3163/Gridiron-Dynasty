@@ -249,4 +249,119 @@ export function registerStatsHandlers(): void {
 
   ipcMain.handle('get-franchise-records', (_event: any, teamId: number) =>
     getFranchiseRecords(teamId));
+
+  // ─── Roster ────────────────────────────────────────────────────────────────
+
+  ipcMain.handle('get-roster', (_event: any, teamId: number) =>
+    db.prepare(`
+      SELECT p.*, c.annual_salary, c.years_remaining, c.years_total,
+             c.is_rookie_contract, c.has_fifth_year_option
+      FROM players p
+      LEFT JOIN contracts c ON c.player_id = p.id
+      WHERE p.team_id = ? AND p.roster_status = 'active'
+      ORDER BY p.overall_rating DESC
+    `).all(teamId)
+  );
+
+  // ─── Player Stats ──────────────────────────────────────────────────────────
+
+  ipcMain.handle('get-player-stats', (_event: any, playerId: number) =>
+    db.prepare(`
+      SELECT s.*, g.week, g.season, g.is_playoff,
+             ot.city || ' ' || ot.name AS opponent_name
+      FROM stats s
+      JOIN games g ON s.game_id = g.id
+      LEFT JOIN teams ot ON ot.id = CASE
+        WHEN g.home_team_id = s.team_id THEN g.away_team_id
+        ELSE g.home_team_id
+      END
+      WHERE s.player_id = ?
+      ORDER BY g.season DESC, g.week DESC
+    `).all(playerId)
+  );
+
+  ipcMain.handle('get-player-career-stats', (_event: any, playerId: number) =>
+    db.prepare(`
+      SELECT h.*, t.city || ' ' || t.name AS team_name
+      FROM career_stats_history h
+      LEFT JOIN teams t ON t.id = h.team_id
+      WHERE h.player_id = ?
+      ORDER BY h.season DESC
+    `).all(playerId)
+  );
+
+  // ─── Season / Team Stats ───────────────────────────────────────────────────
+
+  ipcMain.handle('get-stats', (_event: any, season: number) =>
+    db.prepare(`
+      SELECT p.id, p.first_name, p.last_name, p.position, p.position_label,
+             p.overall_rating, p.age, p.dev_trait,
+             t.name AS team_name, t.city AS team_city, t.id AS team_id,
+             COUNT(DISTINCT s.game_id) AS games,
+             SUM(s.pass_yards) AS pass_yards, SUM(s.pass_tds) AS pass_tds,
+             SUM(s.interceptions) AS interceptions,
+             SUM(s.completions) AS completions, SUM(s.pass_attempts) AS pass_attempts,
+             SUM(s.rush_yards) AS rush_yards, SUM(s.rush_tds) AS rush_tds,
+             SUM(s.rush_attempts) AS rush_attempts,
+             SUM(s.rec_yards) AS rec_yards, SUM(s.rec_tds) AS rec_tds,
+             SUM(s.receptions) AS receptions,
+             SUM(s.tackles) AS tackles, SUM(s.assisted_tackles) AS assisted_tackles,
+             SUM(s.sacks) AS sacks, SUM(s.def_interceptions) AS def_interceptions,
+             SUM(s.pass_deflections) AS pass_deflections,
+             SUM(s.forced_fumbles) AS forced_fumbles
+      FROM stats s
+      JOIN players p ON s.player_id = p.id
+      LEFT JOIN teams t ON p.team_id = t.id
+      WHERE s.season = ? AND s.is_playoff = 0
+      GROUP BY p.id
+      ORDER BY pass_yards DESC
+    `).all(season)
+  );
+
+  ipcMain.handle('get-team-stats', (_event: any, teamId: number, season?: number) => {
+    const { getCurrentSeason } = require('../helpers/getCurrentSeason');
+    const s = season ?? getCurrentSeason();
+    return db.prepare(`
+      SELECT
+        SUM(s.pass_yards) AS pass_yards, SUM(s.pass_tds) AS pass_tds,
+        SUM(s.rush_yards) AS rush_yards, SUM(s.rush_tds) AS rush_tds,
+        SUM(s.rec_yards) AS rec_yards, SUM(s.rec_tds) AS rec_tds,
+        SUM(s.tackles) AS tackles, SUM(s.sacks) AS sacks,
+        SUM(s.def_interceptions) AS def_interceptions,
+        COUNT(DISTINCT s.game_id) AS games
+      FROM stats s
+      WHERE s.team_id = ? AND s.season = ? AND s.is_playoff = 0
+    `).get(teamId, s);
+  });
+
+  ipcMain.handle('get-team-season-stats', (_event: any, season?: number) => {
+    const { getCurrentSeason } = require('../helpers/getCurrentSeason');
+    const s = season ?? getCurrentSeason();
+    return db.prepare(`
+      SELECT t.id, t.city, t.name, t.abbreviation,
+        SUM(s.pass_yards) AS pass_yards, SUM(s.pass_tds) AS pass_tds,
+        SUM(s.rush_yards) AS rush_yards, SUM(s.rush_tds) AS rush_tds,
+        SUM(s.tackles) AS tackles, SUM(s.sacks) AS sacks,
+        SUM(s.def_interceptions) AS def_interceptions,
+        COUNT(DISTINCT s.game_id) AS games
+      FROM teams t
+      LEFT JOIN stats s ON s.team_id = t.id AND s.season = ? AND s.is_playoff = 0
+      GROUP BY t.id
+      ORDER BY t.conference, t.division, t.city
+    `).all(s);
+  });
+
+  // ─── Hall of Fame ──────────────────────────────────────────────────────────
+
+  ipcMain.handle('get-hall-of-fame', () =>
+    db.prepare(`
+      SELECT h.*, p.first_name, p.last_name, p.position, p.overall_rating,
+             t.city || ' ' || t.name AS team_name
+      FROM hall_of_fame h
+      LEFT JOIN players p ON p.id = h.player_id
+      LEFT JOIN teams t ON t.id = p.team_id
+      ORDER BY h.inducted_season DESC
+    `).all()
+  );
+  
 }
