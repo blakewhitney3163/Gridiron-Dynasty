@@ -35,22 +35,23 @@ interface TierDef {
   label: string;
   color: string;
   bg: string;
-  maxSalary: number;
+  maxSalary: number; // in $M
   ovrRange: string;
 }
 
+// All salary values in $M to match DB storage
 const TIERS: Record<BudgetTier, TierDef> = {
-  bronze: { label: 'Bronze', color: '#CD7F32', bg: '#1a0f00', maxSalary: 2_000_000, ovrRange: '60–74' },
-  silver: { label: 'Silver', color: '#C0C0C0', bg: '#111111', maxSalary: 4_000_000, ovrRange: '70–82' },
-  gold:   { label: 'Gold',   color: '#FFD700', bg: '#1a1200', maxSalary: 12_000_000, ovrRange: '78–99' },
+  bronze: { label: 'Bronze', color: '#CD7F32', bg: '#1a0f00', maxSalary: 2.0,  ovrRange: '60–74' },
+  silver: { label: 'Silver', color: '#C0C0C0', bg: '#111111', maxSalary: 4.0,  ovrRange: '70–82' },
+  gold:   { label: 'Gold',   color: '#FFD700', bg: '#1a1200', maxSalary: 12.0, ovrRange: '78–99' },
 };
 
 const TEMPLATE_BUDGETS: Record<string, number> = {
-  rebuild:   8_000_000,
-  contender: 14_000_000,
-  dynasty:   20_000_000,
+  rebuild:   8.0,
+  contender: 14.0,
+  dynasty:   20.0,
 };
-const DEFAULT_BUDGET = 12_000_000;
+const DEFAULT_BUDGET = 12.0;
 
 const COACH_ROLES: Array<{ key: 'HC' | 'OC' | 'DC' | 'ST'; label: string; icon: string }> = [
   { key: 'HC', label: 'Head Coach',        icon: '🎯' },
@@ -71,10 +72,9 @@ const ovrColor = (v: number) =>
 const scoutOvrColor = (v: number) =>
   v >= 70 ? '#4caf50' : v >= 50 ? '#FF8740' : '#e57373';
 
-const fmtM = (n: number) =>
-  n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : `$${(n / 1_000).toFixed(0)}K`;
-
-const fmtScout = (n: number) => `$${n.toFixed(1)}M`;
+// Salary is stored in $M — just format directly
+const fmtM = (n: number) => `$${(n ?? 0).toFixed(1)}M`;
+const fmtScout = (n: number) => `$${(n ?? 0).toFixed(1)}M`;
 
 interface Props {
   teamId: number;
@@ -126,7 +126,7 @@ export default function PreSeasonStaffPanel({
   const getCoach = (role: 'HC' | 'OC' | 'DC' | 'ST') => staff.find(c => c.role === role) ?? null;
 
   const marketForRole = (role: 'HC' | 'OC' | 'DC' | 'ST') =>
-    available.filter(c => c.role === role && c.salary <= TIERS[tier].maxSalary).slice(0, 5);
+    available.filter(c => c.role === role && (c.salary ?? 0) <= TIERS[tier].maxSalary).slice(0, 5);
 
   const getDuration = (coachId: number) => pendingDuration[coachId] ?? 2;
 
@@ -139,10 +139,10 @@ export default function PreSeasonStaffPanel({
     let grant = 0;
     let msg = '';
     if (patience > 70) {
-      grant = (Math.floor(Math.random() * 3) + 4) * 1_000_000; // $4–6M
-      msg = `✓ The owner is confident in the direction — granted ${fmtM(grant)} in additional coaching budget.`;
+      grant = (Math.floor(Math.random() * 3) + 4); // $4–6M
+      msg = `✓ The owner is confident — granted ${fmtM(grant)} in additional coaching budget.`;
     } else if (patience >= 40) {
-      grant = (Math.floor(Math.random() * 2) + 2) * 1_000_000; // $2–3M
+      grant = (Math.floor(Math.random() * 2) + 2); // $2–3M
       msg = `✓ The owner approved a modest increase — granted ${fmtM(grant)} in additional coaching budget.`;
     } else {
       msg = `✗ The owner isn't willing to invest further right now. Improve results to unlock more budget.`;
@@ -152,7 +152,7 @@ export default function PreSeasonStaffPanel({
   };
 
   const handleHireCoach = async (coach: Coach) => {
-    if (!canAfford(coach.salary)) return;
+    if (!canAfford(coach.salary ?? 0)) return;
     setWorking(true);
     const yearsRemaining = getDuration(coach.id);
     await window.api.hireCoach({ teamId, coachId: coach.id, yearsRemaining });
@@ -242,7 +242,7 @@ export default function PreSeasonStaffPanel({
               background: 'none', border: '1px solid #2a1800',
               color: '#FF8740', letterSpacing: 0.5, width: '100%',
             }}>
-              💼 Request More Budget
+              Request More Budget
             </button>
           ) : (
             <div style={{
@@ -255,149 +255,106 @@ export default function PreSeasonStaffPanel({
         </div>
       </div>
 
-      {/* ── Hire Market Tier Filter ── */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 9, letterSpacing: 1.5, color: T.textMuted, textTransform: 'uppercase', marginBottom: 8 }}>
-          Hire Market Filter
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {(Object.entries(TIERS) as [BudgetTier, TierDef][]).map(([key, def]) => (
-            <button key={key} onClick={() => setTier(key)} style={{
-              flex: 1, padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
-              border: `1px solid ${tier === key ? def.color : T.borderFaint}`,
-              background: tier === key ? def.bg : T.bgCard,
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: def.color, marginBottom: 2 }}>{def.label}</div>
-              <div style={{ fontSize: 9, color: T.textMuted }}>OVR {def.ovrRange}</div>
-              <div style={{ fontSize: 8, color: T.textDim, marginTop: 2 }}>
-                {key === 'gold' ? 'Any salary' : `≤${fmtM(def.maxSalary)}/coach`}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Coaching Staff ── */}
-      <div style={{ fontSize: 9, letterSpacing: 1.5, color: T.textMuted, textTransform: 'uppercase', marginBottom: 8 }}>
-        Coaching Staff
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-        {COACH_ROLES.map(({ key, label, icon }) => {
-          const coach = getCoach(key);
-          const market = marketForRole(key);
-          const isExpanded = expandedRole === key;
-          const isExpired = coach && coach.years_remaining <= 0;
+      {/* ── Coach Slots ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+        {COACH_ROLES.map(({ key: role, label, icon }) => {
+          const coach = getCoach(role);
+          const isExpanded = expandedRole === role;
+          const market = marketForRole(role);
 
           return (
-            <div key={key} style={{
+            <div key={role} style={{
               background: T.bgCard,
-              border: `1px solid ${isExpired ? '#3a1a00' : isExpanded ? T.borderMid : T.borderFaint}`,
+              border: `1px solid ${isExpanded ? T.borderMid : T.borderFaint}`,
               borderRadius: 6, overflow: 'hidden',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
-                <span style={{ fontSize: 14, flexShrink: 0 }}>{icon}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 8, color: T.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>{label}</div>
+              {/* Slot header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
+                <span style={{ fontSize: 11 }}>{icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, color: T.textMuted, letterSpacing: 1 }}>{label}</div>
                   {coach ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 12, color: T.textPrimary, fontWeight: 600 }}>
-                        {coach.first_name} {coach.last_name}
-                      </span>
-                      <span style={{
-                        fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
-                        background: isExpired ? '#2a0a00' : coach.years_remaining === 1 ? '#1a1000' : '#0a1a0a',
-                        color: isExpired ? '#e57373' : coach.years_remaining === 1 ? '#FF8740' : '#4caf50',
-                        border: `1px solid ${isExpired ? '#3a1a00' : coach.years_remaining === 1 ? '#2a1800' : '#1a3a1a'}`,
-                      }}>
-                        {isExpired ? 'EXPIRED' : `${coach.years_remaining}yr`}
+                    <div style={{ fontSize: 12, color: T.textPrimary, fontWeight: 600 }}>
+                      {coach.first_name} {coach.last_name}
+                      <span style={{ fontSize: 10, color: T.textSecondary, marginLeft: 8 }}>
+                        OVR {coach.overall_rating} · {fmtM(coach.salary ?? 0)}/yr · {coach.years_remaining}yr
                       </span>
                     </div>
                   ) : (
-                    <div style={{ fontSize: 11, color: '#e57373', fontStyle: 'italic' }}>Vacant — hire a coach</div>
+                    <div style={{ fontSize: 11, color: '#444', fontStyle: 'italic' }}>Vacant</div>
                   )}
                 </div>
-
-                {coach && (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    {[
-                      { label: 'OVR', val: coach.overall_rating, color: ovrColor(coach.overall_rating) },
-                      { label: 'OFF', val: coach.offense_rating },
-                      { label: 'DEF', val: coach.defense_rating },
-                      { label: 'DEV', val: coach.development_rating },
-                    ].map(({ label: lbl, val, color }) => (
-                      <span key={lbl} style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 7, color: T.textDim }}>{lbl}</div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: color ?? T.textSecondary }}>{val}</div>
-                      </span>
-                    ))}
-                    <div style={{ fontSize: 10, color: T.textSecondary, fontFamily: 'monospace', marginLeft: 4 }}>
-                      {fmtM(coach.salary)}/yr
-                    </div>
-                  </div>
+                {coach ? (
+                  <button onClick={() => handleFireCoach(coach.id)} disabled={working} style={{
+                    fontSize: 9, color: '#e57373', background: 'none',
+                    border: '1px solid #3a1a1a', borderRadius: 3, padding: '3px 8px',
+                    cursor: working ? 'not-allowed' : 'pointer',
+                  }}>Fire</button>
+                ) : (
+                  <button
+                    onClick={() => setExpandedRole(isExpanded ? null : role)}
+                    style={{
+                      fontSize: 9, padding: '4px 12px', borderRadius: 3, cursor: 'pointer',
+                      background: isExpanded ? '#141414' : '#0a1a0a',
+                      border: `1px solid ${isExpanded ? '#333' : '#1a3a1a'}`,
+                      color: isExpanded ? '#555' : '#4caf50',
+                    }}
+                  >
+                    {isExpanded ? '▲ Close' : '+ Hire'}
+                  </button>
                 )}
-
-                <button
-                  onClick={() => {
-                    if (coach) {
-                      handleFireCoach(coach.id);
-                    } else {
-                      setExpandedRole(isExpanded ? null : key);
-                    }
-                  }}
-                  disabled={working}
-                  style={{
-                    fontSize: 9, padding: '4px 10px', borderRadius: 4, cursor: working ? 'not-allowed' : 'pointer',
-                    background: coach ? '#1a0a0a' : '#0a1a0a',
-                    border: `1px solid ${coach ? '#3a1a1a' : '#1a3a1a'}`,
-                    color: coach ? '#e57373' : '#4caf50',
-                    flexShrink: 0,
-                  }}
-                >
-                  {coach ? 'Release' : isExpanded ? '▲ Close' : '+ Hire'}
-                </button>
               </div>
 
-              {/* Hire market expansion */}
-              {!coach && isExpanded && (
-                <div style={{ borderTop: `1px solid ${T.borderFaint}`, background: T.bgPage, padding: '10px 12px' }}>
+              {/* Hire panel — only shown when expanded */}
+              {isExpanded && (
+                <div style={{ borderTop: `1px solid ${T.borderFaint}`, padding: '12px 14px', background: T.bgPage }}>
+                  {/* Tier filter — shown only inside hire panel */}
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 8, letterSpacing: 1.5, color: T.textMuted, textTransform: 'uppercase', marginBottom: 6 }}>
+                      Market Filter
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {(Object.entries(TIERS) as [BudgetTier, TierDef][]).map(([key, def]) => (
+                        <button key={key} onClick={() => setTier(key)} style={{
+                          flex: 1, padding: '6px 8px', borderRadius: 5, cursor: 'pointer',
+                          border: `1px solid ${tier === key ? def.color : T.borderFaint}`,
+                          background: tier === key ? def.bg : T.bgCard,
+                          color: tier === key ? def.color : T.textDim,
+                          fontSize: 10, fontWeight: tier === key ? 700 : 400,
+                        }}>
+                          {def.label}
+                          <div style={{ fontSize: 8, color: T.textDim, marginTop: 2 }}>{def.ovrRange}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {market.length === 0 ? (
-                    <div style={{ fontSize: 10, color: T.textDim, fontStyle: 'italic' }}>
-                      No {TIERS[tier].label} coaches available for this role.
+                    <div style={{ fontSize: 11, color: T.textDim, padding: '8px 0' }}>
+                      No {label}s available in this tier.
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {market.map(c => {
-                        const affordable = canAfford(c.salary);
+                        const affordable = canAfford(c.salary ?? 0);
                         return (
                           <div key={c.id} style={{
-                            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 4,
-                            background: T.bgCard,
-                            border: `1px solid ${affordable ? T.borderFaint : '#3a1a1a'}`,
-                            opacity: affordable ? 1 : 0.5,
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '8px 10px', borderRadius: 4,
+                            background: T.bgCard, border: `1px solid ${T.borderFaint}`,
                           }}>
+                            <div style={{ fontSize: 16, fontWeight: 800, color: ovrColor(c.overall_rating), minWidth: 28 }}>
+                              {c.overall_rating}
+                            </div>
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 11, color: affordable ? T.textPrimary : T.textDim, fontWeight: 600 }}>
-                                {c.first_name} {c.last_name}
-                              </div>
-                              <div style={{ display: 'flex', gap: 8, marginTop: 3 }}>
-                                {[
-                                  { label: 'OVR', val: c.overall_rating, color: ovrColor(c.overall_rating) },
-                                  { label: 'OFF', val: c.offense_rating },
-                                  { label: 'DEF', val: c.defense_rating },
-                                  { label: 'DEV', val: c.development_rating },
-                                  { label: 'EXP', val: c.experience },
-                                ].map(({ label: lbl, val, color }) => (
-                                  <span key={lbl} style={{ fontSize: 9, color: T.textSecondary, fontFamily: 'monospace' }}>
-                                    <span style={{ color: T.textDim }}>{lbl} </span>
-                                    <span style={{ color: color ?? T.textSecondary, fontWeight: 700 }}>{val}</span>
-                                  </span>
-                                ))}
+                              <div style={{ fontSize: 11, color: T.textPrimary }}>{c.first_name} {c.last_name}</div>
+                              <div style={{ fontSize: 9, color: T.textMuted }}>
+                                OFF {c.offense_rating} · DEF {c.defense_rating} · DEV {c.development_rating} · {c.experience}yr exp
                               </div>
                             </div>
                             <div style={{ fontSize: 11, color: T.textSecondary, fontFamily: 'monospace', minWidth: 50, textAlign: 'right' }}>
-                              {fmtM(c.salary)}/yr
+                              {fmtM(c.salary ?? 0)}/yr
                             </div>
-
                             {/* Contract duration selector */}
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 60 }}>
                               <div style={{ fontSize: 8, color: T.textMuted }}>Contract</div>
@@ -418,7 +375,6 @@ export default function PreSeasonStaffPanel({
                               </div>
                               <div style={{ fontSize: 7, color: T.textDim }}>yr{getDuration(c.id) > 1 ? 's' : ''}</div>
                             </div>
-
                             <button
                               onClick={() => handleHireCoach(c)}
                               disabled={working || !affordable}
@@ -585,4 +541,3 @@ export default function PreSeasonStaffPanel({
     </div>
   );
 }
-
