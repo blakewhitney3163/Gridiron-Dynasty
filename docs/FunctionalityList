@@ -82,6 +82,8 @@ CODE ARCHITECTURE
   stats.ts, coaching.ts, injuries.ts, chemistry.ts, gameprep.ts
   core.ts exposes: setSetting(key, value), getSetting(key),
   applyDynastyTemplate(), getTeamFinances(teamId), getAllTeamFinances()
+  stats.ts exposes: getGamePlayLog(gameId) — fetches play-by-play log for
+  a completed game; fetched in parallel with box score via Promise.all
   preload.ts merges all via spread into a single contextBridge exposure.
 - IPC handlers split by domain in src/handlers/:
   simHandlers, seasonHandlers, settingsHandlers, statsHandlers,
@@ -149,6 +151,14 @@ HOME TAB
 - Simulate one week or one game at a time
 - "Advance Week" label is context-aware (Weeks 1–16 / End Regular Season)
 - Clickable games → box score modal (Q1–Q4, weather, stat leaders)
+- Box score includes Play-by-Play section below stat lines:
+  - Entries grouped by quarter (QUARTER 1 through QUARTER 4)
+  - Each entry: color-coded type badge (TD green / FG orange / TO red /
+    bigplay gray), description text, running score homeScore–awayScore
+  - Only rendered when play log is non-empty (games simulated before v17
+    migration will show stats only)
+  - Fetched in parallel with box score via Promise.all on handleBoxScore;
+    cleared on close
 - Incoming CPU Trade Offer card (TradeOfferCard.tsx)
 - Franchise Health Monitor panel: OVR tiles, positional group grades
 - Locker Room Chemistry Panel (ChemistryPanel.tsx):
@@ -156,7 +166,6 @@ HOME TAB
   - Labels: Toxic / Shaky / Neutral / Good / Strong / Electric
   - Sim effect label (−4 penalty → +3 boost)
   - ROSTER PERSONALITIES row: color-coded archetype chips with counts
-    (Team Leader, Vocal Leader, Hard Worker, Coachable, Selfish, Troublemaker)
   - Recent chemistry events with week and +/- delta
 - Owner Goals Panel (OwnerGoalsPanel.tsx): patience meter, goal list
 - Live standings snapshot (top AFC / NFC teams in sidebar)
@@ -260,21 +269,18 @@ Coaching Staff Tab:
 Schemes Tab:
   - 5 offensive + 5 defensive schemes; live fit rating; modifier in sim
 
-Cap Summary: total/used/available cap; dead cap per-player breakdown
+Finances Tab (src/franchise/FinancesTab.tsx):
+  - market_size badge: Large Market (gold) / Mid Market (orange) / Small
+    Market (blue)
+  - Stadium Capacity tile
+  - Season Revenue tile (in $M)
+  - Owner Budget progress bar: season_revenue / owner_budget with narrative
+    text by market size (large = FA appeal, small = draft-reliant)
+  - League Market Breakdown grid: all 32 teams with market size and revenue
+  - Data source: team_finances table (schema v18)
+  - IPCs: get-team-finances, get-all-team-finances
 
-FINANCES TAB (src/franchise/FinancesTab.tsx) — built, nav wiring pending
-────────────────────────────────────────────────────────────────────────────────
-- market_size badge (Large Market / Mid Market / Small Market) with color coding
-  (gold / orange / blue)
-- Stadium Capacity tile
-- Season Revenue tile (in $M)
-- Owner Budget progress bar: season_revenue / owner_budget with narrative text
-  by market size (large market FA appeal, small market draft-reliant, etc.)
-- League Market Breakdown grid: all 32 teams with market size and revenue
-- Data source: team_finances table (schema v18)
-- IPCs: get-team-finances (single team), get-all-team-finances (all 32 teams)
-- Market size breakdown: 8 large / 16 medium / 8 small market teams seeded
-  from largest revenue ($380M) to smallest ($188M)
+Cap Summary: total/used/available cap; dead cap per-player breakdown
 
 TRADES TAB
 ────────────────────────────────────────────────────────────────────────────────
@@ -350,7 +356,8 @@ GAME SIMULATION ENGINE
 - Play-by-Play log: generatePlayLog() called after every game; PlayEntry fields:
   quarter (1–4), teamName, description (template phrase), type (td/fg/turnover/
   bigplay), homeScore, awayScore; stored in games.play_log TEXT column;
-  retrieved via get-game-play-log IPC; non-critical (failure silently skipped)
+  retrieved via get-game-play-log IPC; non-critical (failure silently skipped);
+  rendered in box score modal on Home tab, grouped by quarter
 - Game script: trailing teams pass more; leading teams run more
 - Overtime: TD wins outright; FG gives opponent a chance; no ties
 - Weather: clear / rain / snow / wind with pass, rush, score multipliers
