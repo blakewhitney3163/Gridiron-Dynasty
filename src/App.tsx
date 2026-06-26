@@ -1,6 +1,7 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { T } from './theme';
 import { useGameStore, UserTeam } from './store/gameStore';
+import TutorialModal, { hasTutorialBeenSeen } from './tutorial/TutorialModal';
 
 declare const window: any;
 
@@ -16,10 +17,10 @@ const SavePicker   = lazy(() => import('./SavePicker'));
 const MeetTheTeam  = lazy(() => import('./MeetTheTeam'));
 const PlayerEditor = lazy(() => import('./PlayerEditor'));
 const TeamEditor = lazy(() => import('./TeamEditor'));
-const TemplateSelect = lazy(() => import('./TemplateSelect'));
 
 type Tab = 'home' | 'myteam' | 'league' | 'trades' | 'draft' | 'news' | 'import' | 'editor' | 'teameditor';
-type Screen = 'main-menu' | 'loading' | 'custom-setup' | 'save-picker' | 'team-select' | 'template-select' | 'setup' | 'meet-team' | 'game';
+type Screen = 'main-menu' | 'loading' | 'custom-setup' | 'save-picker' | 'team-select' | 'setup' | 'meet-team' | 'game';
+
 interface SetupStep  { label: string; done: boolean; }
 type ImportStatus    = 'idle' | 'running' | 'done' | 'error';
 interface ImportState { status: ImportStatus; message: string; }
@@ -58,6 +59,8 @@ export default function App() {
   const [mountedTabs, setMountedTabs]   = useState<Set<Tab>>(new Set(['home']));
   const [setupSteps, setSetupSteps]     = useState<SetupStep[]>([]);
   const [setupComplete, setSetupComplete] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [isNewGame, setIsNewGame]       = useState(false);
   const [dynastyName, setDynastyName]   = useState('');
   const [dynastyNameFocused, setDynastyNameFocused] = useState(false);
   const [importTeams,   setImportTeams]   = useState<ImportState>(IDLE);
@@ -87,10 +90,9 @@ export default function App() {
     });
   };
 
-    const runSetup = async () => {
+  const runSetup = async () => {
     markStep('Finalizing dynasty setup...', false);
     await window.api.balanceRosters();
-    await window.api.applyDynastyTemplate?.();
     await new Promise(r => setTimeout(r, 800));
     markStep('Finalizing dynasty setup...', true);
     setSetupComplete(true);
@@ -147,6 +149,7 @@ export default function App() {
     setSetupComplete(false);
     setMountedTabs(new Set(['home']));
     setActiveTab('home');
+    setIsNewGame(true);
     await window.api.setUserTeam(team.id);
     runSetup();
   };
@@ -181,7 +184,7 @@ export default function App() {
     const tabs = [
     ...BASE_TABS,
     { id: 'draft' as Tab, label: playoffsComplete ? '⚡ Draft' : '📋 Draft' },
-        ...(commissionerMode ? [
+    ...(commissionerMode ? [
       { id: 'import' as Tab, label: 'Import' },
       { id: 'editor' as Tab, label: '✏ Editor' },
       { id: 'teameditor' as Tab, label: '🏟 Teams' },
@@ -201,9 +204,6 @@ export default function App() {
       }}>
 
         {/* Title */}
-                <div style={{ fontSize: 10, color: '#4FC3F7', letterSpacing: 3, marginBottom: 8 }}>
-          WELCOME, COACH
-        </div>
         <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 3, marginBottom: 8 }}>
           DYNASTY SIMULATOR
         </div>
@@ -298,25 +298,15 @@ export default function App() {
     );
   }
   if (screen === 'loading') {
-  return (
-    <div style={{
-      height: '100vh', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      background: '#0a0a0f', gap: 16,
-    }}>
-      <div style={{ fontSize: 11, letterSpacing: 4, color: '#FF8740', fontFamily: 'monospace', textTransform: 'uppercase' }}>
-        Sideline to Sideline
-      </div>
-      <div style={{ fontSize: 28, fontWeight: 900, color: '#fff', letterSpacing: 2, fontFamily: 'monospace' }}>
-        FOOTBALL
-      </div>
-      <div style={{ width: 40, height: 2, background: '#FF8740', borderRadius: 1, margin: '4px 0' }} />
-      <div style={{ fontSize: 10, color: '#444', letterSpacing: 3, fontFamily: 'monospace' }}>
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: T.bgPage, fontFamily: 'monospace', color: T.textDim, fontSize: 13, letterSpacing: 2,
+      }}>
         LOADING...
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   if (screen === 'custom-setup') {
     return (
@@ -353,7 +343,7 @@ export default function App() {
           />
         </div>
         <button
-          onClick={() => setScreen('template-select')}
+          onClick={() => setScreen('team-select')}
           style={{
             padding: '12px 28px', fontSize: 12, fontWeight: 'bold', letterSpacing: 2,
             background: '#FF8740', color: '#000', border: 'none', borderRadius: 4,
@@ -416,24 +406,19 @@ export default function App() {
     );
   }
 
-  if (screen === 'template-select') {
-    return (
-      <Suspense fallback={<div style={{ color: '#555', padding: 40 }}>Loading...</div>}>
-        <TemplateSelect
-          onSelect={() => setScreen('team-select')}
-          onBack={() => setScreen('custom-setup')}
-        />
-      </Suspense>
-    );
-  }
-  
   if (screen === 'meet-team') {
     return (
       <Suspense fallback={<TabFallback />}>
         <MeetTheTeam
           team={userTeam as any}
           season={currentSeason}
-          onStart={() => setScreen('game')}
+          onStart={() => {
+            setScreen('game');
+            if (isNewGame && !hasTutorialBeenSeen()) {
+              setShowTutorial(true);
+              setIsNewGame(false);
+            }
+          }}
         />
       </Suspense>
     );
@@ -483,6 +468,18 @@ export default function App() {
           style={{ fontSize: 10, color: T.textDim, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
         >
           switch save
+        </button>
+        <button
+          onClick={() => setShowTutorial(true)}
+          title="Open tutorial"
+          style={{
+            fontSize: 11, color: T.textMuted, background: 'none',
+            border: `1px solid ${T.borderFaint}`, borderRadius: '50%',
+            width: 22, height: 22, cursor: 'pointer', lineHeight: 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          ?
         </button>
         <span style={{ fontSize: 9, color: T.textDim, letterSpacing: 1 }}>DIFFICULTY</span>
         {(['easy', 'normal', 'hard'] as const).map(d => (
@@ -571,6 +568,10 @@ export default function App() {
           )}
         </Suspense>
       </div>
+
+      {showTutorial && (
+        <TutorialModal onClose={() => setShowTutorial(false)} />
+      )}
     </div>
   );
 }
