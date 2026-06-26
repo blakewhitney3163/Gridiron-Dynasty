@@ -69,4 +69,16 @@ export const seasonApi = {
 
   generateOwnerGoals: () =>
     ipcRenderer.invoke('generate-owner-goals'),
+
+  getLeagueOfficeData: () =>
+    ipcRenderer.invoke('get-league-office-data'),
+
+  castExpansionVote: (vote: 'for' | 'against') =>
+    ipcRenderer.invoke('cast-expansion-vote', vote),
+
+  getRelocationCities: () =>
+    ipcRenderer.invoke('get-relocation-cities'),
+
+  requestUserRelocation: (payload: { city: string; name: string; abbreviation: string; marketSize: string }) =>
+    ipcRenderer.invoke('request-user-relocation', payload),
 };
