@@ -11,112 +11,130 @@ export function hasTutorialBeenSeen(): boolean {
   return localStorage.getItem(STORAGE_KEY) === '1';
 }
 
-interface Step {
-  icon: string;
-  title: string;
-  body: string;
-  tag: string;
-  tagColor: string;
+export function hasTipBeenSeen(key: string): boolean {
+  return localStorage.getItem(`s2s_tip_${key}`) === '1';
 }
 
-const STEPS: Step[] = [
+export function markTipSeen(key: string) {
+  localStorage.setItem(`s2s_tip_${key}`, '1');
+}
+
+// ── Contextual tab tips ──────────────────────────────────────────────────────
+
+const TAB_TIPS: Record<string, { icon: string; title: string; body: string; color: string }> = {
+  home: {
+    icon: '🏠', color: '#4FC3F7',
+    title: 'Home Tab',
+    body: "This is your command center. Simulate your weekly game, check the injury report, monitor team chemistry, and advance the season from here.",
+  },
+  myteam: {
+    icon: '👥', color: '#FF8740',
+    title: 'My Team',
+    body: "Manage your 53-man roster and 16-man practice squad. View player profiles, handle contracts, place injured players on IR, and promote PS players when ready.",
+  },
+  trades: {
+    icon: '🤝', color: '#4FC3F7',
+    title: 'Trades',
+    body: "Propose deals with any of the 32 CPU teams. Set your trade status to Buyer or Seller to shape how often offers come in. CPU teams will also send you deals on the Home tab.",
+  },
+  draft: {
+    icon: '📋', color: '#FF8740',
+    title: 'The Draft',
+    body: "280 prospects are generated each offseason. Use scouting points earned during the season to reveal their true ratings on the Prospect Board before draft day.",
+  },
+  league: {
+    icon: '📊', color: '#4FC3F7',
+    title: 'League',
+    body: "Check standings, browse team rosters, view the full schedule, track leaderboards, and follow the playoff bracket — all here.",
+  },
+  news: {
+    icon: '📰', color: '#4caf50',
+    title: 'News Center',
+    body: "Every contract signing, trade, injury, milestone, and award gets logged here. Filter by category or season to track your dynasty's history.",
+  },
+};
+
+interface ContextualTipProps {
+  tipKey: string;
+}
+
+export function ContextualTip({ tipKey }: ContextualTipProps) {
+  const tip = TAB_TIPS[tipKey];
+  const [visible, setVisible] = useState(() => !!tip && !hasTipBeenSeen(tipKey));
+
+  if (!tip || !visible) return null;
+
+  const dismiss = () => {
+    markTipSeen(tipKey);
+    setVisible(false);
+  };
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: 12,
+      margin: '12px 16px 0',
+      padding: '12px 16px',
+      background: '#0a1a2a',
+      border: `1px solid ${tip.color}44`,
+      borderLeft: `3px solid ${tip.color}`,
+      borderRadius: 6,
+      fontFamily: 'monospace',
+    }}>
+      <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1.3 }}>{tip.icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: tip.color, letterSpacing: 1, marginBottom: 3 }}>
+          {tip.title.toUpperCase()}
+        </div>
+        <div style={{ fontSize: 11, color: T.textSecondary, lineHeight: 1.6 }}>
+          {tip.body}
+        </div>
+      </div>
+      <button
+        onClick={dismiss}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: T.textDim, fontSize: 14, lineHeight: 1,
+          flexShrink: 0, padding: '0 2px',
+        }}
+        title="Dismiss"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+// ── Welcome modal ────────────────────────────────────────────────────────────
+
+interface WelcomeStep {
+  icon: string;
+  tag: string;
+  tagColor: string;
+  title: string;
+  body: string;
+}
+
+const WELCOME_STEPS: WelcomeStep[] = [
   {
     icon: '🏈',
     tag: 'WELCOME',
     tagColor: '#FF8740',
     title: 'Welcome to Your Dynasty',
-    body: "You're the GM and head of operations for your franchise. Your job is to build a championship team through smart roster moves, coaching hires, and draft picks. This tour covers everything you need to know.",
+    body: "You're the GM and head of operations. Build a championship roster through smart trades, coaching hires, free agency, and the annual draft. Every decision is yours.",
   },
   {
-    icon: '🏠',
-    tag: 'HOME',
+    icon: '💡',
+    tag: 'TIPS',
     tagColor: '#4FC3F7',
-    title: 'The Home Screen',
-    body: "The Home tab is your command center each week. Your upcoming game appears here — sim it to see the result. The sidebar on the right shows standings, your record, and the controls to advance the season.",
-  },
-  {
-    icon: '▶',
-    tag: 'SIMULATING',
-    tagColor: '#4caf50',
-    title: 'Playing Through the Season',
-    body: "Hit Sim My Game to simulate your weekly matchup. After the result, click Advance Week to move to the next week. Repeat all 17 weeks, then the playoffs are simulated automatically.",
-  },
-  {
-    icon: '🏆',
-    tag: 'PLAYOFFS',
-    tagColor: '#FFD700',
-    title: 'Playoffs & Champions',
-    body: "After Week 17, the top 7 teams from each conference make the playoffs. Simulate the bracket from the Home screen. Win the championship to add a title to your dynasty's history.",
-  },
-  {
-    icon: '👥',
-    tag: 'MY TEAM',
-    tagColor: '#FF8740',
-    title: 'Managing Your Roster',
-    body: "The My Team tab is your roster hub. Your active roster holds 53 players. Cut underperformers, view player profiles with full stats and contract details, and keep an eye on injury reports.",
-  },
-  {
-    icon: '🎓',
-    tag: 'PRACTICE SQUAD',
-    tagColor: '#4FC3F7',
-    title: 'Practice Squad',
-    body: "Keep up to 16 developmental players on your Practice Squad at a reduced salary. Young PS players develop faster than active roster players. Promote them when they're ready to contribute.",
-  },
-  {
-    icon: '💰',
-    tag: 'SALARY CAP',
-    tagColor: '#e57373',
-    title: 'Managing the Cap',
-    body: "There's a hard salary cap every season. The Salaries tab shows your total cap hit, every player's contract, and a year-by-year schedule of future commitments. Going over the cap isn't allowed — plan ahead.",
-  },
-  {
-    icon: '✍️',
-    tag: 'FREE AGENTS',
-    tagColor: '#4caf50',
-    title: 'Free Agency',
-    body: "Need depth or a starter? Sign free agents from the FA pool — they're available year-round. CPU teams are also signing players, so don't sleep on high-value free agents. Free agency opens after the playoffs.",
-  },
-  {
-    icon: '🤝',
-    tag: 'TRADES',
-    tagColor: '#4FC3F7',
-    title: 'Making Trades',
-    body: "Trade players and draft picks with CPU teams from the Trades tab. CPU GMs will also send you incoming trade offers that appear on the Home screen. Your trade status (open/guarded/closed) affects how often you get offers.",
-  },
-  {
-    icon: '🎯',
-    tag: 'COACHING',
-    tagColor: '#FF8740',
-    title: 'Coaching Staff',
-    body: "Your Head Coach, Offensive/Defensive Coordinators, and Special Teams coach all affect game outcomes through their ratings. Contracts last 1–4 years — expired slots show up in the pre-season staff review.",
-  },
-  {
-    icon: '🔬',
-    tag: 'SCOUTING',
-    tagColor: '#4FC3F7',
-    title: 'Your Scouting Staff',
-    body: "Scouts generate weekly scouting points during the season. More scouting points = better intel on draft prospects, letting you reveal their true ratings before draft day. You can have up to 3 scouts.",
-  },
-  {
-    icon: '📋',
-    tag: 'DRAFT',
-    tagColor: '#FF8740',
-    title: 'The Annual Draft',
-    body: "Each offseason you draft from a pool of college prospects. Use scouting points during the season to evaluate players on the Prospect Board. Undrafted prospects become free agents — don't miss hidden gems.",
-  },
-  {
-    icon: '🏟',
-    tag: 'PRE-SEASON',
-    tagColor: '#4caf50',
-    title: 'Pre-Season Staff Review',
-    body: "Before each new season, you'll review your coaching and scouting staff. Hire replacements for expired contracts, pick contract lengths (1–4 years), then lock in your staff to generate the schedule and start the season.",
+    title: 'Tips Along the Way',
+    body: "As you explore each section for the first time, a short tip will appear at the top of the screen to guide you. Dismiss it when you're ready. Reopen this guide anytime with the ? button.",
   },
   {
     icon: '✅',
     tag: 'READY',
     tagColor: '#4caf50',
-    title: "You're Ready, Coach",
-    body: "That covers everything. Build your roster, manage the cap, make smart trades, develop young talent, and bring home a championship. You can reopen this guide anytime with the ? button in the top bar. Good luck!",
+    title: "You're Set, Coach",
+    body: "Start by reviewing your pre-season staff on the Home tab, then generate your schedule to kick off the season. Good luck — bring home a championship.",
   },
 ];
 
@@ -127,10 +145,10 @@ interface Props {
 export default function TutorialModal({ onClose }: Props) {
   const [step, setStep] = useState(0);
 
-  const current = STEPS[step];
+  const current = WELCOME_STEPS[step];
   const isFirst = step === 0;
-  const isLast = step === STEPS.length - 1;
-  const progress = ((step + 1) / STEPS.length) * 100;
+  const isLast  = step === WELCOME_STEPS.length - 1;
+  const progress = ((step + 1) / WELCOME_STEPS.length) * 100;
 
   const handleClose = () => {
     markTutorialSeen();
@@ -138,11 +156,8 @@ export default function TutorialModal({ onClose }: Props) {
   };
 
   const handleNext = () => {
-    if (isLast) {
-      handleClose();
-    } else {
-      setStep(s => s + 1);
-    }
+    if (isLast) handleClose();
+    else setStep(s => s + 1);
   };
 
   return (
@@ -156,7 +171,7 @@ export default function TutorialModal({ onClose }: Props) {
       }}
     >
       <div style={{
-        width: 480, background: T.bgPanel,
+        width: 460, background: T.bgPanel,
         border: `1px solid ${T.borderMid}`,
         borderRadius: 10, overflow: 'hidden',
         boxShadow: '0 24px 64px rgba(0,0,0,0.7)',
@@ -171,22 +186,20 @@ export default function TutorialModal({ onClose }: Props) {
           }} />
         </div>
 
-        {/* Body */}
         <div style={{ padding: '32px 36px 28px' }}>
 
-          {/* Tag + step counter */}
+          {/* Tag + counter */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <span style={{
               fontSize: 9, fontWeight: 700, letterSpacing: 2,
               color: current.tagColor,
               border: `1px solid ${current.tagColor}`,
               padding: '2px 8px', borderRadius: 3,
-              opacity: 0.9,
             }}>
               {current.tag}
             </span>
             <span style={{ fontSize: 9, color: T.textDim, letterSpacing: 1 }}>
-              {step + 1} of {STEPS.length}
+              {step + 1} of {WELCOME_STEPS.length}
             </span>
           </div>
 
@@ -198,13 +211,12 @@ export default function TutorialModal({ onClose }: Props) {
           {/* Title */}
           <div style={{
             fontSize: 20, fontWeight: 800, color: T.textPrimary,
-            textAlign: 'center', marginBottom: 14, lineHeight: 1.2,
-            letterSpacing: 0.5,
+            textAlign: 'center', marginBottom: 14, lineHeight: 1.2, letterSpacing: 0.5,
           }}>
             {current.title}
           </div>
 
-          {/* Body text */}
+          {/* Body */}
           <div style={{
             fontSize: 12, color: T.textSecondary, lineHeight: 1.7,
             textAlign: 'center', marginBottom: 28,
@@ -214,18 +226,13 @@ export default function TutorialModal({ onClose }: Props) {
 
           {/* Step dots */}
           <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginBottom: 28 }}>
-            {STEPS.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setStep(i)}
-                style={{
-                  width: i === step ? 20 : 8, height: 8,
-                  borderRadius: 4, border: 'none', cursor: 'pointer',
-                  background: i === step ? current.tagColor : i < step ? T.borderStrong : T.borderFaint,
-                  transition: 'all 0.2s ease',
-                  padding: 0,
-                }}
-              />
+            {WELCOME_STEPS.map((_, i) => (
+              <button key={i} onClick={() => setStep(i)} style={{
+                width: i === step ? 20 : 8, height: 8,
+                borderRadius: 4, border: 'none', cursor: 'pointer',
+                background: i === step ? current.tagColor : i < step ? T.borderStrong : T.borderFaint,
+                transition: 'all 0.2s ease', padding: 0,
+              }} />
             ))}
           </div>
 
@@ -245,29 +252,20 @@ export default function TutorialModal({ onClose }: Props) {
               ← Back
             </button>
 
-            <button
-              onClick={handleClose}
-              style={{
-                flex: 1, padding: '9px 0', borderRadius: 5, fontSize: 10,
-                background: 'none', border: 'none',
-                color: T.textDim, cursor: 'pointer',
-                letterSpacing: 1,
-              }}
-            >
-              Skip Tour
+            <button onClick={handleClose} style={{
+              flex: 1, padding: '9px 0', borderRadius: 5, fontSize: 10,
+              background: 'none', border: 'none', color: T.textDim, cursor: 'pointer', letterSpacing: 1,
+            }}>
+              Skip
             </button>
 
-            <button
-              onClick={handleNext}
-              style={{
-                padding: '9px 22px', borderRadius: 5, fontSize: 11,
-                fontWeight: 700, cursor: 'pointer',
-                background: isLast ? current.tagColor === '#4caf50' ? '#0a2a0a' : '#1a1000' : T.bgCard,
-                border: `1px solid ${current.tagColor}`,
-                color: current.tagColor,
-                letterSpacing: 0.5,
-              }}
-            >
+            <button onClick={handleNext} style={{
+              padding: '9px 22px', borderRadius: 5, fontSize: 11,
+              fontWeight: 700, cursor: 'pointer',
+              background: T.bgCard,
+              border: `1px solid ${current.tagColor}`,
+              color: current.tagColor, letterSpacing: 0.5,
+            }}>
               {isLast ? "Let's Go! →" : 'Next →'}
             </button>
           </div>
