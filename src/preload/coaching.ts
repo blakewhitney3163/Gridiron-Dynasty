@@ -7,11 +7,14 @@ export const coachingApi = {
   getAvailableCoaches: (role?: string) =>
     ipcRenderer.invoke('get-available-coaches', role),
 
-  hireCoach: (payload: { teamId: number; coachId: number }) =>
+  hireCoach: (payload: { teamId: number; coachId: number; yearsRemaining?: number }) =>
     ipcRenderer.invoke('hire-coach', payload),
 
   fireCoach: (coachId: number) =>
     ipcRenderer.invoke('fire-coach', coachId),
+
+  decrementCoachContracts: () =>
+    ipcRenderer.invoke('decrement-coach-contracts'),
 
   getTeamScheme: (teamId: number) =>
     ipcRenderer.invoke('get-team-scheme', teamId),
