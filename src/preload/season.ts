@@ -7,20 +7,17 @@ export const seasonApi = {
   getSeasons: () =>
     ipcRenderer.invoke('get-seasons'),
 
-  advanceSeason: () =>
-    ipcRenderer.invoke('advance-season'),
-
   getStandings: (season: number) =>
     ipcRenderer.invoke('get-standings', season),
 
   getDashboard: (season: number) =>
     ipcRenderer.invoke('get-dashboard', season),
 
-  generateSchedule: () =>
-    ipcRenderer.invoke('generate-schedule'),
-
   getSchedule: (season: number) =>
     ipcRenderer.invoke('get-schedule', season),
+
+  generateSchedule: () =>
+    ipcRenderer.invoke('generate-schedule'),
 
   getCurrentWeek: () =>
     ipcRenderer.invoke('get-current-week'),
@@ -31,7 +28,7 @@ export const seasonApi = {
   simulateWeek: (week: number) =>
     ipcRenderer.invoke('simulate-week', week),
 
-  simulateOneGame: (gameId: number) =>
+  simulateGame: (gameId: number) =>
     ipcRenderer.invoke('simulate-game', gameId),
 
   getGameBoxScore: (gameId: number) =>
@@ -87,4 +84,13 @@ export const seasonApi = {
 
   getAllGmPersonalities: () =>
     ipcRenderer.invoke('get-all-gm-personalities'),
+
+  initPlayoffs: (season?: number) =>
+    ipcRenderer.invoke('init-playoffs', season),
+
+  getPlayoffState: (season?: number) =>
+    ipcRenderer.invoke('get-playoff-state', season),
+
+  simulatePlayoffGame: (gameId: number) =>
+    ipcRenderer.invoke('simulate-playoff-game', gameId),
 };
