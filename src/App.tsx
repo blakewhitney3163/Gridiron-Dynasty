@@ -91,7 +91,7 @@ export default function App() {
     });
   };
 
-    const runSetup = async () => {
+  const runSetup = async () => {
     markStep('Finalizing dynasty setup...', false);
     await window.api.balanceRosters();
     await window.api.applyDynastyTemplate();
@@ -159,6 +159,11 @@ export default function App() {
   const handleSeasonAdvance = (nextSeason: number) => {
     advanceSeason(nextSeason);
     setActiveTab('home');
+  };
+
+  const goToMainMenu = () => {
+    setDynastyName('');
+    setScreen('main-menu');
   };
 
   const runImport = async (
@@ -356,7 +361,7 @@ export default function App() {
           CONTINUE TO TEAM SELECTION →
         </button>
         <button
-          onClick={() => setScreen('main-menu')}
+          onClick={goToMainMenu}
           style={{ fontSize: 10, color: T.textDim, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'monospace' }}
         >
           ← back to main menu
@@ -368,7 +373,7 @@ export default function App() {
   if (screen === 'save-picker') {
     return (
       <Suspense fallback={<TabFallback />}>
-        <SavePicker onBack={() => setScreen('main-menu')} onSaveLoaded={handleSaveLoaded} />
+        <SavePicker onBack={goToMainMenu} onSaveLoaded={handleSaveLoaded} />
       </Suspense>
     );
   }
@@ -378,7 +383,7 @@ export default function App() {
       <Suspense fallback={<div style={{ color: '#555', padding: 40 }}>Loading...</div>}>
         <TemplateSelect
           onSelect={() => setScreen('team-select')}
-          onBack={() => setScreen('main-menu')}
+          onBack={goToMainMenu}
         />
       </Suspense>
     );
@@ -470,7 +475,7 @@ export default function App() {
             if (window.confirm('Return to the main menu? Unsaved progress this week may be lost.')) {
               setUserTeam(null);
               setMountedTabs(new Set(['home']));
-              setScreen('main-menu');
+              goToMainMenu();
             }
           }}
           style={{ fontSize: 10, color: T.borderStrong, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
@@ -528,7 +533,7 @@ export default function App() {
         ))}
       </div>
 
-            {/* Tab content — keep-alive */}
+      {/* Tab content — keep-alive */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         <Suspense fallback={<TabFallback />}>
           {isMounted('home') && (
