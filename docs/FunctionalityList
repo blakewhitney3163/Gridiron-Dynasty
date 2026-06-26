@@ -12,8 +12,8 @@ CORE INFRASTRUCTURE
   historical_records, news_events, pick_assets, team_trade_overrides,
   player_milestones, dead_cap_entries, coaching_staff, team_schemes,
   owner_goals, injury_history, team_chemistry, chemistry_events, scouts,
-  team_finances
-- Schema version: v18. Migration runner in runMigrations() upgrades existing
+  team_finances, expansion_history
+- Schema version: v19. Migration runner in runMigrations() upgrades existing
   saves on launch. Active migrations:
   v9:  team_id INTEGER on career_stats_history + idx_career_stats_team
   v10: Recalibrate all active-roster contract salaries to market-rate scale
@@ -34,8 +34,15 @@ CORE INFRASTRUCTURE
   v18: team_finances table (team_id UNIQUE, market_size, stadium_capacity,
        season_revenue, owner_budget); seeded for all 32 teams with
        differentiated market data on migration
+  v19: is_expansion INTEGER DEFAULT 0, stadium_name TEXT, relocated_from TEXT
+       columns added to teams table; expansion_history table created
+       (id INTEGER PRIMARY KEY, team_name TEXT, city TEXT, abbrev TEXT,
+       season INTEGER); salary_cap setting seeded to 279000000 on migration
+- Salary cap is dynamic: stored in settings under key 'salary_cap'. All
+  contract logic reads it via getSalaryCap() helper (src/helpers/getSalaryCap.ts)
+  which falls back to 279000000 if not set. Cap escalates via LeagueExpansionService.
 - generateContracts() uses CONTRACT_MARKET_RATES table + TRAIT_PREMIUM
-  multipliers. After generation every team scaled to 95% of SALARY_CAP (~$265M).
+  multipliers. After generation every team scaled to 95% of salary cap.
 - career_stats_history: player_id, season, team_id, games, completions,
   pass/rush/rec stats, defensive stats, def_tds.
 - DB indexes:
@@ -84,6 +91,8 @@ CODE ARCHITECTURE
   applyDynastyTemplate(), getTeamFinances(teamId), getAllTeamFinances()
   stats.ts exposes: getGamePlayLog(gameId) — fetches play-by-play log for
   a completed game; fetched in parallel with box score via Promise.all
+  season.ts exposes: getLeagueOfficeData(), castExpansionVote(vote),
+  getRelocationCities(), requestUserRelocation(cityObj)
   preload.ts merges all via spread into a single contextBridge exposure.
 - IPC handlers split by domain in src/handlers/:
   simHandlers, seasonHandlers, settingsHandlers, statsHandlers,
@@ -93,10 +102,19 @@ CODE ARCHITECTURE
 - Services layer in src/services/:
   SeasonService, SimulationService, StatsService, TradeService,
   ContractService, CoachingService, ProgressionService, OwnerGoalsService,
-  InjuryService, ChemistryService, ScoutingService
+  InjuryService, ChemistryService, ScoutingService, LeagueExpansionService
+  LeagueExpansionService: checkCapEscalation (10% chance/season, cap grows
+  2–5%, stored in settings salary_cap), checkExpansionVote (city pool,
+  user vote threshold 60%+, inserts expansion_history row), checkCpuRelocation
+  (patience-driven CPU team city moves, logs news event)
 - Repositories layer in src/repositories/ — typed DB access per domain;
   includes ScoutRepository (getByTeam, getAvailable, getById, assignToTeam,
   release, getWeeklyPoints)
+- Helpers in src/helpers/:
+  getSalaryCap.ts — reads 'salary_cap' from settings table; fallback 279000000.
+  Used everywhere ContractService and LeagueExpansionService need the current cap.
+  logNewsEvent.ts — logs typed news event objects (eventType, category, headline,
+  detail, teamId, playerId, season, week) to news_events table.
 - Shared UI components in src/components/:
   ArchetypeBadge.tsx — reusable archetype chip; import anywhere;
   renders nothing when archetype === 'normal'
@@ -245,6 +263,37 @@ TEAMS TAB
   season stats, career stats
 - Player Editor inline (Edit button): OVR, age, dev trait, 14 attribute sliders
 
+LEAGUE OFFICE TAB (src/LeagueOffice.tsx — OFFICE sub-tab in League view)
+────────────────────────────────────────────────────────────────────────────────
+- Accessible via the OFFICE sub-tab in League.tsx navigation
+- Three panels rendered side-by-side:
+  Salary Cap Panel:
+    - Current cap displayed in $M format
+    - Cap history table: last 5 seasons with season number and cap value
+    - Cap escalates probabilistically each offseason (10% chance, +2–5%)
+  Expansion Panel:
+    - User vote interface: YES / NO buttons with current vote highlighted
+    - Vote stored under settings key 'user_expansion_vote' (season-independent;
+      cleared after the expansion check resolves each offseason)
+    - Recent expansion history: team name, city, abbreviation, season
+    - Expansion check runs at season advance: random city pool, 60%+ vote
+      threshold required; if approved, inserts row into expansion_history and
+      seeds a new team record in teams table (is_expansion = 1)
+  Relocation Panel:
+    - Recent relocations fetched from news_events (category: 'League',
+      headline containing 'relocate'); displays headline, detail, season
+    - "REQUEST RELOCATION" button: opens city picker modal
+    - City picker lists available cities (pool minus already-used cities);
+      user selects destination, confirms; 10-season cooldown enforced
+    - Relocation validated by owner_patience (minimum 30 required) and
+      cooldown key 'user_relocation_cooldown' in settings
+    - On approval: team city, name, abbrev updated in DB; relocated_from set
+      to original city; owner_patience deducted by 20; news event logged
+    - CPU teams may also relocate each offseason if patience is critically low
+      (checkCpuRelocation in LeagueExpansionService)
+- IPC calls used: get-league-office-data, cast-expansion-vote,
+  get-relocation-cities, request-user-relocation
+
 DEPTH CHART TAB
 ────────────────────────────────────────────────────────────────────────────────
 - Phase sections: OFFENSE, DEFENSE, SPECIAL TEAMS
@@ -360,7 +409,8 @@ NEWS CENTER TAB
 - Season selector (3 seasons retained)
 - Expandable news items — click any item to reveal full detail text below it
 - Auto-logged: contracts, trades, injuries, IR moves, draft picks, game results,
-  retirements, HOF, season awards, milestones, owner patience warnings, breakouts
+  retirements, HOF, season awards, milestones, owner patience warnings, breakouts,
+  league expansions, team relocations
 
 IMPORT TAB
 ────────────────────────────────────────────────────────────────────────────────
@@ -418,6 +468,18 @@ SEASON ADVANCE (advanceSeason in SeasonService.ts)
 16. Evaluate owner goals + update patience
 17. Advance season counter
 18. Replenish FA pool
+19. Check cap escalation (LeagueExpansionService.checkCapEscalation) —
+    10% chance per offseason; cap grows 2–5%; new value stored in settings
+    under key 'salary_cap'; all future contract logic reads via getSalaryCap()
+20. Check expansion vote (LeagueExpansionService.checkExpansionVote) —
+    draws a random city from pool; reads user vote from 'user_expansion_vote'
+    setting; 60%+ combined threshold triggers expansion; inserts row into
+    expansion_history and seeds a new teams record (is_expansion = 1);
+    clears 'user_expansion_vote' setting after resolution
+21. Check CPU relocation (LeagueExpansionService.checkCpuRelocation) —
+    CPU teams with critically low patience may relocate to an available city;
+    updates team city/name/abbrev in DB; sets relocated_from to original city;
+    logs a 'League' category news event via logNewsEvent()
 
 IN-SEASON PLAYER PROGRESSION (ProgressionService.ts)
 ────────────────────────────────────────────────────────────────────────────────
@@ -495,4 +557,5 @@ set-gameplan get-gameplan scout-opponent is-opponent-scouted
 get-scouts get-available-scouts hire-scout fire-scout
 get-weekly-scout-pts get-game-play-log apply-dynasty-template
 set-setting get-setting get-team-finances get-all-team-finances
-
+get-league-office-data cast-expansion-vote
+get-relocation-cities request-user-relocation
