@@ -1,5 +1,5 @@
 SIDELINE TO SIDELINE FOOTBALL — FULL FEATURE INVENTORY
-Last Updated: June 25, 2026
+Last Updated: June 26, 2026
 Repository: https://github.com/blakewhitney3163/Sideline-to-Sideline-Football
 ================================================================================
 
@@ -101,28 +101,61 @@ CODE ARCHITECTURE
   ArchetypeBadge.tsx — reusable archetype chip; import anywhere;
   renders nothing when archetype === 'normal'
 
+TUTORIAL SYSTEM (src/tutorial/TutorialModal.tsx)
+────────────────────────────────────────────────────────────────────────────────
+- TutorialModal: 3-step welcome modal shown automatically on new dynasty start
+  (after MeetTheTeam) if hasTutorialBeenSeen() is false. Steps: Welcome /
+  Tips Along the Way / You're Set. Progress bar, step dots, Back/Skip/Next nav.
+  markTutorialSeen() writes to localStorage key s2s_tutorial_seen. Reopenable
+  via ? button in top bar (setShowTutorial(true) in App.tsx).
+- ContextualTip: exported named component. Small left-bordered banner rendered
+  at top of each tab div on first visit. Tracks seen state per tab via
+  localStorage key s2s_tip_{tabKey}. hasTipBeenSeen / markTipSeen helpers.
+  Tips defined for: home, myteam, league, trades, news, draft.
+  Dismissed with ✕ button; never shown again after dismissed.
+  App.tsx renders <ContextualTip tipKey="home|myteam|..." /> inside each tab.
+
 MAIN MENU (App.tsx)
 ────────────────────────────────────────────────────────────────────────────────
 - "WELCOME, COACH" greeting displayed above the game title
 - "SIDELINE TO SIDELINE FOOTBALL" title with orange accent subtitle
-- New Dynasty button → team selection → template select → dynasty setup
+- New Dynasty button → template-select → team-select → setup → meet-team → game
+- Custom Dynasty button → custom-setup → template-select → team-select → setup
 - Load Dynasty button → save picker
 - New game flow saves dynasty_template setting before reaching setup screen
 
 PRESET DYNASTY TEMPLATES (TemplateSelect.tsx)
 ────────────────────────────────────────────────────────────────────────────────
-- Shown between team selection and dynasty name input on new dynasty creation
+- Shown as 'template-select' screen in App.tsx; both NEW DYNASTY and CUSTOM
+  DYNASTY flows route through it before team selection
 - Three templates displayed as cards:
   Rebuild    — 62–70 OVR roster, $30M+ cap space, 5-year owner horizon;
-               all players dropped 10–18 OVR, contracts cut to 55% of market
+               all players dropped 10–18 OVR (floor 50), contracts cut to 55%
   Contender  — 78–84 OVR core, $15M cap space, 2-year window;
-               bottom half of roster trimmed 2–6 OVR, contracts at 80%
+               bottom half of roster trimmed 2–6 OVR (floor 55), contracts 80%
   Dynasty    — 85–90 OVR core, $8M cap space, win-now expectations;
-               top 15 players boosted 3–7 OVR, contracts unchanged
+               top 15 players boosted 3–7 OVR (ceiling 99), contracts unchanged
 - Template choice saved via setSetting('dynasty_template', id)
-- apply-dynasty-template IPC adjusts user team OVR + contracts on dynasty start
-- Back button returns to team selection
+- apply-dynasty-template IPC handler (settingsHandlers.ts) fires in runSetup
+  after balanceRosters; reads template + user_team_id from settings; also
+  clears all user team coaches (UPDATE coaching_staff SET team_id = NULL)
+- onBack returns to custom-setup screen
 - Background: #0c1220 (dark navy) with orange accent branding
+
+PRE-SEASON STAFF PANEL — COACHING BUDGET (PreSeasonStaffPanel.tsx)
+────────────────────────────────────────────────────────────────────────────────
+- Coaching budget displayed in header alongside vacant slot warnings
+- Starting budget based on dynasty template:
+  Rebuild $8M / Contender $14M / Dynasty $20M / default $12M
+- Budget loaded from getSetting('dynasty_template') on panel mount
+- Hire buttons show "Over Budget" and are disabled when salary would exceed limit
+- "💼 Request More Budget" button available once per pre-season:
+    patience > 70  → owner grants $4–6M ("confident in the direction")
+    patience 40–70 → owner grants $2–3M ("modest increase approved")
+    patience < 40  → denied ("not willing to invest further right now")
+  Grant applied immediately to coachingBudget state; result shown inline
+- Team chemistry panel hidden on Home tab during pre-season (hasSchedule guard)
+- Coaches always start vacant on new dynasty (cleared in apply-dynasty-template)
 
 MEET THE TEAM SCREEN (MeetTheTeam.tsx)
 ────────────────────────────────────────────────────────────────────────────────
@@ -462,3 +495,4 @@ set-gameplan get-gameplan scout-opponent is-opponent-scouted
 get-scouts get-available-scouts hire-scout fire-scout
 get-weekly-scout-pts get-game-play-log apply-dynasty-template
 set-setting get-setting get-team-finances get-all-team-finances
+
