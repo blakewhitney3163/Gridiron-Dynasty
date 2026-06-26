@@ -73,8 +73,18 @@ SIMULATION & SCHEDULE
  Duplicate handler conflict in seasonHandlers.ts fixed (broken PlayoffService
  stubs removed).
 
-Multi-Season Batch Simulation — "Sim N seasons" with a progress bar. Deferred —
- not a priority for current development phase.
+[ ] Multi-Season Batch Sim — "Sim N seasons" with a progress bar for
+    fast-forwarding dynasties. Low priority until core OOTP loop is polished.
+
+[ ] Live Sim Watch Mode — real-time in-game experience while a game simulates.
+    Drive-by-drive or play-by-play simulation streams to a dedicated game view:
+    down & distance, field position, score, game clock, and live stat updates.
+    Replaces the current "generate narrative from final stats" approach with a
+    genuine simulation loop that produces results progressively. Requires
+    rearchitecting simulateGame into a step-by-step engine and streaming output
+    back to the renderer (likely via IPC events rather than a single invoke
+    response). OOTP equivalent: the "watch" mode in live sim. Nice-to-have;
+    significant engineering effort.
 
 Preseason Games — 2–4 preseason games before the regular season to evaluate
  depth chart and practice squad before Week 1. Pending.
