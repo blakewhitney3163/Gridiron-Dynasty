@@ -1,5 +1,5 @@
 SIDELINE TO SIDELINE FOOTBALL — ROADMAP
-Last Updated: June 25, 2026
+Last Updated: June 26, 2026
 Repository: https://github.com/blakewhitney3163/Sideline-to-Sideline-Football
 ================================================================================
 
@@ -19,8 +19,12 @@ DONE - Preset Dynasty Templates — fictional franchise starter kits selectable 
  dynasty creation. Three templates: Rebuild (62–70 OVR, $30M+ cap, 5-year
  horizon), Contender (78–84 OVR, $15M cap, 2-year window), Dynasty (85–90 OVR
  core, $8M cap, win-now pressure). Roster OVR and contract salaries adjusted
- via apply-dynasty-template IPC. Template saved to settings; applied on dynasty
- finalization. Back button returns to team selection.
+ via apply-dynasty-template IPC (settingsHandlers.ts). Template saved to
+ settings; applied in runSetup after balanceRosters. TemplateSelect screen
+ restored to App.tsx flow (template-select screen type). Back button returns
+ to custom-setup. Standard new dynasty also routes through template-select.
+ User team coaches cleared on dynasty start so pre-season staff panel starts
+ vacant.
 
 ================================================================================
 GAMEPLAY DEPTH — OOTP-Tier Features
@@ -158,6 +162,36 @@ MAINTENANCE
 ================================================================================
 COMPLETED ITEMS
 ================================================================================
+
+[DONE June 26, 2026] Pre-Season Staff Coaching Budget — coaching budget introduced
+ to pre-season staff panel. Starting budget tied to dynasty template: Rebuild
+ $8M, Contender $14M, Dynasty $20M, default $12M. Hire buttons disable with
+ "Over Budget" label when salary would exceed budget. "Request More Budget"
+ button available once per pre-season: owner grants $4–6M (patience >70),
+ $2–3M (patience 40–70), or denies (<40). Result shown inline. Budget reads
+ dynasty_template setting on panel load.
+
+[DONE June 26, 2026] Pre-Season Staff Panel Improvements — team chemistry panel
+ hidden during pre-season (only shown when hasSchedule is true). Header renamed
+ to "Staff Hiring." User team coaches always cleared back to free pool when
+ apply-dynasty-template fires, so coaches start vacant and must be hired fresh
+ each new dynasty.
+
+[DONE June 26, 2026] Tutorial System Redesign — TutorialModal simplified from
+ 14-step linear walkthrough to 3-step welcome modal (Welcome / Tips Along the
+ Way / You're Set). Added ContextualTip component exported from TutorialModal.tsx:
+ small dismissible banner that fires once per tab on first visit. Tips defined
+ for Home, My Team, League, Trades, News, and Draft tabs. App.tsx renders
+ <ContextualTip tipKey={tab}> inside each tab div. hasTipBeenSeen / markTipSeen
+ helpers use localStorage per tip key.
+
+[DONE June 26, 2026] apply-dynasty-template IPC Handler — backend implementation
+ added to settingsHandlers.ts. Reads dynasty_template and user_team_id from
+ settings. Rebuild: drops all active roster players 10–18 OVR (floor 50), cuts
+ contracts to 55% of salary (floor $0.87M). Contender: trims bottom half of
+ roster 2–6 OVR (floor 55), contracts at 80%. Dynasty: boosts top 15 players
+ 3–7 OVR (ceiling 99), contracts unchanged. Always clears user team coaches.
+ App.tsx runSetup calls applyDynastyTemplate after balanceRosters.
 
 [DONE June 25, 2026] Play-by-Play UI — box score modal on Home tab now renders
  the play log below stat lines. Entries grouped by quarter (Q1–Q4). Each entry
@@ -317,3 +351,4 @@ COMPLETED ITEMS
 [DONE June 18, 2026] OL Ratings in Teams / Depth Chart
 [DONE] Player Editor — inline edit mode in PlayerProfile.tsx
 [DONE] Playoff UI Update — bracket-style visual
+
