@@ -1,5 +1,5 @@
-GRIDIRON DYNASTY — ROADMAP
-Last Updated: June 24, 2026
+SIDELINE TO SIDELINE FOOTBALL — ROADMAP
+Last Updated: June 25, 2026
 Repository: https://github.com/blakewhitney3163/Sideline-to-Sideline-Football
 ================================================================================
 
@@ -8,15 +8,18 @@ TIER 3 — Polish & replayability
 League Customization — expansion teams, relocation, custom team names beyond
  the Team Editor. Relocation wizard, stadium naming, fan base effects.
 
-DONE ? In-Game Narrative / Play-by-Play — text play-by-play during simulation.
- Stats-only output today limits immersion significantly.
+DONE - In-Game Narrative / Play-by-Play — text play-by-play during simulation.
+ PlayEntry logs generated from real game stats: TD passes, TD runs, FGs,
+ turnovers, and big plays. Stored in games.play_log column (schema v17) and
+ retrieved via get-game-play-log IPC. Phrase bank templates for commentary.
+ Backend and storage complete; full UI render in box score modal pending.
 
 DONE - Preset Dynasty Templates — fictional franchise starter kits selectable at new
- dynasty creation. Each template ships as a pre-built CSV: roster of fictional
- players, team ratings, historical records, and league configuration. Examples:
- "Rebuild Mode" (60–70 OVR roster, tight cap), "Contender Window" (stacked but
- aging), "Dynasty Peak" (league powerhouse, high expectations). Lowers barrier
- to entry and provides structured challenge modes.
+ dynasty creation. Three templates: Rebuild (62–70 OVR, $30M+ cap, 5-year
+ horizon), Contender (78–84 OVR, $15M cap, 2-year window), Dynasty (85–90 OVR
+ core, $8M cap, win-now pressure). Roster OVR and contract salaries adjusted
+ via apply-dynasty-template IPC. Template saved to settings; applied on dynasty
+ finalization. Back button returns to team selection.
 
 ================================================================================
 GAMEPLAY DEPTH — OOTP-Tier Features
@@ -36,9 +39,13 @@ Multi-Season Batch Simulation — "Sim N seasons" with a progress bar. Deferred 
 
 LEAGUE & FINANCIALS
 ────────────────────────────────────────────────────────────────────────────────
-Financial System Beyond Cap — market size per team affecting revenue, stadium
- attendance, and owner budget. Large market vs. small market affecting cap
- floor and FA appeal.
+DONE - Financial System Beyond Cap — team_finances table (schema v18): market_size
+ (large/medium/small), stadium_capacity, season_revenue, owner_budget. 32 teams
+ seeded with differentiated market data (8 large, 16 medium, 8 small market).
+ FinancesTab component built (src/franchise/FinancesTab.tsx): market size badge,
+ stadium capacity, season revenue, owner budget progress bar, league-wide market
+ table. IPCs: get-team-finances, get-all-team-finances. Tab wiring to Franchise
+ nav pending.
 
 ================================================================================
 PRE-STEAM TECHNICAL CHECKLIST
@@ -151,6 +158,52 @@ MAINTENANCE
 COMPLETED ITEMS
 ================================================================================
 
+[DONE June 25, 2026] Preset Dynasty Templates — Three starter kits on new
+ dynasty creation: Rebuild, Contender, Dynasty. Each adjusts user team OVR and
+ contract salaries via apply-dynasty-template IPC. Template select screen
+ (TemplateSelect.tsx) shown between team selection and dynasty name input.
+ Back button to return to team selection. Template saved to settings as
+ dynasty_template key.
+
+[DONE June 25, 2026] Play-by-Play Commentary — generatePlayLog() in
+ src/sim/playbyplay.ts builds a play-by-play log from real game stats.
+ PlayEntry fields: quarter, teamName, description, type (td/fg/turnover/
+ bigplay), running homeScore/awayScore. Five phrase-bank categories (TD pass,
+ TD run, FG, turnover, big play), each with 3–4 template strings. Log stored
+ in games.play_log column (schema v17); retrieved via get-game-play-log IPC.
+
+[DONE June 25, 2026] Financial System — team_finances table (schema v18)
+ with market_size, stadium_capacity, season_revenue, owner_budget. 32 teams
+ seeded with real market-size differentials (8 large / 16 medium / 8 small).
+ FinancesTab.tsx component built: market badge, capacity, revenue tiles,
+ owner budget progress bar, league-wide market breakdown grid.
+ IPCs: get-team-finances, get-all-team-finances.
+
+[DONE June 25, 2026] CPU Trade Offer Weekly Cap — CPU offer generation
+ changed from a seasonal cap (3/season) to a weekly cap (2/week). Key:
+ trade_offers_week_{season}_{week}. Prevents burst offers in early weeks.
+ 18% base chance, +15% urgency weeks 6–8, active weeks 1–10 only.
+
+[DONE June 25, 2026] Multi-Player Trades — Removed hard 3-player count cap
+ in the Trades UI. Users can now include as many players as they want on
+ either side of a trade proposal.
+
+[DONE June 25, 2026] Welcome Message on Main Menu — "WELCOME, COACH" greeting
+ displayed above the title on the main menu screen.
+
+[DONE June 25, 2026] Expandable News Items — News Center items are now
+ expandable; clicking an item reveals full detail text below it.
+
+[DONE June 25, 2026] CPU Game Plan Tendencies — CPU teams derive their game
+ plan from their scheme setting. Offense mapping: West Coast/Spread →
+ pass_attack, Air Raid → bombs_away, Pro Style → balanced, Power Run →
+ run_heavy. Defense: 4-3 → base, 3-4 → zone, Nickel → press_man, Dime →
+ zone, 46 → blitz. Applied to simulateGame via GamePlanOptions.
+
+[DONE June 25, 2026] setSetting / getSetting Preload Methods — Generic
+ key/value settings read/write exposed to renderer via core.ts preload.
+ Used by template selection, game plan persistence, and settings flows.
+
 [DONE June 24, 2026] Scouting Department — hireable scouts stored in scouts
  table (schema v16). ScoutRepository + ScoutingService. Each scout has an
  overall_rating, specialty (Offense / Defense / College / National / Regional),
@@ -173,12 +226,6 @@ COMPLETED ITEMS
  selection saved via set-gameplan IPC and loaded into simulateGame() as
  GamePlanOptions, applying rating multipliers to team offense/defense.
  (3) Injury Preview — current injury report inline.
-
-[DONE June 24, 2026] Realistic Trade Offer Frequency — CPU trade offer
- generation reduced from 60% weekly chance to 18%; capped at 3 offers per
- season total; active only weeks 1–10; deadline urgency bump of +15% during
- weeks 6–8. Offer counter persisted in settingsRepo
- (trade_offers_sent_{season}).
 
 [DONE June 24, 2026] GamePlanOptions in simulateGame — simulateGame() now
  accepts an optional GamePlanOptions param ({ offense, defense }). Offense
@@ -205,11 +252,15 @@ COMPLETED ITEMS
 
 [DONE June 24, 2026] Injury History / Injury-Prone Trait — injury_history table
  (schema v13). Severity tiers, injury_prone flag after 2+ moderate/severe
- injuries. IR placement/activation with news events. 🏥 Injuries tab under
+ injuries. IR placement/activation with news events. Injuries tab under
  My Team with full career injury history table.
 
 [DONE June 24, 2026] Loading / Splash Screen — branded HTML splash before React
  loads. Animated orange progress bar, fades via window.__hideSplash().
+
+[DONE June 24, 2026] Realistic Trade Offer Frequency — CPU trade offer
+ generation reduced from 60% weekly chance to 18%; active only weeks 1–10;
+ deadline urgency bump of +15% during weeks 6–8.
 
 [DONE June 23, 2026] Commissioner Mode
 [DONE June 23, 2026] Team Editor
