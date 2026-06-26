@@ -8,6 +8,7 @@ import PlayoffResultsView from './home/PlayoffResultsView';
 import SeasonAwardsView from './home/SeasonAwardsView';
 import GamePreview from './home/GamePreview';
 import GameWeekPrep from './home/GameWeekPrep';
+import PreSeasonStaffPanel from './home/PreSeasonStaffPanel';
 import { useGameStore } from './store/gameStore';
 import TradeOfferCard from './home/TradeOfferCard';
 import ChemistryPanel from './home/ChemistryPanel';
@@ -67,7 +68,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [generatingSchedule, setGeneratingSchedule] = useState(false);
   const [boxScore, setBoxScore] = useState<BoxScoreData | null>(null);
   const [boxScoreLoading, setBoxScoreLoading] = useState(false);
-  const [playLog, setPlayLog] = useState<any[]>([]);
   const [topAFC, setTopAFC] = useState<StandingEntry[]>([]);
   const [topNFC, setTopNFC] = useState<StandingEntry[]>([]);
   const [champions, setChampions] = useState<Champion[]>([]);
@@ -99,8 +99,9 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [userScheme, setUserScheme] = useState<{ offenseScheme: string; defenseScheme: string } | null>(null);
   const [allStandings, setAllStandings] = useState<{ id: number; wins: number; losses: number }[]>([]);
   const [recentNews, setRecentNews] = useState<NewsEvent[]>([]);
-  const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: { id: number; week: number; delta: number; reason: string }[]; archetypes: { archetype: string; count: number }[] } | null>(null);
-
+const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: { id: number; week: number; delta: number; reason: string }[]; archetypes: { archetype: string; count: number }[] } | null>(null);
+  const [staffSetupComplete, setStaffSetupComplete] = useState(false);
+  
   const fetchRecentNews = async () => {
     const news = await window.api.getNewsFeed({ season: currentSeason, limit: 6 });
     setRecentNews(news ?? []);
@@ -113,25 +114,25 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setLoading(true);
       setBoxScore(null); setConfirming(false); setPlayoffSeeds(null);
       setPlayoffResults(null); setUserRecord(null); setInjuryReport([]);
-      setSeasonAwards(null);
+      setSeasonAwards(null); setStaffSetupComplete(false);
 
       const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffers, tradeStatus, spots, health, psAlerts, announcingRets, news, chemistry] = await Promise.all([
-        window.api.getCurrentWeek(),
-        window.api.getDashboard(currentSeason),
-        window.api.getChampions(),
-        window.api.getStandings(currentSeason),
-        window.api.getOffseasonStatus(),
-        window.api.getInjuryReport(userTeam.id),
-        window.api.getStats(currentSeason),
-        window.api.getCpuTradeOffer(),
-        window.api.getTeamStatus(userTeam.id),
-        window.api.getRosterSpots(userTeam.id),
-        window.api.getFranchiseHealth(userTeam.id),
-        window.api.getPSPromotionAlerts(userTeam.id),
-        window.api.getAnnouncingRetirements(),
-        window.api.getNewsFeed({ season: currentSeason, limit: 6 }),
-        window.api.getTeamChemistry(userTeam.id),
-      ]);
+  window.api.getCurrentWeek(),
+  window.api.getDashboard(currentSeason),
+  window.api.getChampions(),
+  window.api.getStandings(currentSeason),
+  window.api.getOffseasonStatus(),
+  window.api.getInjuryReport(userTeam.id),
+  window.api.getStats(currentSeason),
+  window.api.getCpuTradeOffer(),
+  window.api.getTeamStatus(userTeam.id),
+  window.api.getRosterSpots(userTeam.id),
+  window.api.getFranchiseHealth(userTeam.id),
+  window.api.getPSPromotionAlerts(userTeam.id),
+  window.api.getAnnouncingRetirements(),
+  window.api.getNewsFeed({ season: currentSeason, limit: 6 }),
+  window.api.getTeamChemistry(userTeam.id),
+]);
       if (cancelled) return;
 
       const seasonDone = status.hasSchedule && status.currentWeek === null;
@@ -292,34 +293,30 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   };
 
   const handleBoxScore = async (gameId: number) => {
-    if (boxScore?.game?.id === gameId) { setBoxScore(null); setPlayLog([]); return; }
+    if (boxScore?.game?.id === gameId) { setBoxScore(null); return; }
     setBoxScoreLoading(true);
-    const [data, log] = await Promise.all([
-      window.api.getGameBoxScore(gameId),
-      window.api.getGamePlayLog?.(gameId).catch(() => []),
-    ]);
+    const data = await window.api.getGameBoxScore(gameId);
     setBoxScore(data);
-    setPlayLog(log ?? []);
     setBoxScoreLoading(false);
   };
 
   const handleSimulatePlayoffs = async () => {
-    setSimulatingPlayoffs(true);
-    await window.api.simulatePlayoffs(currentSeason);
-    const [results, champs] = await Promise.all([
-      window.api.getPlayoffs(currentSeason),
-      window.api.getChampions(),
-    ]);
-    setPlayoffResults(results);
-    setChampions(champs);
-    const champForSeason = champs.find((c: Champion) => c.season === currentSeason);
-    if (champForSeason) {
-      setPlayoffsComplete(true);
-      setSeasonAwards(await window.api.getSeasonAwards(currentSeason));
-    }
-    await fetchRecentNews();
-    setSimulatingPlayoffs(false);
-  };
+  setSimulatingPlayoffs(true);
+  await window.api.simulatePlayoffs(currentSeason);
+  const [results, champs] = await Promise.all([
+    window.api.getPlayoffs(currentSeason),
+    window.api.getChampions(),
+  ]);
+  setPlayoffResults(results);
+  setChampions(champs);
+  const champForSeason = champs.find((c: Champion) => c.season === currentSeason);
+  if (champForSeason) {
+    setPlayoffsComplete(true);
+    setSeasonAwards(await window.api.getSeasonAwards(currentSeason));
+  }
+  await fetchRecentNews();
+  setSimulatingPlayoffs(false);
+};
 
   const handleAdvance = async () => {
     setAdvancing(true);
@@ -396,6 +393,18 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
+        {/* Pre-Season Staff Setup */}
+        {!hasSchedule && !staffSetupComplete && userTeam && (
+          <PreSeasonStaffPanel
+            teamId={userTeam.id}
+            season={currentSeason}
+            onConfirm={() => setStaffSetupComplete(true)}
+            onGenerateSchedule={handleGenerateSchedule}
+            generatingSchedule={generatingSchedule}
+          />
+        )}
+
+        {/* Pending Trade Offers */}
         {cpuOffers.map((offer, i) => (
           <TradeOfferCard
             key={i}
@@ -543,34 +552,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                         })}
                       </div>
                     ))}
-
-                    {playLog.length > 0 && (
-                      <div style={{ marginTop: 14 }}>
-                        <div style={{ fontSize: 8, color: T.textMuted, letterSpacing: 1.5, marginBottom: 8 }}>PLAY BY PLAY</div>
-                        {[1, 2, 3, 4].filter(q => playLog.some(e => e.quarter === q)).map(q => (
-                          <div key={q} style={{ marginBottom: 10 }}>
-                            <div style={{ fontSize: 8, color: '#444', letterSpacing: 1, marginBottom: 4, paddingBottom: 3, borderBottom: `1px solid ${T.borderFaint}` }}>
-                              QUARTER {q}
-                            </div>
-                            {playLog.filter(e => e.quarter === q).map((entry: any, i: number) => {
-                              const typeColor = entry.type === 'td' ? '#4caf50' : entry.type === 'fg' ? '#FF8740' : entry.type === 'turnover' ? '#e57373' : '#888';
-                              const typeBadge = entry.type === 'td' ? 'TD' : entry.type === 'fg' ? 'FG' : entry.type === 'turnover' ? 'TO' : '▶';
-                              return (
-                                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '4px 0', borderBottom: `1px solid ${T.borderFaint}`, fontSize: 11 }}>
-                                  <span style={{ fontSize: 8, fontWeight: 700, padding: '2px 5px', borderRadius: 3, background: typeColor + '22', color: typeColor, minWidth: 22, textAlign: 'center', flexShrink: 0 }}>
-                                    {typeBadge}
-                                  </span>
-                                  <span style={{ color: '#aaa', flex: 1, lineHeight: 1.4 }}>{entry.description}</span>
-                                  <span style={{ fontSize: 9, color: T.textDim, whiteSpace: 'nowrap', fontFamily: 'monospace', flexShrink: 0 }}>
-                                    {entry.homeScore}–{entry.awayScore}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )}
               </>
@@ -667,9 +648,10 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         )}
 
         {teamChemistry && (
-          <ChemistryPanel chemistry={teamChemistry.chemistry} events={teamChemistry.events} archetypes={teamChemistry.archetypes ?? []} />
-        )}
+  <ChemistryPanel chemistry={teamChemistry.chemistry} events={teamChemistry.events} archetypes={teamChemistry.archetypes ?? []} />
+)}
 
+{/* Recent News */}
         <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '14px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, textTransform: 'uppercase' }}>Recent News</div>
@@ -730,7 +712,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         statLeaders={statLeaders}
         userTradeStatus={userTradeStatus}
         settingStatus={settingStatus}
-        onGenerateSchedule={handleGenerateSchedule}
+        onGenerateSchedule={staffSetupComplete ? handleGenerateSchedule : undefined}
         onSimulateWeek={handleSimulateWeek}
         onSimulatePlayoffs={handleSimulatePlayoffs}
         onConfirm={() => setConfirming(true)}
