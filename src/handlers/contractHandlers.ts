@@ -7,6 +7,8 @@ import {
   calcFairMarket, signFreeAgent, resignPlayer, promoteFromPS, demoteToPS, cutFromPS, cpuFASigning,
   signFreeAgentToPS, extendPlayer, restructurePlayer, releasePlayer,
   getOffseasonStatus, applyFranchiseTag, removeFranchiseTag, acceptCounterOffer,
+  pickUpFifthYearOption, declineFifthYearOption,
+  getHoldoutPlayers, resolveHoldout,
 } from '../services/ContractService';
 import { logNewsEvent } from '../helpers/logNewsEvent';
 import { db } from '../database';
@@ -76,9 +78,8 @@ export function registerContractHandlers(): void {
     return demoteToPS(playerId, teamId);
   });
 
-  ipcMain.handle('cut-from-ps', (_event: IpcEvent, playerId: number) => {
-    return cutFromPS(playerId);
-  });
+  ipcMain.handle('cut-from-ps', (_event: IpcEvent, playerId: number) =>
+    cutFromPS(playerId));
 
   ipcMain.handle('sign-free-agent', (_event: IpcEvent, { playerId, years, salary }: { playerId: number; years: number; salary: number }) => {
     const teamId = settingsRepo.getUserTeamId();
@@ -140,9 +141,7 @@ export function registerContractHandlers(): void {
   });
 
   ipcMain.handle('edit-player-contract', (_event: IpcEvent, {
-    playerId,
-    annual_salary,
-    years_remaining,
+    playerId, annual_salary, years_remaining,
   }: { playerId: number; annual_salary: number; years_remaining: number }) => {
     const contract = db.prepare('SELECT id, years_total FROM contracts WHERE player_id = ?')
       .get(playerId) as { id: number; years_total: number } | undefined;
@@ -153,4 +152,21 @@ export function registerContractHandlers(): void {
     ).run(annual_salary, years_remaining, newTotal, playerId);
     return { success: true };
   });
+
+  // ── 5th Year Option ─────────────────────────────────────────────────────
+  ipcMain.handle('pick-up-fifth-year-option', (_event: IpcEvent, playerId: number) =>
+    pickUpFifthYearOption(playerId));
+
+  ipcMain.handle('decline-fifth-year-option', (_event: IpcEvent, playerId: number) =>
+    declineFifthYearOption(playerId));
+
+  // ── Holdouts & Trade Demands ─────────────────────────────────────────────
+  ipcMain.handle('get-holdout-players', () => {
+    const teamId = settingsRepo.getUserTeamId();
+    if (!teamId) return [];
+    return getHoldoutPlayers(teamId);
+  });
+
+  ipcMain.handle('resolve-holdout', (_event: IpcEvent, { playerId, action }: { playerId: number; action: 'pay' | 'wait' | 'trade_request' }) =>
+    resolveHoldout(playerId, action));
 }
