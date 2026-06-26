@@ -757,8 +757,8 @@ export function registerSimHandlers(): void {
     const userTeamId = settingsRepo.getUserTeamId();
     if (!userTeamId) return { success: false };
 
-    const template = settingsRepo.get('dynasty_template') ?? 'contender';
-
+const template = settingsRepo.get('dynasty_template');
+if (!template) return { success: true, template: 'none' };
     const players = db.prepare(
       "SELECT id, overall_rating FROM players WHERE team_id = ? AND roster_status = 'active' ORDER BY overall_rating DESC"
     ).all(userTeamId) as any[];
