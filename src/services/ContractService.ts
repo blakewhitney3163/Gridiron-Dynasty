@@ -1,6 +1,7 @@
 import { db } from '../database';
 import { playerRepo, contractRepo, gameRepo } from '../repositories';
-import { MAX_ACTIVE_ROSTER, MAX_PRACTICE_SQUAD, MIN_CPU_ROSTER, SALARY_CAP } from '../constants';
+import { MAX_ACTIVE_ROSTER, MAX_PRACTICE_SQUAD, MIN_CPU_ROSTER } from '../constants';
+import { getSalaryCap } from '../helpers/getSalaryCap';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { SuccessResult } from '../types';
 import { logNewsEvent } from '../helpers/logNewsEvent';
@@ -269,7 +270,7 @@ export function cpuRosterCuts(userTeamId: number): { totalReleased: number; team
   const teamsAffected = new Set<number>();
   for (const team of cpuTeams) {
     const capUsed = capMap.get(team.id) ?? 0;
-    if (capUsed <= SALARY_CAP) continue;
+    if (capUsed <= getSalaryCap()) continue;
     const players = db.prepare(`
       SELECT p.id, p.first_name, p.last_name, p.position, p.overall_rating, p.age, p.dev_trait,
              c.annual_salary
@@ -280,7 +281,7 @@ export function cpuRosterCuts(userTeamId: number): { totalReleased: number; team
     `).all(team.id) as any[];
     let currentCap = capUsed;
     for (const player of players) {
-      if (currentCap <= SALARY_CAP) break;
+      if (currentCap <= getSalaryCap()) break;
       if (player.dev_trait === 'X-Factor') continue;
       if (player.overall_rating >= 88) continue;
       contractRepo.delete(player.id);
@@ -335,7 +336,7 @@ export function cpuResignAttempts(userTeamId: number): { attempted: number; resi
   for (const team of cpuTeams) {
     const teamType = teamTypes.get(team.id) ?? 'Neutral';
     const premium = RESIGN_PREMIUM[teamType] ?? 0.95;
-    let capLeft = SALARY_CAP - (capMap.get(team.id) ?? 0);
+    let capLeft = getSalaryCap() - (capMap.get(team.id) ?? 0);
     const expiring = expiringByTeam.get(team.id) ?? [];
     for (const player of expiring) {
       if (player.overall_rating < 68) continue;
@@ -422,7 +423,7 @@ export function cpuFABiddingEngine(userTeamId: number): { totalSigned: number; t
   for (const team of cpuTeams) {
     teamStates.set(team.id, {
       id: team.id, type: teamTypes.get(team.id) ?? 'Neutral',
-      capLeft: SALARY_CAP - (capMap.get(team.id) ?? 0),
+      capLeft: getSalaryCap() - (capMap.get(team.id) ?? 0),
       spotsLeft: MAX_ACTIVE_ROSTER - (activeMap.get(team.id) ?? 0),
       posCounts: posMap.get(team.id) ?? {},
     });
@@ -646,7 +647,7 @@ export function applyFranchiseTag(
   const multiplier = tagType === 'franchise' ? 1.35 : 1.10;
   const tagSalary = Math.round(fairMarket * multiplier * 10) / 10;
   const capUsed = contractRepo.getCapUsage(teamId);
-  const capLeft = Math.round((SALARY_CAP - capUsed) * 10) / 10;
+  const capLeft = Math.round((getSalaryCap() - capUsed) * 10) / 10;
   const capImpact = Math.round((tagSalary - player.annual_salary) * 10) / 10;
   if (capImpact > capLeft + 0.1) {
     return { success: false, reason: `Not enough cap space. Tag costs $${tagSalary}M (${capImpact >= 0 ? '+' : ''}$${capImpact.toFixed(1)}M net). Only $${capLeft.toFixed(1)}M available.` };
