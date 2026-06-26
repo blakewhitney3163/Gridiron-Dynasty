@@ -305,4 +305,108 @@ ipcMain.handle('get-all-team-finances', () =>
     if (userTeamId > 0) generateOwnerGoals(season, userTeamId);
     return { success: true };
   });
+
+  ipcMain.handle('get-league-office-data', () => {
+    const { getSalaryCap } = require('../helpers/getSalaryCap');
+    const currentSeason = getCurrentSeason();
+    const userTeamId = settingsRepo.getUserTeamId() ?? -1;
+
+    const capHistory: { season: number; cap: number }[] = [];
+    for (let s = currentSeason - 4; s <= currentSeason; s++) {
+      const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(`cap_history_${s}`) as any;
+      if (row) capHistory.push({ season: s, cap: parseFloat(row.value) });
+    }
+
+    const userVoteRow = db.prepare("SELECT value FROM settings WHERE key = ?")
+      .get(`expansion_user_vote_${currentSeason}`) as any;
+    const userVote = userVoteRow ? userVoteRow.value : null;
+
+    let recentExpansions: any[] = [];
+    let recentRelocations: any[] = [];
+    try {
+      recentExpansions = db.prepare(
+        'SELECT * FROM expansion_history WHERE passed = 1 ORDER BY season DESC LIMIT 5'
+      ).all() as any[];
+    } catch {}
+    try {
+      recentRelocations = db.prepare(
+        "SELECT headline, detail, season FROM news_events WHERE event_type = 'league' AND headline LIKE '%Relocate%' ORDER BY season DESC LIMIT 5"
+      ).all() as any[];
+    } catch {}
+
+    return {
+      salaryCap: getSalaryCap(),
+      capHistory,
+      pendingVote: !userVote,
+      userVote,
+      recentExpansions,
+      recentRelocations,
+    };
+  });
+
+  ipcMain.handle('cast-expansion-vote', (_event: any, vote: 'for' | 'against') => {
+    const season = getCurrentSeason();
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(`expansion_user_vote_${season}`, vote);
+    return { success: true };
+  });
+
+  ipcMain.handle('get-relocation-cities', () => {
+    const existingCities = new Set(
+      (db.prepare('SELECT city FROM teams').all() as any[]).map((t: any) => t.city)
+    );
+    const CITY_POOL = [
+      { city: 'Portland',       name: 'Pioneers',   abbreviation: 'POR', marketSize: 'medium' },
+      { city: 'San Antonio',    name: 'Stallions',  abbreviation: 'SAS', marketSize: 'medium' },
+      { city: 'Sacramento',     name: 'Surge',      abbreviation: 'SAC', marketSize: 'small'  },
+      { city: 'Salt Lake City', name: 'Sentinels',  abbreviation: 'SLC', marketSize: 'small'  },
+      { city: 'Austin',         name: 'Armadillos', abbreviation: 'AUS', marketSize: 'medium' },
+      { city: 'Memphis',        name: 'Grizzlies',  abbreviation: 'MEM', marketSize: 'small'  },
+      { city: 'Oklahoma City',  name: 'Thunder',    abbreviation: 'OKC', marketSize: 'small'  },
+      { city: 'St. Louis',      name: 'Blues',      abbreviation: 'STL', marketSize: 'medium' },
+      { city: 'San Diego',      name: 'Surge',      abbreviation: 'SDG', marketSize: 'medium' },
+      { city: 'Raleigh',        name: 'Ravens',     abbreviation: 'RAL', marketSize: 'small'  },
+      { city: 'Columbus',       name: 'Charge',     abbreviation: 'COL', marketSize: 'small'  },
+      { city: 'Louisville',     name: 'Lightning',  abbreviation: 'LOU', marketSize: 'small'  },
+      { city: 'Birmingham',     name: 'Bulls',      abbreviation: 'BHM', marketSize: 'small'  },
+      { city: 'Hartford',       name: 'Hawks',      abbreviation: 'HFD', marketSize: 'small'  },
+      { city: 'San Jose',       name: 'Sharks',     abbreviation: 'SJO', marketSize: 'medium' },
+    ];
+    return CITY_POOL.filter(c => !existingCities.has(c.city));
+  });
+
+  ipcMain.handle('request-user-relocation', (_event: any, payload: { city: string; name: string; abbreviation: string; marketSize: string }) => {
+    const season = getCurrentSeason();
+    const userTeamId = settingsRepo.getUserTeamId() ?? -1;
+    if (userTeamId < 0) return { success: false, reason: 'No team selected.' };
+
+    const cooldownRow = db.prepare("SELECT value FROM settings WHERE key = 'user_relocated_season'").get() as any;
+    const lastReloc = cooldownRow ? parseInt(cooldownRow.value, 10) : 0;
+    if (lastReloc > 0 && season - lastReloc < 10) {
+      return { success: false, reason: `You can relocate again in ${10 - (season - lastReloc)} season(s).` };
+    }
+
+    const team = db.prepare('SELECT city, name FROM teams WHERE id = ?').get(userTeamId) as any;
+    if (!team) return { success: false, reason: 'Team not found.' };
+
+    const oldCity = team.city;
+    db.prepare('UPDATE teams SET city = ?, abbreviation = ?, relocated_from = ? WHERE id = ?')
+      .run(payload.city, payload.abbreviation, oldCity, userTeamId);
+    db.prepare('UPDATE team_finances SET market_size = ? WHERE team_id = ?')
+      .run(payload.marketSize, userTeamId);
+
+    const currentPatience = parseInt(
+      (db.prepare("SELECT value FROM settings WHERE key = 'owner_patience'").get() as any)?.value ?? '75', 10
+    );
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('owner_patience', ?)").run(String(Math.max(0, currentPatience - 10)));
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('user_relocated_season', ?)").run(String(season));
+
+    logNewsEvent({
+      eventType: 'league', category: 'season',
+      headline: `${oldCity} ${team.name} Relocate to ${payload.city}`,
+      detail: `The franchise moves from ${oldCity} to ${payload.city}, becoming the ${payload.city} ${team.name}.`,
+      season,
+    });
+    return { success: true };
+  });
+  
 }
