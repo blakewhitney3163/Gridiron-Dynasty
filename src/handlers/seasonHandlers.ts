@@ -2,267 +2,160 @@ import { ipcMain } from 'electron';
 import { db } from '../database';
 import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { AdvanceSeasonResult } from '../types';
-import { settingsRepo, gameRepo } from '../repositories';
 import { advanceSeason, openFreeAgency } from '../services/SeasonService';
-import { getLeagueStats, getTeamSeasonStats, getTeamPlayerStats } from '../services/StatsService';
-import { logNewsEvent } from '../helpers/logNewsEvent';
+import { settingsRepo } from '../repositories';
+import { getRecentLeagueEvents } from '../services/LeagueEventsService';
 
 export function registerSeasonHandlers(): void {
 
-  ipcMain.handle('get-standings', (_event: any, season?: number) => {
-    const s = season ?? getCurrentSeason();
-    const records = gameRepo.getAllRecords(s);
-    return (db.prepare('SELECT id, city, name, conference, division FROM teams').all() as any[])
-      .map((team: any) => {
-        const { wins = 0, losses = 0, ties = 0 } = records[team.id] ?? {};
-        return { ...team, wins, losses, ties };
-      });
+  ipcMain.handle('get-current-season', () => getCurrentSeason());
+
+  ipcMain.handle('get-seasons', () => {
+    const rows = db.prepare('SELECT DISTINCT season FROM games ORDER BY season DESC').all() as any[];
+    return rows.map(r => r.season);
   });
 
-  ipcMain.handle('get-teams', () =>
-    db.prepare('SELECT * FROM teams ORDER BY conference, division, name').all());
-
-  ipcMain.handle('get-roster', (_event: any, teamId: number) =>
+  ipcMain.handle('get-standings', (_event: any, season: number) =>
     db.prepare(`
-      SELECT id, first_name, last_name, position, position_label, overall_rating, age,
-             speed, strength, awareness, dev_trait,
-             throw_accuracy, throw_power, catching, route_running,
-             tackle_rating, coverage, pass_rush, kickpower, kickaccuracy,
-             runblocking, passblocking
-      FROM players WHERE team_id = ?
-      ORDER BY
-        CASE position
-          WHEN 'QB' THEN 1 WHEN 'RB' THEN 2 WHEN 'WR' THEN 3 WHEN 'TE' THEN 4
-          WHEN 'OL' THEN 5 WHEN 'DL' THEN 6 WHEN 'LB' THEN 7
-          WHEN 'CB' THEN 8 WHEN 'S' THEN 9 WHEN 'K' THEN 10 ELSE 11
-        END, overall_rating DESC
-    `).all(teamId));
+      SELECT t.id, t.city, t.name, t.abbreviation, t.conference, t.division,
+        COALESCE(SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score)
+                          OR (g.away_team_id = t.id AND g.away_score > g.home_score) THEN 1 ELSE 0 END), 0) as wins,
+        COALESCE(SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score < g.away_score)
+                          OR (g.away_team_id = t.id AND g.away_score < g.home_score) THEN 1 ELSE 0 END), 0) as losses,
+        COALESCE(SUM(CASE WHEN (g.home_team_id = t.id OR g.away_team_id = t.id)
+                          AND g.home_score = g.away_score THEN 1 ELSE 0 END), 0) as ties
+      FROM teams t
+      LEFT JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id)
+        AND g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
+      GROUP BY t.id
+      ORDER BY wins DESC, losses ASC
+    `).all(season));
 
-  ipcMain.handle('get-player-stats', (_event: any, playerId: number) => {
+  ipcMain.handle('get-dashboard', (_event: any, season: number) => {
+    const userTeamId = settingsRepo.getUserTeamId();
+    if (!userTeamId) return null;
+    const team = db.prepare('SELECT id, city, name, abbreviation, conference, division FROM teams WHERE id = ?').get(userTeamId) as any;
+    const record = db.prepare(`
+      SELECT
+        SUM(CASE WHEN (g.home_team_id = ? AND g.home_score > g.away_score)
+                   OR (g.away_team_id = ? AND g.away_score > g.home_score) THEN 1 ELSE 0 END) as wins,
+        SUM(CASE WHEN (g.home_team_id = ? AND g.home_score < g.away_score)
+                   OR (g.away_team_id = ? AND g.away_score < g.home_score) THEN 1 ELSE 0 END) as losses,
+        SUM(CASE WHEN (g.home_team_id = ? OR g.away_team_id = ?)
+                  AND g.home_score = g.away_score THEN 1 ELSE 0 END) as ties
+      FROM games g
+      WHERE (g.home_team_id = ? OR g.away_team_id = ?)
+        AND g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
+    `).get(userTeamId, userTeamId, userTeamId, userTeamId, userTeamId, userTeamId, userTeamId, userTeamId, season) as any;
+    const recentNews = db.prepare(
+      "SELECT headline, detail, event_type, category, season, week FROM news_events ORDER BY id DESC LIMIT 8"
+    ).all() as any[];
+    return { team, record, recentNews };
+  });
+
+  ipcMain.handle('generate-schedule', () => {
+    const { generateSchedule } = require('../services/ScheduleService');
+    return generateSchedule();
+  });
+
+  ipcMain.handle('get-schedule', (_event: any, season: number) =>
+    db.prepare(`
+      SELECT g.id, g.week, g.home_team_id, g.away_team_id,
+        g.home_score, g.away_score, g.is_simulated, g.is_playoff, g.weather,
+        ht.city as home_city, ht.name as home_name, ht.abbreviation as home_abbr,
+        at.city as away_city, at.name as away_name, at.abbreviation as away_abbr
+      FROM games g
+      JOIN teams ht ON ht.id = g.home_team_id
+      JOIN teams at ON at.id = g.away_team_id
+      WHERE g.season = ?
+      ORDER BY g.week, g.id
+    `).all(season));
+
+  ipcMain.handle('get-current-week', () => {
+    const season = getCurrentSeason();
+    const row = db.prepare(
+      'SELECT MAX(week) as week FROM games WHERE season = ? AND is_simulated = 1 AND is_playoff = 0'
+    ).get(season) as any;
+    return row?.week ?? 0;
+  });
+
+  ipcMain.handle('get-week-matchups', (_event: any, week: number) => {
     const season = getCurrentSeason();
     return db.prepare(`
-      SELECT COUNT(DISTINCT s.game_id) as games,
-             SUM(s.pass_attempts) as pass_attempts, SUM(s.completions) as completions,
-             SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
-             SUM(s.interceptions) as interceptions, SUM(s.rush_attempts) as rush_attempts,
-             SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds,
-             SUM(s.targets) as targets, SUM(s.receptions) as receptions,
-             SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
-             SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
-             SUM(s.sacks) as sacks, SUM(s.tfl) as tfl,
-             SUM(s.def_interceptions) as def_interceptions,
-             SUM(s.pass_deflections) as pass_deflections
-      FROM stats s
-      WHERE s.player_id = ? AND s.season = ?
-    `).get(playerId, season);
-  });
-
-  ipcMain.handle('get-player-career-stats', (_event: any, playerId: number) => {
-    const live = db.prepare(`
-      SELECT s.season, COUNT(DISTINCT s.game_id) as games,
-             SUM(s.completions) as completions, SUM(s.pass_attempts) as pass_attempts,
-             SUM(s.pass_yards) as pass_yards, SUM(s.pass_tds) as pass_tds,
-             SUM(s.interceptions) as interceptions, SUM(s.rush_attempts) as rush_attempts,
-             SUM(s.rush_yards) as rush_yards, SUM(s.rush_tds) as rush_tds,
-             SUM(s.targets) as targets, SUM(s.receptions) as receptions,
-             SUM(s.rec_yards) as rec_yards, SUM(s.rec_tds) as rec_tds,
-             SUM(s.tackles) as tackles, SUM(s.assisted_tackles) as assisted_tackles,
-             SUM(s.sacks) as sacks, SUM(s.tfl) as tfl,
-             SUM(s.def_interceptions) as def_interceptions,
-             SUM(s.pass_deflections) as pass_deflections
-      FROM stats s WHERE s.player_id = ?
-      GROUP BY s.season
-    `).all(playerId) as any[];
-    const history = db.prepare(`
-      SELECT season, games, completions, pass_attempts, pass_yards, pass_tds, interceptions,
-             rush_attempts, rush_yards, rush_tds, targets, receptions, rec_yards, rec_tds,
-             tackles, assisted_tackles, sacks, tfl, def_interceptions, pass_deflections
-      FROM career_stats_history WHERE player_id = ?
-    `).all(playerId) as any[];
-    const liveSeasons = new Set(live.map((r: any) => r.season));
-    return [...live, ...history.filter((r: any) => !liveSeasons.has(r.season))]
-      .sort((a: any, b: any) => b.season - a.season);
-  });
-
-  ipcMain.handle('get-schedule', (_event: any, season?: number) => {
-    const s = season ?? getCurrentSeason();
-    return db.prepare(`
-      SELECT g.id, g.week, g.home_score, g.away_score,
-             ht.city || ' ' || ht.name AS home_team,
-             at.city || ' ' || at.name AS away_team
+      SELECT g.id, g.week, g.home_team_id, g.away_team_id,
+        g.home_score, g.away_score, g.is_simulated, g.weather,
+        ht.city as home_city, ht.name as home_name, ht.abbreviation as home_abbr,
+        at.city as away_city, at.name as away_name, at.abbreviation as away_abbr
       FROM games g
-      JOIN teams ht ON g.home_team_id = ht.id
-      JOIN teams at ON g.away_team_id = at.id
-      WHERE g.season = ? AND g.is_simulated = 1
-      ORDER BY g.week, g.id
-    `).all(s);
+      JOIN teams ht ON ht.id = g.home_team_id
+      JOIN teams at ON at.id = g.away_team_id
+      WHERE g.season = ? AND g.week = ? AND g.is_playoff = 0
+      ORDER BY g.id
+    `).all(season, week);
   });
 
-  ipcMain.handle('get-dashboard', (_event: any, season?: number) => {
-    const s = season ?? getCurrentSeason();
-    const topAFC = db.prepare(`
-      SELECT t.city || ' ' || t.name AS team_name,
-             SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score)
-                       OR (g.away_team_id = t.id AND g.away_score > g.home_score)
-                  THEN 1 ELSE 0 END) AS wins,
-             SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score < g.away_score)
-                       OR (g.away_team_id = t.id AND g.away_score < g.home_score)
-                  THEN 1 ELSE 0 END) AS losses
-      FROM teams t
-      JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id)
-      WHERE g.season = ? AND g.is_simulated = 1 AND t.conference = 'AFC'
-      GROUP BY t.id ORDER BY wins DESC LIMIT 5
-    `).all(s);
-    const topNFC = db.prepare(`
-      SELECT t.city || ' ' || t.name AS team_name,
-             SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score)
-                       OR (g.away_team_id = t.id AND g.away_score > g.home_score)
-                  THEN 1 ELSE 0 END) AS wins,
-             SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score < g.away_score)
-                       OR (g.away_team_id = t.id AND g.away_score < g.home_score)
-                  THEN 1 ELSE 0 END) AS losses
-      FROM teams t
-      JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id)
-      WHERE g.season = ? AND g.is_simulated = 1 AND t.conference = 'NFC'
-      GROUP BY t.id ORDER BY wins DESC LIMIT 5
-    `).all(s);
-    const recentGames = db.prepare(`
-      SELECT g.week, g.home_score, g.away_score,
-             ht.city || ' ' || ht.name AS home_team,
-             at.city || ' ' || at.name AS away_team
-      FROM games g
-      JOIN teams ht ON g.home_team_id = ht.id
-      JOIN teams at ON g.away_team_id = at.id
-      WHERE g.season = ? AND g.is_simulated = 1
-      ORDER BY g.week DESC, g.id DESC LIMIT 8
-    `).all(s);
-    return { topAFC, topNFC, recentGames };
+  ipcMain.handle('simulate-week', (_event: any, week: number) => {
+    const { simulateWeek } = require('../services/SimulationService');
+    return simulateWeek(week);
   });
 
-  ipcMain.handle('get-stats', (_event: any, season?: number) => {
-    const s = season ?? getCurrentSeason();
-    return getLeagueStats(s);
+  ipcMain.handle('simulate-game', (_event: any, gameId: number) => {
+    const { simulateSingleGame } = require('../services/SimulationService');
+    return simulateSingleGame(gameId);
   });
 
-  ipcMain.handle('get-hall-of-fame', () =>
-    db.prepare('SELECT * FROM hall_of_fame ORDER BY inducted_season DESC, name ASC').all());
-
-  ipcMain.handle('get-team-season-stats', (_event: any, season?: number) => {
-    const s = season ?? getCurrentSeason();
-    return getTeamSeasonStats(s);
+  ipcMain.handle('get-game-box-score', (_event: any, gameId: number) => {
+    const { getGameBoxScore } = require('../services/SimulationService');
+    return getGameBoxScore(gameId);
   });
 
-  ipcMain.handle('get-team-stats', (_event: any, teamId: number, season?: number) => {
-    const s = season ?? getCurrentSeason();
-    return getTeamPlayerStats(teamId, s);
+  ipcMain.handle('simulate-playoffs', (_event: any, season: number) => {
+    const { simulatePlayoffs } = require('../services/PlayoffService');
+    return simulatePlayoffs(season);
   });
 
-  ipcMain.handle('get-playoffs', (_event: any, season?: number) => {
-    const s = season ?? getCurrentSeason();
-    return db.prepare(`
-      SELECT g.week, g.home_score, g.away_score,
-             ht.city || ' ' || ht.name AS home_team,
-             at.city || ' ' || at.name AS away_team
-      FROM games g
-      JOIN teams ht ON g.home_team_id = ht.id
-      JOIN teams at ON g.away_team_id = at.id
-      WHERE g.season = ? AND g.is_playoff = 1
-      ORDER BY g.week, g.id
-    `).all(s);
+  ipcMain.handle('get-playoffs', (_event: any, season: number) => {
+    const { getPlayoffs } = require('../services/PlayoffService');
+    return getPlayoffs(season);
   });
 
-  ipcMain.handle('get-announcing-retirements', () => {
-  const userTeamId = settingsRepo.getUserTeamId() ?? -1;
-  return db.prepare(`
-    SELECT p.id, p.first_name, p.last_name, p.position, p.position_label,
-           p.age, p.overall_rating, c.annual_salary
-    FROM players p
-    LEFT JOIN contracts c ON c.player_id = p.id
-    WHERE p.team_id = ? AND p.roster_status = 'announcing_retirement'
-    ORDER BY p.overall_rating DESC
-  `).all(userTeamId);
-});
+  ipcMain.handle('get-playoff-seeds', () => {
+    const { getPlayoffSeeds } = require('../services/PlayoffService');
+    return getPlayoffSeeds();
+  });
 
-ipcMain.handle('make-retention-offer', (_event: any, playerId: number) => {
-  const player = db.prepare(`
-    SELECT id, first_name, last_name, position, age, overall_rating
-    FROM players WHERE id = ? AND roster_status = 'announcing_retirement'
-  `).get(playerId) as any;
-  if (!player) return { success: false, reason: 'Player not found.' };
+  ipcMain.handle('get-announcing-retirements', () =>
+    db.prepare(`
+      SELECT id, first_name, last_name, position, age, overall_rating, team_id
+      FROM players WHERE roster_status = 'announcing_retirement'
+    `).all());
 
-  let acceptChance = 0.50;
-  if (player.age <= 33) acceptChance += 0.15;
-  else if (player.age <= 35) acceptChance += 0.00;
-  else if (player.age <= 37) acceptChance -= 0.15;
-  else acceptChance -= 0.30;
-  if (player.overall_rating >= 80) acceptChance += 0.10;
-  if (player.overall_rating < 70) acceptChance -= 0.15;
-  acceptChance = Math.max(0.10, Math.min(0.85, acceptChance));
+  ipcMain.handle('make-retention-offer', (_event: any, playerId: number) => {
+    const { makeRetentionOffer } = require('../services/ContractService');
+    if (makeRetentionOffer) return makeRetentionOffer(playerId);
+    db.prepare("UPDATE players SET roster_status = 'active', morale = MIN(100, morale + 15) WHERE id = ?").run(playerId);
+    return { success: true };
+  });
 
-  const accepted = Math.random() < acceptChance;
-  const name = `${player.first_name} ${player.last_name}`;
-  const season = getCurrentSeason();
-
-  if (accepted) {
-    const contract = db.prepare('SELECT annual_salary FROM contracts WHERE player_id = ?').get(playerId) as any;
-    const currentSalary = contract?.annual_salary ?? 2.0;
-    const offerSalary = Math.max(1.0, Math.round(currentSalary * 0.75 * 10) / 10);
-    db.prepare("UPDATE players SET roster_status = 'active' WHERE id = ?").run(playerId);
-    if (contract) {
-      db.prepare("UPDATE contracts SET years_remaining = 1, annual_salary = ? WHERE player_id = ?").run(offerSalary, playerId);
-    } else {
-      db.prepare("INSERT INTO contracts (player_id, team_id, years_remaining, annual_salary) VALUES (?, ?, 1, ?)").run(playerId, settingsRepo.getUserTeamId(), offerSalary);
-    }
-    logNewsEvent({
-      eventType: 'contract', category: 'transactions',
-      headline: `${name} Returns for One More Year`,
-      detail: `${player.position} · Age ${player.age} · signed a 1-year deal worth $${offerSalary.toFixed(1)}M.`,
-      playerId: player.id, season,
-    });
-    return { accepted: true, name, salary: offerSalary };
-  } else {
+  ipcMain.handle('dismiss-retirement', (_event: any, playerId: number) => {
     db.prepare("UPDATE players SET roster_status = 'retired', team_id = NULL, is_free_agent = 0 WHERE id = ?").run(playerId);
-    db.prepare('DELETE FROM contracts WHERE player_id = ?').run(playerId);
-    logNewsEvent({
-      eventType: 'retirement', category: 'season',
-      headline: `${name} Retires`,
-      detail: `${player.position} · Age ${player.age} · ${player.overall_rating} OVR — declined to return for another season.`,
-      playerId: player.id, season,
-    });
-    return { accepted: false, name };
-  }
-});
-
-ipcMain.handle('dismiss-retirement', (_event: any, playerId: number) => {
-  const player = db.prepare(`
-    SELECT id, first_name, last_name, position, age, overall_rating
-    FROM players WHERE id = ? AND roster_status = 'announcing_retirement'
-  `).get(playerId) as any;
-  if (!player) return { success: false };
-  db.prepare("UPDATE players SET roster_status = 'retired', team_id = NULL, is_free_agent = 0 WHERE id = ?").run(playerId);
-  db.prepare('DELETE FROM contracts WHERE player_id = ?').run(playerId);
-  const season = getCurrentSeason();
-  logNewsEvent({
-    eventType: 'retirement', category: 'season',
-    headline: `${player.first_name} ${player.last_name} Retires`,
-    detail: `${player.position} · Age ${player.age} · ${player.overall_rating} OVR — a career comes to an end.`,
-    playerId: player.id, season,
+    const { contractRepo: cr } = require('../repositories');
+    cr.delete(playerId);
+    return { success: true };
   });
-  return { success: true };
-});
 
   ipcMain.handle('get-champions', () =>
     db.prepare(`
-      SELECT c.season, t.city || ' ' || t.name AS team_name, t.conference
-      FROM champions c JOIN teams t ON c.team_id = t.id
-      ORDER BY c.season DESC
+      SELECT ch.season, ch.team_id, t.city, t.name, t.abbreviation
+      FROM champions ch JOIN teams t ON t.id = ch.team_id
+      ORDER BY ch.season DESC
     `).all());
 
-  ipcMain.handle('get-seasons', () =>
-    (db.prepare(`SELECT DISTINCT season FROM games WHERE is_simulated = 1 ORDER BY season DESC`)
-      .all() as any[]).map((r: any) => r.season));
-
-  ipcMain.handle('get-current-season', () => getCurrentSeason());
+  ipcMain.handle('get-season-awards', (_event: any, season: number) => {
+    const { getSeasonAwards } = require('../services/AwardsService');
+    if (getSeasonAwards) return getSeasonAwards(season);
+    return [];
+  });
 
   ipcMain.handle('advance-season', async (): Promise<AdvanceSeasonResult> =>
     advanceSeason() as any);
@@ -270,28 +163,26 @@ ipcMain.handle('dismiss-retirement', (_event: any, playerId: number) => {
   ipcMain.handle('open-free-agency', () =>
     openFreeAgency(settingsRepo.getUserTeamId() ?? -1));
 
-    ipcMain.handle('get-owner-goals', (_event: any, season: number) => {
+  ipcMain.handle('get-owner-goals', (_event: any, season: number) => {
     const { getOwnerGoalsForSeason } = require('../services/OwnerGoalsService');
     return getOwnerGoalsForSeason(season);
   });
 
   ipcMain.handle('get-team-finances', (_event: any, teamId: number) => {
-  let row = db.prepare('SELECT * FROM team_finances WHERE team_id = ?').get(teamId) as any;
-  if (!row) {
-    db.prepare('INSERT OR IGNORE INTO team_finances (team_id) VALUES (?)').run(teamId);
-    row = db.prepare('SELECT * FROM team_finances WHERE team_id = ?').get(teamId);
-  }
-  return row ?? null;
-});
+    let row = db.prepare('SELECT * FROM team_finances WHERE team_id = ?').get(teamId) as any;
+    if (!row) {
+      db.prepare('INSERT OR IGNORE INTO team_finances (team_id) VALUES (?)').run(teamId);
+      row = db.prepare('SELECT * FROM team_finances WHERE team_id = ?').get(teamId);
+    }
+    return row ?? null;
+  });
 
-ipcMain.handle('get-all-team-finances', () =>
-  db.prepare(`
-    SELECT tf.*, t.city, t.name
-    FROM team_finances tf
-    JOIN teams t ON t.id = tf.team_id
-    ORDER BY tf.season_revenue DESC
-  `).all()
-);
+  ipcMain.handle('get-all-team-finances', () =>
+    db.prepare(`
+      SELECT tf.*, t.city, t.name
+      FROM team_finances tf JOIN teams t ON t.id = tf.team_id
+      ORDER BY tf.season_revenue DESC
+    `).all());
 
   ipcMain.handle('get-owner-patience', () => {
     const { getOwnerPatience } = require('../services/OwnerGoalsService');
@@ -309,30 +200,21 @@ ipcMain.handle('get-all-team-finances', () =>
   ipcMain.handle('get-league-office-data', () => {
     const { getSalaryCap } = require('../helpers/getSalaryCap');
     const currentSeason = getCurrentSeason();
-    const userTeamId = settingsRepo.getUserTeamId() ?? -1;
-
     const capHistory: { season: number; cap: number }[] = [];
     for (let s = currentSeason - 4; s <= currentSeason; s++) {
       const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(`cap_history_${s}`) as any;
       if (row) capHistory.push({ season: s, cap: parseFloat(row.value) });
     }
-
     const userVoteRow = db.prepare("SELECT value FROM settings WHERE key = 'user_expansion_vote'").get() as any;
     const userVote = userVoteRow ? userVoteRow.value : null;
-
     let recentExpansions: any[] = [];
     let recentRelocations: any[] = [];
     try {
-      recentExpansions = db.prepare(
-        'SELECT * FROM expansion_history WHERE passed = 1 ORDER BY season DESC LIMIT 5'
-      ).all() as any[];
+      recentExpansions = db.prepare('SELECT * FROM expansion_history WHERE passed = 1 ORDER BY season DESC LIMIT 5').all() as any[];
     } catch {}
     try {
-      recentRelocations = db.prepare(
-        "SELECT headline, detail, season FROM news_events WHERE event_type = 'league' AND headline LIKE '%Relocate%' ORDER BY season DESC LIMIT 5"
-      ).all() as any[];
+      recentRelocations = db.prepare("SELECT headline, detail, season FROM news_events WHERE event_type = 'league' AND headline LIKE '%Relocate%' ORDER BY season DESC LIMIT 5").all() as any[];
     } catch {}
-
     return {
       salaryCap: getSalaryCap(),
       capHistory,
@@ -344,15 +226,12 @@ ipcMain.handle('get-all-team-finances', () =>
   });
 
   ipcMain.handle('cast-expansion-vote', (_event: any, vote: 'for' | 'against') => {
-    const season = getCurrentSeason();
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('user_expansion_vote', vote);
     return { success: true };
   });
 
   ipcMain.handle('get-relocation-cities', () => {
-    const existingCities = new Set(
-      (db.prepare('SELECT city FROM teams').all() as any[]).map((t: any) => t.city)
-    );
+    const existingCities = new Set((db.prepare('SELECT city FROM teams').all() as any[]).map((t: any) => t.city));
     const CITY_POOL = [
       { city: 'Portland',       name: 'Pioneers',   abbreviation: 'POR', marketSize: 'medium' },
       { city: 'San Antonio',    name: 'Stallions',  abbreviation: 'SAS', marketSize: 'medium' },
@@ -377,28 +256,19 @@ ipcMain.handle('get-all-team-finances', () =>
     const season = getCurrentSeason();
     const userTeamId = settingsRepo.getUserTeamId() ?? -1;
     if (userTeamId < 0) return { success: false, reason: 'No team selected.' };
-
     const cooldownRow = db.prepare("SELECT value FROM settings WHERE key = 'user_relocated_season'").get() as any;
     const lastReloc = cooldownRow ? parseInt(cooldownRow.value, 10) : 0;
-    if (lastReloc > 0 && season - lastReloc < 10) {
+    if (lastReloc > 0 && season - lastReloc < 10)
       return { success: false, reason: `You can relocate again in ${10 - (season - lastReloc)} season(s).` };
-    }
-
     const team = db.prepare('SELECT city, name FROM teams WHERE id = ?').get(userTeamId) as any;
     if (!team) return { success: false, reason: 'Team not found.' };
-
     const oldCity = team.city;
-    db.prepare('UPDATE teams SET city = ?, abbreviation = ?, relocated_from = ? WHERE id = ?')
-      .run(payload.city, payload.abbreviation, oldCity, userTeamId);
-    db.prepare('UPDATE team_finances SET market_size = ? WHERE team_id = ?')
-      .run(payload.marketSize, userTeamId);
-
-    const currentPatience = parseInt(
-      (db.prepare("SELECT value FROM settings WHERE key = 'owner_patience'").get() as any)?.value ?? '75', 10
-    );
+    db.prepare('UPDATE teams SET city = ?, abbreviation = ?, relocated_from = ? WHERE id = ?').run(payload.city, payload.abbreviation, oldCity, userTeamId);
+    db.prepare('UPDATE team_finances SET market_size = ? WHERE team_id = ?').run(payload.marketSize, userTeamId);
+    const currentPatience = parseInt((db.prepare("SELECT value FROM settings WHERE key = 'owner_patience'").get() as any)?.value ?? '75', 10);
     db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('owner_patience', ?)").run(String(Math.max(0, currentPatience - 10)));
     db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('user_relocated_season', ?)").run(String(season));
-
+    const { logNewsEvent } = require('../helpers/logNewsEvent');
     logNewsEvent({
       eventType: 'league', category: 'season',
       headline: `${oldCity} ${team.name} Relocate to ${payload.city}`,
@@ -407,6 +277,14 @@ ipcMain.handle('get-all-team-finances', () =>
     });
     return { success: true };
   });
-  
-}
 
+  // ── League Events ────────────────────────────────────────────────────────
+  ipcMain.handle('get-recent-league-events', () => getRecentLeagueEvents(10));
+
+  // ── GM Personalities ─────────────────────────────────────────────────────
+  ipcMain.handle('get-all-gm-personalities', () =>
+    db.prepare(`
+      SELECT t.id, t.city, t.name, t.gm_personality
+      FROM teams t ORDER BY t.city
+    `).all());
+}
