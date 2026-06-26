@@ -40,6 +40,12 @@ export const contractsApi = {
   promoteFromPs: (playerId: number) =>
     ipcRenderer.invoke('promote-from-ps', playerId),
 
+    demoteToPs: (playerId: number) =>
+    ipcRenderer.invoke('demote-to-ps', playerId),
+
+  cutFromPs: (playerId: number) =>
+    ipcRenderer.invoke('cut-from-ps', playerId),
+
   acceptCounterOffer: (payload: { playerId: number; years: number; salary: number }) =>
     ipcRenderer.invoke('accept-counter-offer', payload),
 
