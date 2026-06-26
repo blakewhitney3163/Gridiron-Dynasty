@@ -4,6 +4,7 @@ import { Matchup, BoxScoreData, StandingEntry, Champion, SeedEntry, PlayoffGame,
 import OffseasonChecklist from './home/OffseasonChecklist';
 import Sidebar from './home/Sidebar';
 import PlayoffSeedingsView from './home/PlayoffSeedingsView';
+import PlayoffBracketView from './home/PlayoffBracketView';
 import PlayoffResultsView from './home/PlayoffResultsView';
 import SeasonAwardsView from './home/SeasonAwardsView';
 import GamePreview from './home/GamePreview';
@@ -76,6 +77,8 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [playoffSeeds, setPlayoffSeeds] = useState<{ afc: SeedEntry[]; nfc: SeedEntry[] } | null>(null);
   const [playoffResults, setPlayoffResults] = useState<PlayoffGame[] | null>(null);
   const [simulatingPlayoffs, setSimulatingPlayoffs] = useState(false);
+  const [playoffState, setPlayoffState] = useState<any>(null);
+  const [simulatingPlayoffGameId, setSimulatingPlayoffGameId] = useState<number | null>(null);
   const [userRecord, setUserRecord] = useState<{ wins: number; losses: number } | null>(null);
   const [pendingResigns, setPendingResigns] = useState(0);
   const [draftComplete, setDraftComplete] = useState(false);
@@ -99,9 +102,9 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [userScheme, setUserScheme] = useState<{ offenseScheme: string; defenseScheme: string } | null>(null);
   const [allStandings, setAllStandings] = useState<{ id: number; wins: number; losses: number }[]>([]);
   const [recentNews, setRecentNews] = useState<NewsEvent[]>([]);
-const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: { id: number; week: number; delta: number; reason: string }[]; archetypes: { archetype: string; count: number }[] } | null>(null);
+  const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: { id: number; week: number; delta: number; reason: string }[]; archetypes: { archetype: string; count: number }[] } | null>(null);
   const [staffSetupComplete, setStaffSetupComplete] = useState(false);
-  
+
   const fetchRecentNews = async () => {
     const news = await window.api.getNewsFeed({ season: currentSeason, limit: 6 });
     setRecentNews(news ?? []);
@@ -117,22 +120,22 @@ const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: 
       setSeasonAwards(null); setStaffSetupComplete(false);
 
       const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffers, tradeStatus, spots, health, psAlerts, announcingRets, news, chemistry] = await Promise.all([
-  window.api.getCurrentWeek(),
-  window.api.getDashboard(currentSeason),
-  window.api.getChampions(),
-  window.api.getStandings(currentSeason),
-  window.api.getOffseasonStatus(),
-  window.api.getInjuryReport(userTeam.id),
-  window.api.getStats(currentSeason),
-  window.api.getCpuTradeOffer(),
-  window.api.getTeamStatus(userTeam.id),
-  window.api.getRosterSpots(userTeam.id),
-  window.api.getFranchiseHealth(userTeam.id),
-  window.api.getPSPromotionAlerts(userTeam.id),
-  window.api.getAnnouncingRetirements(),
-  window.api.getNewsFeed({ season: currentSeason, limit: 6 }),
-  window.api.getTeamChemistry(userTeam.id),
-]);
+        window.api.getCurrentWeek(),
+        window.api.getDashboard(currentSeason),
+        window.api.getChampions(),
+        window.api.getStandings(currentSeason),
+        window.api.getOffseasonStatus(),
+        window.api.getInjuryReport(userTeam.id),
+        window.api.getStats(currentSeason),
+        window.api.getCpuTradeOffer(),
+        window.api.getTeamStatus(userTeam.id),
+        window.api.getRosterSpots(userTeam.id),
+        window.api.getFranchiseHealth(userTeam.id),
+        window.api.getPSPromotionAlerts(userTeam.id),
+        window.api.getAnnouncingRetirements(),
+        window.api.getNewsFeed({ season: currentSeason, limit: 6 }),
+        window.api.getTeamChemistry(userTeam.id),
+      ]);
       if (cancelled) return;
 
       const seasonDone = status.hasSchedule && status.currentWeek === null;
@@ -168,8 +171,12 @@ const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: 
         const data = await window.api.getWeekMatchups(status.currentWeek);
         if (!cancelled) setMatchups(data);
       } else if (seasonDone && !champForSeason) {
-        const [seeds, weekData] = await Promise.all([window.api.getPlayoffSeeds(), window.api.getWeekMatchups(18)]);
-        if (!cancelled) { setPlayoffSeeds(seeds); setMatchups(weekData); }
+        let pState = await window.api.getPlayoffState(currentSeason);
+        if (!pState?.initialized) {
+          await window.api.initPlayoffs(currentSeason);
+          pState = await window.api.getPlayoffState(currentSeason);
+        }
+        if (!cancelled) setPlayoffState(pState);
       } else if (seasonDone && champForSeason) {
         const [results, weekData, awards] = await Promise.all([
           window.api.getPlayoffs(currentSeason),
@@ -255,8 +262,12 @@ const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: 
     if (weekResult?.userPSOpenSpots > 0)
       setPSAlert(`Practice squad has ${weekResult.userPSOpenSpots} open spot${weekResult.userPSOpenSpots !== 1 ? 's' : ''}. Go to My Team → Practice Squad.`);
     if (status.currentWeek === null && status.hasSchedule) {
-      setPlayoffSeeds(await window.api.getPlayoffSeeds());
-      setMatchups(await window.api.getWeekMatchups(18));
+      let pState = await window.api.getPlayoffState(currentSeason);
+      if (!pState?.initialized) {
+        await window.api.initPlayoffs(currentSeason);
+        pState = await window.api.getPlayoffState(currentSeason);
+      }
+      setPlayoffState(pState);
     } else if (status.currentWeek) {
       setMatchups(await window.api.getWeekMatchups(status.currentWeek));
     }
@@ -300,23 +311,43 @@ const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: 
     setBoxScoreLoading(false);
   };
 
+  const handleSimulatePlayoffGame = async (gameId: number) => {
+    setSimulatingPlayoffGameId(gameId);
+    await window.api.simulatePlayoffGame(gameId);
+    const pState = await window.api.getPlayoffState(currentSeason);
+    setPlayoffState(pState);
+    if (pState?.complete) {
+      setPlayoffsComplete(true);
+      const [champs, results, awards] = await Promise.all([
+        window.api.getChampions(),
+        window.api.getPlayoffs(currentSeason),
+        window.api.getSeasonAwards(currentSeason),
+      ]);
+      setChampions(champs);
+      setPlayoffResults(results);
+      setSeasonAwards(awards);
+    }
+    await fetchRecentNews();
+    setSimulatingPlayoffGameId(null);
+  };
+
   const handleSimulatePlayoffs = async () => {
-  setSimulatingPlayoffs(true);
-  await window.api.simulatePlayoffs(currentSeason);
-  const [results, champs] = await Promise.all([
-    window.api.getPlayoffs(currentSeason),
-    window.api.getChampions(),
-  ]);
-  setPlayoffResults(results);
-  setChampions(champs);
-  const champForSeason = champs.find((c: Champion) => c.season === currentSeason);
-  if (champForSeason) {
-    setPlayoffsComplete(true);
-    setSeasonAwards(await window.api.getSeasonAwards(currentSeason));
-  }
-  await fetchRecentNews();
-  setSimulatingPlayoffs(false);
-};
+    setSimulatingPlayoffs(true);
+    await window.api.simulatePlayoffs(currentSeason);
+    const [results, champs] = await Promise.all([
+      window.api.getPlayoffs(currentSeason),
+      window.api.getChampions(),
+    ]);
+    setPlayoffResults(results);
+    setChampions(champs);
+    const champForSeason = champs.find((c: Champion) => c.season === currentSeason);
+    if (champForSeason) {
+      setPlayoffsComplete(true);
+      setSeasonAwards(await window.api.getSeasonAwards(currentSeason));
+    }
+    await fetchRecentNews();
+    setSimulatingPlayoffs(false);
+  };
 
   const handleAdvance = async () => {
     setAdvancing(true);
@@ -624,7 +655,13 @@ const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: 
         )}
 
         {allWeeksDone && !isPlayoffsComplete && (
-          <PlayoffSeedingsView seeds={playoffSeeds} onSimulate={handleSimulatePlayoffs} simulating={simulatingPlayoffs} />
+          <PlayoffBracketView
+            state={playoffState}
+            onSimulateGame={handleSimulatePlayoffGame}
+            onSimulateAll={handleSimulatePlayoffs}
+            simulatingGameId={simulatingPlayoffGameId}
+            simulatingAll={simulatingPlayoffs}
+          />
         )}
 
         {allWeeksDone && isPlayoffsComplete && (
@@ -647,11 +684,11 @@ const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: 
           </>
         )}
 
-                {teamChemistry && hasSchedule && (
-  <ChemistryPanel chemistry={teamChemistry.chemistry} events={teamChemistry.events} archetypes={teamChemistry.archetypes ?? []} />
-)}
+        {teamChemistry && (
+          <ChemistryPanel chemistry={teamChemistry.chemistry} events={teamChemistry.events} archetypes={teamChemistry.archetypes ?? []} />
+        )}
 
-{/* Recent News */}
+        {/* Recent News */}
         <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '14px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, textTransform: 'uppercase' }}>Recent News</div>
