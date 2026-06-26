@@ -520,10 +520,11 @@ export default function Franchise() {
         />
       )}
 
-      {activeTab === 'salaries' && (
+            {activeTab === 'salaries' && (
         <SalariesTab
           contracts={contracts}
           cap={cap}
+          currentSeason={currentSeason}
         />
       )}
 
