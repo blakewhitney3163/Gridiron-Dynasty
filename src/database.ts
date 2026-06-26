@@ -25,7 +25,6 @@ export function getDbPath(): string | null {
   return _dbPath;
 }
 
-// Lightweight open for worker threads — no schema setup, just opens the connection
 export function openDatabase(dbPath: string): void {
   _db = new Database(dbPath);
   _db.pragma('journal_mode = WAL');
@@ -91,7 +90,7 @@ export function initDatabase(dbPath: string): void {
       waiver_placed_week INTEGER,
       morale INTEGER DEFAULT 75,
       archetype TEXT NOT NULL DEFAULT 'normal',
-            injury_prone INTEGER DEFAULT 0,
+      injury_prone INTEGER DEFAULT 0,
       FOREIGN KEY (team_id) REFERENCES teams(id)
     );
     CREATE TABLE IF NOT EXISTS games (
@@ -347,8 +346,7 @@ export function initDatabase(dbPath: string): void {
       defense_scheme TEXT NOT NULL DEFAULT '4-3',
       FOREIGN KEY (team_id) REFERENCES teams(id)
     );
-
-        CREATE TABLE IF NOT EXISTS scouts (
+    CREATE TABLE IF NOT EXISTS scouts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       team_id INTEGER,
       first_name TEXT NOT NULL,
@@ -359,24 +357,21 @@ export function initDatabase(dbPath: string): void {
       years_on_staff INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (team_id) REFERENCES teams(id)
     );
-
-CREATE TABLE IF NOT EXISTS team_finances (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  team_id INTEGER UNIQUE NOT NULL,
-  market_size TEXT NOT NULL DEFAULT 'medium',
-  stadium_capacity INTEGER NOT NULL DEFAULT 65000,
-  season_revenue REAL NOT NULL DEFAULT 250.0,
-  owner_budget REAL NOT NULL DEFAULT 280.0
-);
-
-        CREATE TABLE IF NOT EXISTS owner_goals (
+    CREATE TABLE IF NOT EXISTS team_finances (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      team_id INTEGER UNIQUE NOT NULL,
+      market_size TEXT NOT NULL DEFAULT 'medium',
+      stadium_capacity INTEGER NOT NULL DEFAULT 65000,
+      season_revenue REAL NOT NULL DEFAULT 250.0,
+      owner_budget REAL NOT NULL DEFAULT 280.0
+    );
+    CREATE TABLE IF NOT EXISTS owner_goals (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       season INTEGER NOT NULL,
       goal_type TEXT NOT NULL,
       target_value INTEGER NOT NULL,
       achieved INTEGER DEFAULT 0
     );
-
     CREATE TABLE IF NOT EXISTS injury_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       player_id INTEGER NOT NULL,
@@ -387,26 +382,23 @@ CREATE TABLE IF NOT EXISTS team_finances (
       weeks_out INTEGER NOT NULL,
       FOREIGN KEY (player_id) REFERENCES players(id)
     );
-
     CREATE TABLE IF NOT EXISTS team_chemistry (
       team_id INTEGER PRIMARY KEY,
       chemistry INTEGER NOT NULL DEFAULT 50,
       FOREIGN KEY (team_id) REFERENCES teams(id)
     );
-
     CREATE TABLE IF NOT EXISTS expansion_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    season INTEGER NOT NULL,
-    city TEXT NOT NULL,
-    name TEXT NOT NULL,
-    conference TEXT NOT NULL,
-    division TEXT NOT NULL,
-    team_id INTEGER,
-    votes_for INTEGER NOT NULL DEFAULT 0,
-    votes_against INTEGER NOT NULL DEFAULT 0,
-    passed INTEGER NOT NULL DEFAULT 0
-  );
-
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      season INTEGER NOT NULL,
+      city TEXT NOT NULL,
+      name TEXT NOT NULL,
+      conference TEXT NOT NULL,
+      division TEXT NOT NULL,
+      team_id INTEGER,
+      votes_for INTEGER NOT NULL DEFAULT 0,
+      votes_against INTEGER NOT NULL DEFAULT 0,
+      passed INTEGER NOT NULL DEFAULT 0
+    );
     CREATE TABLE IF NOT EXISTS chemistry_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       team_id INTEGER NOT NULL,
@@ -466,18 +458,15 @@ CREATE TABLE IF NOT EXISTS team_finances (
   // ── Bootstrap defaults ────────────────────────────────────────────────────
   if (!_db!.prepare("SELECT value FROM settings WHERE key = 'current_season'").get())
     _db!.prepare("INSERT INTO settings (key, value) VALUES ('current_season', '2025')").run();
-  
-    if (!_db!.prepare("SELECT value FROM settings WHERE key = 'salary_cap'").get())
+  if (!_db!.prepare("SELECT value FROM settings WHERE key = 'salary_cap'").get())
     _db!.prepare("INSERT INTO settings (key, value) VALUES ('salary_cap', '279.2')").run();
 
   runMigrations();
-    // Must run after migrations — team_id is added by v9 on old saves
   try { _db!.exec('CREATE INDEX IF NOT EXISTS idx_career_stats_team ON career_stats_history(team_id)'); } catch {}
 }
 
 // ─── Contract Generation ──────────────────────────────────────────────────────
 
-// Market rate table — aligned with ContractService MARKET_RATE_TABLE
 const CONTRACT_MARKET_RATES: Record<string, [number, number][]> = {
   QB: [[99,65],[93,50],[88,35],[83,20],[78,10],[73,4],[70,1.5]],
   WR: [[99,45],[93,35],[88,25],[83,16],[78,8],[73,3],[70,1.5]],
@@ -536,7 +525,6 @@ export function generateContracts(): void {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
-  // Build per-player contract data
   interface PendingContract {
     id: number; team_id: number; salary: number;
     yearsTotal: number; yearsRemaining: number; guaranteedPct: number;
@@ -562,12 +550,11 @@ export function generateContracts(): void {
     teamTotals.set(p.team_id, (teamTotals.get(p.team_id) ?? 0) + salary);
   }
 
-  // Scale down any team that's over 95% of the cap
   const CAP_TARGET = SALARY_CAP * 0.95;
-for (const contract of pending) {
-  const total = teamTotals.get(contract.team_id) ?? 0;
-  contract.salary = Math.max(1.0, Math.round(contract.salary * (CAP_TARGET / total) * 10) / 10);
-}
+  for (const contract of pending) {
+    const total = teamTotals.get(contract.team_id) ?? 0;
+    contract.salary = Math.max(1.0, Math.round(contract.salary * (CAP_TARGET / total) * 10) / 10);
+  }
 
   db.transaction(() => {
     for (const c of pending) {
@@ -585,7 +572,7 @@ for (const contract of pending) {
 
 // ─── Migration Versioning ─────────────────────────────────────────────────────
 
-const CURRENT_SCHEMA_VERSION = 19;
+const CURRENT_SCHEMA_VERSION = 20;
 
 interface Migration { version: number; description: string; up: () => void; }
 
@@ -633,18 +620,15 @@ const MIGRATIONS: Migration[] = [
         WHERE p.roster_status = 'active'
         GROUP BY c.team_id
       `).all() as any[];
-
       const updateSalary = db.prepare(
         'UPDATE contracts SET annual_salary = ?, guaranteed_amount = ? WHERE player_id = ?'
       );
-
       for (const team of teamRows as any[]) {
         if (Math.abs(team.total_salary - CAP_TARGET) < 5) continue;
         const scale = CAP_TARGET / team.total_salary;
         const contracts = db.prepare(`
           SELECT c.player_id, c.annual_salary, c.years_total, c.guaranteed_pct
-          FROM contracts c
-          JOIN players p ON c.player_id = p.id
+          FROM contracts c JOIN players p ON c.player_id = p.id
           WHERE c.team_id = ? AND p.roster_status = 'active'
         `).all(team.team_id) as any[];
         for (const c of contracts) {
@@ -688,13 +672,12 @@ const MIGRATIONS: Migration[] = [
         )
       `).run();
       db.exec('CREATE INDEX IF NOT EXISTS idx_injury_history_player ON injury_history(player_id)');
-
       const playerCols = (db.prepare('PRAGMA table_info(players)').all() as any[]).map((c: any) => c.name);
       if (!playerCols.includes('injury_prone'))
         db.prepare('ALTER TABLE players ADD COLUMN injury_prone INTEGER DEFAULT 0').run();
     },
   },
-    {
+  {
     version: 14,
     description: 'Add team_chemistry and chemistry_events tables',
     up: () => {
@@ -717,7 +700,6 @@ const MIGRATIONS: Migration[] = [
         )
       `).run();
       db.exec('CREATE INDEX IF NOT EXISTS idx_chem_events_team ON chemistry_events(team_id, season)');
-      // Seed chemistry = 50 for all existing teams
       const teams = db.prepare('SELECT id FROM teams').all() as any[];
       const insert = db.prepare('INSERT OR IGNORE INTO team_chemistry (team_id, chemistry) VALUES (?, 50)');
       db.transaction(() => { for (const t of teams) insert.run(t.id); })();
@@ -727,13 +709,10 @@ const MIGRATIONS: Migration[] = [
     version: 15,
     description: 'Add archetype column to players for personality system',
     up: () => {
-      db.prepare(
-        "ALTER TABLE players ADD COLUMN archetype TEXT NOT NULL DEFAULT 'normal'"
-      ).run();
+      db.prepare("ALTER TABLE players ADD COLUMN archetype TEXT NOT NULL DEFAULT 'normal'").run();
     },
   },
-
-    {
+  {
     version: 16,
     description: 'Add scouts table for week-by-week scouting system',
     up: () => {
@@ -752,7 +731,6 @@ const MIGRATIONS: Migration[] = [
       `).run();
     },
   },
-
   {
     version: 17,
     description: 'Add play_log column to games',
@@ -760,7 +738,6 @@ const MIGRATIONS: Migration[] = [
       try { db.prepare('ALTER TABLE games ADD COLUMN play_log TEXT').run(); } catch {}
     },
   },
-
   {
     version: 18,
     description: 'Add team_finances table and seed market data',
@@ -775,7 +752,6 @@ const MIGRATIONS: Migration[] = [
           owner_budget REAL NOT NULL DEFAULT 280.0
         )
       `).run();
-
       const allTeams = db.prepare('SELECT id FROM teams ORDER BY id').all() as any[];
       const marketSizes = ['large','large','large','large','large','large','large','large',
         'medium','medium','medium','medium','medium','medium','medium','medium',
@@ -789,7 +765,6 @@ const MIGRATIONS: Migration[] = [
         67000,66500,66000,65500,65000,64500,64000,63500,
         63000,62500,62000,61500,61000,60500,60000,59500,
         58000,57000,56000,55000,54000,53000,52000,51000];
-
       const ins = db.prepare('INSERT OR IGNORE INTO team_finances (team_id, market_size, stadium_capacity, season_revenue, owner_budget) VALUES (?,?,?,?,?)');
       db.transaction(() => {
         allTeams.forEach((t, i) => {
@@ -802,7 +777,6 @@ const MIGRATIONS: Migration[] = [
       })();
     },
   },
-
   {
     version: 19,
     description: 'Add expansion/relocation columns, expansion_history table, seed salary_cap',
@@ -814,7 +788,6 @@ const MIGRATIONS: Migration[] = [
         db.prepare('ALTER TABLE teams ADD COLUMN stadium_name TEXT').run();
       if (!teamCols.includes('relocated_from'))
         db.prepare('ALTER TABLE teams ADD COLUMN relocated_from TEXT').run();
-
       db.prepare(`
         CREATE TABLE IF NOT EXISTS expansion_history (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -829,11 +802,63 @@ const MIGRATIONS: Migration[] = [
           passed INTEGER NOT NULL DEFAULT 0
         )
       `).run();
-
       db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('salary_cap', '279.2')").run();
     },
   },
-  
+  {
+    version: 20,
+    description: 'Add GM personalities, rookie deal flags, holdout/trade demand columns, attendance rate',
+    up: () => {
+      // team_finances: attendance_rate for dynamic revenue
+      const finCols = (db.prepare('PRAGMA table_info(team_finances)').all() as any[]).map((c: any) => c.name);
+      if (!finCols.includes('attendance_rate'))
+        db.prepare('ALTER TABLE team_finances ADD COLUMN attendance_rate REAL DEFAULT 0.72').run();
+
+      // teams: CPU GM personality
+      const teamCols = (db.prepare('PRAGMA table_info(teams)').all() as any[]).map((c: any) => c.name);
+      if (!teamCols.includes('gm_personality'))
+        db.prepare("ALTER TABLE teams ADD COLUMN gm_personality TEXT DEFAULT 'balanced'").run();
+
+      // Seed personalities for existing teams
+      const PERSONALITIES = ['win_now', 'analytics', 'old_school', 'rebuilder', 'star_chaser', 'balanced'];
+      const teams = db.prepare('SELECT id FROM teams').all() as any[];
+      const updPersonality = db.prepare('UPDATE teams SET gm_personality = ? WHERE id = ?');
+      db.transaction(() => {
+        for (const t of teams) {
+          const p = PERSONALITIES[Math.floor(Math.random() * PERSONALITIES.length)];
+          updPersonality.run(p, t.id);
+        }
+      })();
+
+      // contracts: rookie deal flags
+      const contractCols = (db.prepare('PRAGMA table_info(contracts)').all() as any[]).map((c: any) => c.name);
+      if (!contractCols.includes('is_rookie_deal'))
+        db.prepare('ALTER TABLE contracts ADD COLUMN is_rookie_deal INTEGER DEFAULT 0').run();
+      if (!contractCols.includes('fifth_year_option_eligible'))
+        db.prepare('ALTER TABLE contracts ADD COLUMN fifth_year_option_eligible INTEGER DEFAULT 0').run();
+      if (!contractCols.includes('fifth_year_option_picked_up'))
+        db.prepare('ALTER TABLE contracts ADD COLUMN fifth_year_option_picked_up INTEGER DEFAULT 0').run();
+
+      // players: holdout / trade demand
+      const playerCols = (db.prepare('PRAGMA table_info(players)').all() as any[]).map((c: any) => c.name);
+      if (!playerCols.includes('holdout_status'))
+        db.prepare('ALTER TABLE players ADD COLUMN holdout_status TEXT').run();
+      if (!playerCols.includes('holdout_weeks'))
+        db.prepare('ALTER TABLE players ADD COLUMN holdout_weeks INTEGER DEFAULT 0').run();
+      if (!playerCols.includes('trade_demand'))
+        db.prepare('ALTER TABLE players ADD COLUMN trade_demand INTEGER DEFAULT 0').run();
+
+      // Seed attendance_rate for existing team_finances rows
+      db.prepare(`
+        UPDATE team_finances SET attendance_rate = CASE
+          WHEN market_size = 'large'  THEN 0.82
+          WHEN market_size = 'medium' THEN 0.72
+          ELSE 0.62
+        END
+        WHERE attendance_rate IS NULL OR attendance_rate = 0
+      `).run();
+    },
+  },
 ];
 
 function getSchemaVersion(): number {
