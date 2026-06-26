@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import type { IpcEvent } from '../types/ipc';
 import {
-  getStaffByTeam, getAvailableCoaches, hireCoach, fireCoach, replenishCoachPool,
+  getStaffByTeam, getAvailableCoaches, hireCoach, fireCoach, replenishCoachPool, decrementCoachContracts,
 } from '../services/CoachingService';
 
 export function registerCoachingHandlers(): void {
@@ -13,9 +13,14 @@ export function registerCoachingHandlers(): void {
     return getAvailableCoaches(role);
   });
 
-  ipcMain.handle('hire-coach', (_event: IpcEvent, { teamId, coachId }: { teamId: number; coachId: number }) =>
-    hireCoach(teamId, coachId));
+  ipcMain.handle(
+    'hire-coach',
+    (_event: IpcEvent, { teamId, coachId, yearsRemaining }: { teamId: number; coachId: number; yearsRemaining?: number }) =>
+      hireCoach(teamId, coachId, yearsRemaining ?? 1)
+  );
 
   ipcMain.handle('fire-coach', (_event: IpcEvent, coachId: number) =>
     fireCoach(coachId));
+
+  ipcMain.handle('decrement-coach-contracts', () => decrementCoachContracts());
 }
