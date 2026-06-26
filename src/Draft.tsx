@@ -13,8 +13,29 @@ interface Props {
   onDraftComplete: () => void;
 }
 
+const POSITION_LABELS: Record<string, string> = {
+  QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', OL: 'OL',
+  DL: 'DL', LB: 'LB', CB: 'CB', S: 'S', K: 'K',
+};
+
+function classGradeLabel(rating: number): string {
+  if (rating >= 85) return 'Elite';
+  if (rating >= 75) return 'Strong';
+  if (rating >= 65) return 'Average';
+  if (rating >= 55) return 'Weak';
+  return 'Poor';
+}
+
+function classGradeColor(rating: number): string {
+  if (rating >= 85) return '#FFD700';
+  if (rating >= 75) return '#4caf50';
+  if (rating >= 65) return '#FF8740';
+  if (rating >= 55) return '#ef5350';
+  return '#666';
+}
+
 export default function Draft({ onDraftComplete }: Props) {
-    const { userTeam, currentSeason, playoffsComplete } = useGameStore();
+  const { userTeam, currentSeason, playoffsComplete } = useGameStore();
 
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [draftOrder, setDraftOrder] = useState<DraftTeam[]>([]);
@@ -30,28 +51,42 @@ export default function Draft({ onDraftComplete }: Props) {
   const [showResults, setShowResults] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [running, setRunning] = useState(false);
-    const [scoutsUsed, setScoutsUsed] = useState(0);
+  const [scoutsUsed, setScoutsUsed] = useState(0);
   const [scoutBudget, setScoutBudget] = useState(25);
   const [scouting, setScouting] = useState<number | null>(null);
+  const [classStrength, setClassStrength] = useState<Record<string, number> | null>(null);
 
-    useEffect(() => { loadDraft(); }, [userTeam?.id]);
+  // In-draft trade modal state
+  const [showTradeModal, setShowTradeModal] = useState(false);
+  const [tradeMyPickAssetId, setTradeMyPickAssetId] = useState<number | null>(null);
+  const [tradeTheirTeamId, setTradeTheirTeamId] = useState<number | null>(null);
+  const [tradeTheirPickAssetId, setTradeTheirPickAssetId] = useState<number | null>(null);
+  const [tradeResult, setTradeResult] = useState<{ accepted: boolean; reason?: string } | null>(null);
+  const [tradingPick, setTradingPick] = useState(false);
+
+  useEffect(() => { loadDraft(); }, [userTeam?.id]);
 
   const loadDraft = async () => {
-
-      const [cls, order, sc] = await Promise.all([
+    const [cls, order, sc, cs] = await Promise.all([
       window.api.getDraftClass(),
       window.api.getDraftOrder(),
       window.api.getScoutCount(),
+      window.api.getDraftClassStrength(),
     ]);
-    setProspects(cls); setDraftOrder(order);
+    setProspects(cls);
+    setDraftOrder(order);
     setScoutsUsed(sc?.used ?? sc ?? 0);
     setScoutBudget(sc?.budget ?? 25);
     setDraftGenerated(cls.length > 0);
+    if (cs && typeof cs === 'object' && !cs.error) {
+      setClassStrength(cs);
+    }
 
     const drafted = cls.filter((p: Prospect) => p.is_drafted);
     const roundsDone = Math.floor(drafted.length / 32);
     if (roundsDone >= 7) {
-      setDraftFinished(true); setCurrentRound(7);
+      setDraftFinished(true);
+      setCurrentRound(7);
     } else {
       const round = roundsDone + 1;
       setCurrentRound(round);
@@ -59,8 +94,14 @@ export default function Draft({ onDraftComplete }: Props) {
     }
     const mine = cls.filter((p: Prospect) => p.is_drafted && p.drafted_by_team_id === userTeam.id);
     setMyPicks(mine.map((p: Prospect) => {
-      const g = draftGrade(p.overall_rating);
-      return { round: p.draft_round!, slot: (p.draft_pick! - 1) % 32 + 1, player: p, grade: g.grade, gradeColor: g.color };
+      const gradeInfo = draftGrade(p.overall_rating);
+      return {
+        round: p.draft_round!,
+        slot: (p.draft_pick! - 1) % 32 + 1,
+        player: p,
+        grade: gradeInfo.grade,
+        gradeColor: gradeInfo.color,
+      };
     }));
   };
 
@@ -68,8 +109,10 @@ export default function Draft({ onDraftComplete }: Props) {
     if (!userTeam) return;
     const slots: PickSlot[] = await window.api.getRoundPickOrder({ round });
     setRoundPickSlots(slots);
-    const uSlots = slots.filter(s => s.ownerTeamId === userTeam.id && !s.isUsed).map(s => s.slot);
-    setUserPickSlots(uSlots);
+    const userSlots = slots
+      .filter(slot => slot.ownerTeamId === userTeam.id && !slot.isUsed)
+      .map(slot => slot.slot);
+    setUserPickSlots(userSlots);
     setCurrentPickIdx(0);
   };
 
@@ -83,9 +126,9 @@ export default function Draft({ onDraftComplete }: Props) {
   const handleScout = async (prospectId: number) => {
     if (scoutsUsed >= MAX_SCOUTS || scouting !== null) return;
     setScouting(prospectId);
-    const res = await window.api.scoutProspect(prospectId);
-    if (res.success) {
-      setScoutsUsed(s => s + 1);
+    const result = await window.api.scoutProspect(prospectId);
+    if (result.success) {
+      setScoutsUsed(prev => prev + 1);
       setProspects(await window.api.getDraftClass());
     }
     setScouting(null);
@@ -96,10 +139,21 @@ export default function Draft({ onDraftComplete }: Props) {
     setRunning(true);
     const slot = userPickSlots[currentPickIdx] ?? 1;
     const overallPick = (currentRound - 1) * 32 + slot;
-    await window.api.makeDraftPick({ prospectId: prospect.id, teamId: userTeam.id, round: currentRound, pick: overallPick });
+    await window.api.makeDraftPick({
+      prospectId: prospect.id,
+      teamId: userTeam.id,
+      round: currentRound,
+      pick: overallPick,
+    });
 
-    const g = draftGrade(prospect.overall_rating);
-    setMyPicks(prev => [...prev, { round: currentRound, slot, player: prospect, grade: g.grade, gradeColor: g.color }]);
+    const gradeInfo = draftGrade(prospect.overall_rating);
+    setMyPicks(prev => [...prev, {
+      round: currentRound,
+      slot,
+      player: prospect,
+      grade: gradeInfo.grade,
+      gradeColor: gradeInfo.color,
+    }]);
 
     if (currentPickIdx < userPickSlots.length - 1) {
       setProspects(await window.api.getDraftClass());
@@ -108,7 +162,10 @@ export default function Draft({ onDraftComplete }: Props) {
       return;
     }
 
-    const cpuResults: CpuPick[] = await window.api.runCpuRound({ round: currentRound, userTeamId: userTeam.id });
+    const cpuResults: CpuPick[] = await window.api.runCpuRound({
+      round: currentRound,
+      userTeamId: userTeam.id,
+    });
     setLastCpuPicks(cpuResults);
     setProspects(await window.api.getDraftClass());
     setShowResults(true);
@@ -116,17 +173,22 @@ export default function Draft({ onDraftComplete }: Props) {
   };
 
   const handleAutoPick = () => {
-    const best = prospects.find(p => !p.is_drafted && (posFilter === 'ALL' || p.position === posFilter));
-    if (best) handlePick(best);
+    const bestProspect = prospects.find(p => !p.is_drafted && (posFilter === 'ALL' || p.position === posFilter));
+    if (bestProspect) {
+      handlePick(bestProspect);
+    }
   };
 
   const handleNextRound = async () => {
-    if (currentRound >= 7) { setDraftFinished(true); return; }
-    const next = currentRound + 1;
-    setCurrentRound(next);
+    if (currentRound >= 7) {
+      setDraftFinished(true);
+      return;
+    }
+    const nextRound = currentRound + 1;
+    setCurrentRound(nextRound);
     setShowResults(false);
     setLastCpuPicks([]);
-    await loadRoundSlots(next);
+    await loadRoundSlots(nextRound);
   };
 
   const handleCompleteDraft = async () => {
@@ -136,39 +198,83 @@ export default function Draft({ onDraftComplete }: Props) {
     onDraftComplete();
   };
 
+  const openTradeModal = () => {
+    setTradeMyPickAssetId(null);
+    setTradeTheirTeamId(null);
+    setTradeTheirPickAssetId(null);
+    setTradeResult(null);
+    setShowTradeModal(true);
+  };
+
+  const handleProposeTrade = async () => {
+    if (!userTeam || !tradeMyPickAssetId || !tradeTheirPickAssetId || !tradeTheirTeamId) return;
+    setTradingPick(true);
+    setTradeResult(null);
+    const result = await window.api.proposeDraftTrade({
+      userTeamId: userTeam.id,
+      myPickId: tradeMyPickAssetId,
+      theirTeamId: tradeTheirTeamId,
+      theirPickId: tradeTheirPickAssetId,
+    });
+    setTradeResult(result);
+    setTradingPick(false);
+    if (result.accepted) {
+      await loadRoundSlots(currentRound);
+    }
+  };
+
   if (!userTeam) return null;
 
-    const scoutsLeft = scoutBudget - scoutsUsed;
+  const scoutsLeft = scoutBudget - scoutsUsed;
   const available = prospects.filter(p => !p.is_drafted && (posFilter === 'ALL' || p.position === posFilter));
   const pickNum = userPickSlots[currentPickIdx];
   const totalPicksThisRound = userPickSlots.length;
 
-    if (!draftGenerated) return (
-    <div style={{ padding: '40px 24px', maxWidth: 700, margin: '0 auto', textAlign: 'center' }}>
-      <div style={{ fontSize: 20, fontWeight: 700, color: T.textPrimary, marginBottom: 12 }}>
-        {currentSeason} Draft Scouting
-      </div>
-      <div style={{ color: T.textDim, fontSize: 13, marginBottom: 24 }}>
-        The draft class will be auto-generated when you generate your season schedule.
-        Come back once the season is underway to start scouting prospects.
-      </div>
-    </div>
+  // Pick slots available to the user for trading (unused picks with a valid pickAssetId)
+  const myTradableSlots = roundPickSlots.filter(
+    slot => slot.ownerTeamId === userTeam.id && !slot.isUsed && slot.pickAssetId !== null,
   );
+  // CPU teams in this round
+  const cpuTeamIds = [...new Set(
+    roundPickSlots
+      .filter(slot => slot.ownerTeamId !== userTeam.id && !slot.isUsed)
+      .map(slot => slot.ownerTeamId),
+  )];
+  const theirSlots = tradeTheirTeamId !== null
+    ? roundPickSlots.filter(slot => slot.ownerTeamId === tradeTheirTeamId && !slot.isUsed && slot.pickAssetId !== null)
+    : [];
 
-  if (draftFinished) return (
-    <DraftSummary
-      myPicks={myPicks}
-      userTeam={userTeam}
-      currentSeason={currentSeason}
-      onComplete={handleCompleteDraft}
-      running={running}
-    />
-  );
+  if (!draftGenerated) {
+    return (
+      <div style={{ padding: '40px 24px', maxWidth: 700, margin: '0 auto', textAlign: 'center' }}>
+        <div style={{ fontSize: 20, fontWeight: 700, color: T.textPrimary, marginBottom: 12 }}>
+          {currentSeason} Draft Scouting
+        </div>
+        <div style={{ color: T.textDim, fontSize: 13, marginBottom: 24 }}>
+          The draft class will be auto-generated when you generate your season schedule.
+          Come back once the season is underway to start scouting prospects.
+        </div>
+      </div>
+    );
+  }
+
+  if (draftFinished) {
+    return (
+      <DraftSummary
+        myPicks={myPicks}
+        userTeam={userTeam}
+        currentSeason={currentSeason}
+        onComplete={handleCompleteDraft}
+        running={running}
+      />
+    );
+  }
 
   if (!playoffsComplete) {
-    const scoutsLeft = scoutBudget - scoutsUsed;
+    const scoutsAvailable = scoutBudget - scoutsUsed;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px 24px' }}>
+        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, color: T.textPrimary }}>
@@ -180,14 +286,54 @@ export default function Draft({ onDraftComplete }: Props) {
           </div>
           <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
             <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1 }}>SCOUTS AVAILABLE</div>
-            <div style={{ color: scoutsLeft >= 5 ? '#4caf50' : scoutsLeft > 0 ? '#FF8740' : '#e57373', fontWeight: 700, fontSize: 16 }}>
-              {scoutsLeft} / {scoutBudget}
+            <div style={{
+              color: scoutsAvailable >= 5 ? '#4caf50' : scoutsAvailable > 0 ? '#FF8740' : '#e57373',
+              fontWeight: 700,
+              fontSize: 16,
+            }}>
+              {scoutsAvailable} / {scoutBudget}
             </div>
             <div style={{ fontSize: 9, color: T.textDim }}>simulate games to earn more</div>
           </div>
         </div>
 
-        <div style={{ background: '#0a1000', border: '1px solid #1a2a1a', borderRadius: 6, padding: '10px 16px', marginBottom: 14, fontSize: 11, color: '#4caf50', fontFamily: 'monospace' }}>
+        {/* Draft Class Strength panel */}
+        {classStrength && (
+          <div style={{
+            background: '#07100f', border: '1px solid #1a2e1a', borderRadius: 6,
+            padding: '10px 16px', marginBottom: 12,
+          }}>
+            <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1, marginBottom: 8 }}>
+              {currentSeason} DRAFT CLASS STRENGTH
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {Object.entries(POSITION_LABELS).map(([pos, label]) => {
+                const rating = classStrength[pos] ?? 0;
+                return (
+                  <div key={pos} style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    background: '#0e1a0e', border: '1px solid #1e2e1e', borderRadius: 4,
+                    padding: '4px 10px', minWidth: 48,
+                  }}>
+                    <span style={{ fontSize: 9, color: T.textDim, letterSpacing: 0.5 }}>{label}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: classGradeColor(rating) }}>
+                      {rating > 0 ? rating : '—'}
+                    </span>
+                    <span style={{ fontSize: 8, color: classGradeColor(rating) }}>
+                      {rating > 0 ? classGradeLabel(rating) : ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div style={{
+          background: '#0a1000', border: '1px solid #1a2a1a', borderRadius: 6,
+          padding: '10px 16px', marginBottom: 14, fontSize: 11, color: '#4caf50',
+          fontFamily: 'monospace',
+        }}>
           📋 Scouting mode — reveal prospect ratings now to prepare for draft day.
           Pick buttons unlock after playoffs complete.
         </div>
@@ -223,7 +369,9 @@ export default function Draft({ onDraftComplete }: Props) {
                 }}>
                   <span style={{
                     width: 36, textAlign: 'center', fontWeight: 700, fontSize: 13,
-                    color: p.scouted ? (p.overall_rating >= 80 ? '#FFD700' : p.overall_rating >= 70 ? '#4FC3F7' : '#888') : '#333',
+                    color: p.scouted
+                      ? (p.overall_rating >= 80 ? '#FFD700' : p.overall_rating >= 70 ? '#4FC3F7' : '#888')
+                      : '#333',
                   }}>
                     {p.scouted ? p.overall_rating : '??'}
                   </span>
@@ -236,12 +384,13 @@ export default function Draft({ onDraftComplete }: Props) {
                   {!p.scouted && (
                     <button
                       onClick={() => handleScout(p.id)}
-                      disabled={scoutsLeft <= 0 || isScouting}
+                      disabled={scoutsAvailable <= 0 || isScouting}
                       style={{
-                        padding: '3px 10px', fontSize: 10, cursor: scoutsLeft > 0 ? 'pointer' : 'not-allowed',
+                        padding: '3px 10px', fontSize: 10,
+                        cursor: scoutsAvailable > 0 ? 'pointer' : 'not-allowed',
                         borderRadius: 3, background: '#141414',
-                        border: `1px solid ${scoutsLeft > 0 ? '#2a4a2a' : '#222'}`,
-                        color: scoutsLeft > 0 ? '#4caf50' : '#333', fontFamily: 'monospace',
+                        border: `1px solid ${scoutsAvailable > 0 ? '#2a4a2a' : '#222'}`,
+                        color: scoutsAvailable > 0 ? '#4caf50' : '#333', fontFamily: 'monospace',
                       }}
                     >
                       {isScouting ? '...' : '🔍 Scout'}
@@ -260,9 +409,12 @@ export default function Draft({ onDraftComplete }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px 24px' }}>
+      {/* Draft Day Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: T.textPrimary }}>{currentSeason} NFL Draft</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: T.textPrimary }}>
+            {currentSeason} NFL Draft
+          </div>
           <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>
             Round {currentRound} of 7 &nbsp;·&nbsp; {available.length} prospects available
             {totalPicksThisRound > 1 && !showResults && (
@@ -272,26 +424,44 @@ export default function Draft({ onDraftComplete }: Props) {
             )}
           </div>
         </div>
-        <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-          <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1 }}>SCOUTS</div>
-          <div style={{ color: scoutsLeft >= 5 ? '#4caf50' : scoutsLeft > 0 ? '#FF8740' : '#e57373', fontWeight: 700, fontSize: 16 }}>
-            {scoutsLeft} / {MAX_SCOUTS}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
+          {myTradableSlots.length > 0 && !showResults && !running && (
+            <button
+              onClick={openTradeModal}
+              style={{
+                padding: '5px 14px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
+                background: '#0d1a2a', border: '1px solid #1a4060',
+                color: '#4FC3F7', fontFamily: 'monospace',
+              }}
+            >
+              🔄 Trade Pick
+            </button>
+          )}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1 }}>SCOUTS</div>
+            <div style={{
+              color: scoutsLeft >= 5 ? '#4caf50' : scoutsLeft > 0 ? '#FF8740' : '#e57373',
+              fontWeight: 700,
+              fontSize: 16,
+            }}>
+              {scoutsLeft} / {MAX_SCOUTS}
+            </div>
           </div>
         </div>
       </div>
 
-// After the "Round X of 7" header section, add this block:
-{running && !showResults && (
-  <div style={{
-    margin: '12px 0', padding: '12px 18px', borderRadius: 6,
-    background: '#0d1a10', border: '1px solid #2a4a2a',
-    color: '#4caf50', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10,
-  }}>
-    <span style={{ fontSize: 18 }}>⏳</span>
-    <span>CPU teams are drafting… please wait.</span>
-  </div>
-)}
-      
+      {/* CPU drafting spinner */}
+      {running && !showResults && (
+        <div style={{
+          margin: '0 0 12px', padding: '12px 18px', borderRadius: 6,
+          background: '#0d1a10', border: '1px solid #2a4a2a',
+          color: '#4caf50', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 18 }}>⏳</span>
+          <span>CPU teams are drafting… please wait.</span>
+        </div>
+      )}
+
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 300px', overflow: 'hidden' }}>
         <ProspectBoard
           available={available}
@@ -325,6 +495,142 @@ export default function Draft({ onDraftComplete }: Props) {
           userTeam={userTeam}
         />
       </div>
+
+      {/* In-Draft Trade Modal */}
+      {showTradeModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div style={{
+            background: '#111', border: '1px solid #2a2a2a', borderRadius: 8,
+            padding: 28, width: 480, maxWidth: '90vw',
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: T.textPrimary, marginBottom: 4 }}>
+              Propose Pick Trade — Round {currentRound}
+            </div>
+            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 20 }}>
+              Offer one of your picks in exchange for a CPU team's pick this round.
+            </div>
+
+            {/* Your pick */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1, marginBottom: 6 }}>YOUR PICK TO OFFER</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {myTradableSlots.map(slot => (
+                  <button
+                    key={slot.pickAssetId}
+                    onClick={() => setTradeMyPickAssetId(slot.pickAssetId)}
+                    style={{
+                      padding: '5px 14px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
+                      background: tradeMyPickAssetId === slot.pickAssetId ? '#FF8740' : '#1a1a1a',
+                      border: `1px solid ${tradeMyPickAssetId === slot.pickAssetId ? '#FF8740' : '#333'}`,
+                      color: tradeMyPickAssetId === slot.pickAssetId ? '#000' : '#aaa',
+                    }}
+                  >
+                    Round {currentRound}, Pick {slot.slot}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* CPU team */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1, marginBottom: 6 }}>SELECT CPU TEAM</div>
+              <select
+                value={tradeTheirTeamId ?? ''}
+                onChange={e => {
+                  setTradeTheirTeamId(e.target.value ? Number(e.target.value) : null);
+                  setTradeTheirPickAssetId(null);
+                }}
+                style={{
+                  background: '#1a1a1a', border: '1px solid #333', color: '#ccc',
+                  padding: '6px 10px', borderRadius: 4, fontSize: 12, width: '100%',
+                }}
+              >
+                <option value="">— Choose a team —</option>
+                {cpuTeamIds.map(teamId => {
+                  const slot = roundPickSlots.find(s => s.ownerTeamId === teamId);
+                  return (
+                    <option key={teamId} value={teamId}>
+                      {slot ? `${slot.ownerCity} ${slot.ownerName}` : `Team ${teamId}`}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* Their pick */}
+            {tradeTheirTeamId !== null && theirSlots.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1, marginBottom: 6 }}>
+                  THEIR PICK YOU WANT
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {theirSlots.map(slot => (
+                    <button
+                      key={slot.pickAssetId}
+                      onClick={() => setTradeTheirPickAssetId(slot.pickAssetId)}
+                      style={{
+                        padding: '5px 14px', fontSize: 11, cursor: 'pointer', borderRadius: 4,
+                        background: tradeTheirPickAssetId === slot.pickAssetId ? '#4FC3F7' : '#1a1a1a',
+                        border: `1px solid ${tradeTheirPickAssetId === slot.pickAssetId ? '#4FC3F7' : '#333'}`,
+                        color: tradeTheirPickAssetId === slot.pickAssetId ? '#000' : '#aaa',
+                      }}
+                    >
+                      Round {currentRound}, Pick {slot.slot}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Result */}
+            {tradeResult && (
+              <div style={{
+                padding: '10px 14px', borderRadius: 5, marginBottom: 16,
+                background: tradeResult.accepted ? '#0d1a10' : '#1a0d0d',
+                border: `1px solid ${tradeResult.accepted ? '#2a4a2a' : '#4a2a2a'}`,
+                color: tradeResult.accepted ? '#4caf50' : '#ef5350',
+                fontSize: 12,
+              }}>
+                {tradeResult.accepted
+                  ? '✓ Trade accepted! The pick has been swapped.'
+                  : `✗ Trade declined: ${tradeResult.reason}`}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowTradeModal(false)}
+                style={{
+                  padding: '7px 18px', fontSize: 12, cursor: 'pointer', borderRadius: 4,
+                  background: 'transparent', border: '1px solid #333', color: '#888',
+                }}
+              >
+                {tradeResult?.accepted ? 'Close' : 'Cancel'}
+              </button>
+              {!tradeResult?.accepted && (
+                <button
+                  onClick={handleProposeTrade}
+                  disabled={!tradeMyPickAssetId || !tradeTheirPickAssetId || !tradeTheirTeamId || tradingPick}
+                  style={{
+                    padding: '7px 18px', fontSize: 12, borderRadius: 4,
+                    cursor: tradeMyPickAssetId && tradeTheirPickAssetId && tradeTheirTeamId ? 'pointer' : 'not-allowed',
+                    background: tradeMyPickAssetId && tradeTheirPickAssetId ? '#FF8740' : '#222',
+                    border: 'none',
+                    color: tradeMyPickAssetId && tradeTheirPickAssetId ? '#000' : '#444',
+                    fontWeight: 600,
+                  }}
+                >
+                  {tradingPick ? 'Proposing…' : 'Propose Trade'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
