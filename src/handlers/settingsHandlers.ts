@@ -14,6 +14,8 @@ export function getDifficultyFactor(): number {
   return DIFFICULTY_FACTORS[getDifficulty()] ?? 0;
 }
 
+interface PlayerOvrRow { id: number; overall_rating: number; }
+
 export function registerSettingsHandlers(): void {
 
   ipcMain.handle('get-difficulty', () => getDifficulty());
@@ -90,6 +92,61 @@ export function registerSettingsHandlers(): void {
     return row.cnt > 0;
   });
 
+  ipcMain.handle('apply-dynasty-template', () => {
+    const template = settingsRepo.get('dynasty_template');
+    if (!template) return { success: true };
+
+    const teamIdStr = settingsRepo.get('user_team_id');
+    if (!teamIdStr) return { success: false, reason: 'No user team set' };
+    const teamId = parseInt(teamIdStr, 10);
+
+    if (template === 'rebuild') {
+      // Drop all players 10–18 OVR, floor at 50
+      const players = db.prepare(
+        "SELECT id, overall_rating FROM players WHERE team_id = ? AND roster_status = 'active'"
+      ).all(teamId) as PlayerOvrRow[];
+      for (const p of players) {
+        const drop = Math.floor(Math.random() * 9) + 10;
+        const newOvr = Math.max(50, p.overall_rating - drop);
+        db.prepare('UPDATE players SET overall_rating = ? WHERE id = ?').run(newOvr, p.id);
+      }
+      // Cut contracts to 55% of current salary, floor at $0.87M minimum
+      db.prepare(
+        'UPDATE contracts SET annual_salary = MAX(0.87, annual_salary * 0.55) WHERE team_id = ?'
+      ).run(teamId);
+
+    } else if (template === 'contender') {
+      // Trim bottom half of roster 2–6 OVR, floor at 55
+      const players = db.prepare(
+        "SELECT id, overall_rating FROM players WHERE team_id = ? AND roster_status = 'active' ORDER BY overall_rating ASC"
+      ).all(teamId) as PlayerOvrRow[];
+      const bottom = players.slice(0, Math.floor(players.length / 2));
+      for (const p of bottom) {
+        const drop = Math.floor(Math.random() * 5) + 2;
+        const newOvr = Math.max(55, p.overall_rating - drop);
+        db.prepare('UPDATE players SET overall_rating = ? WHERE id = ?').run(newOvr, p.id);
+      }
+      // Contracts at 80% of current salary
+      db.prepare(
+        'UPDATE contracts SET annual_salary = MAX(0.87, annual_salary * 0.80) WHERE team_id = ?'
+      ).run(teamId);
+
+    } else if (template === 'dynasty') {
+      // Boost top 15 players 3–7 OVR, ceiling at 99
+      const players = db.prepare(
+        "SELECT id, overall_rating FROM players WHERE team_id = ? AND roster_status = 'active' ORDER BY overall_rating DESC LIMIT 15"
+      ).all(teamId) as PlayerOvrRow[];
+      for (const p of players) {
+        const boost = Math.floor(Math.random() * 5) + 3;
+        const newOvr = Math.min(99, p.overall_rating + boost);
+        db.prepare('UPDATE players SET overall_rating = ? WHERE id = ?').run(newOvr, p.id);
+      }
+      // Contracts unchanged for dynasty
+    }
+
+    return { success: true };
+  });
+
   ipcMain.handle('edit-player', (_event: IpcEvent, payload: {
     playerId: number;
     first_name?: string;
@@ -142,7 +199,7 @@ export function registerSettingsHandlers(): void {
     return { success: true };
   });
 
-    ipcMain.handle('set-setting', (_event: any, key: string, value: string) => {
+  ipcMain.handle('set-setting', (_event: any, key: string, value: string) => {
     settingsRepo.set(key, value);
     return { success: true };
   });
