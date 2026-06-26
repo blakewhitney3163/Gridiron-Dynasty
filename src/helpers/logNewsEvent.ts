@@ -9,7 +9,8 @@ export type NewsCategory =
   | 'season'
   | 'milestones'
   | 'game'
-  | 'trade';
+  | 'trade'
+  | 'league_event';
 
 export function logNewsEvent(params: {
   eventType?: string;
