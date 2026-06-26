@@ -46,6 +46,7 @@ export function registerSettingsHandlers(): void {
     db.prepare('DELETE FROM players').run();
     db.prepare('DELETE FROM owner_goals').run();
     db.prepare("DELETE FROM settings WHERE key LIKE 'scouting_budget_%'").run();
+    db.prepare("DELETE FROM settings WHERE key = 'dynasty_template'").run();
     db.prepare("DELETE FROM settings WHERE key = 'owner_patience'").run();
     generatePlayers();
     db.prepare("UPDATE settings SET value = '2025' WHERE key = 'current_season'").run();
@@ -71,6 +72,7 @@ export function registerSettingsHandlers(): void {
     db.prepare('DELETE FROM owner_goals').run();
     db.prepare("DELETE FROM settings WHERE key LIKE 'scouting_budget_%'").run();
     db.prepare("DELETE FROM settings WHERE key = 'owner_patience'").run();
+    db.prepare("DELETE FROM settings WHERE key = 'dynasty_template'").run();
     generatePlayers();
     db.prepare("UPDATE settings SET value = '2025' WHERE key = 'current_season'").run();
     generateContracts();
