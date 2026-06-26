@@ -1,12 +1,3 @@
-export interface Game {
-  id: number;
-  week: number;
-  home_team: string;
-  away_team: string;
-  home_score: number;
-  away_score: number;
-}
-
 export interface BoxScoreGame {
   id: number; week: number;
   home_team: string; away_team: string;
@@ -14,6 +5,7 @@ export interface BoxScoreGame {
   home_score: number; away_score: number;
   home_q1: number; home_q2: number; home_q3: number; home_q4: number;
   away_q1: number; away_q2: number; away_q3: number; away_q4: number;
+  weather?: string;
 }
 
 export interface BoxScorePlayer {
