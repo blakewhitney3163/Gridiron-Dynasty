@@ -93,12 +93,6 @@ export function registerSeasonHandlers(): void {
       ORDER BY ch.season DESC
     `).all());
 
-  ipcMain.handle('get-season-awards', (_event: any, season: number) => {
-    const { getSeasonAwards } = require('../services/AwardsService');
-    if (getSeasonAwards) return getSeasonAwards(season);
-    return [];
-  });
-
   ipcMain.handle('advance-season', async (): Promise<AdvanceSeasonResult> =>
     advanceSeason() as any);
 
