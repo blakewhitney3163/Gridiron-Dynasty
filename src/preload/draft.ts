@@ -7,6 +7,9 @@ export const draftApi = {
   getDraftClass: () =>
     ipcRenderer.invoke('get-draft-class'),
 
+  getDraftClassStrength: () =>
+    ipcRenderer.invoke('get-draft-class-strength'),
+
   getDraftOrder: () =>
     ipcRenderer.invoke('get-draft-order'),
 
@@ -27,4 +30,7 @@ export const draftApi = {
 
   getScoutCount: (): Promise<{ used: number; budget: number }> =>
     ipcRenderer.invoke('get-scout-count'),
+
+  proposeDraftTrade: (payload: { userTeamId: number; myPickId: number; theirTeamId: number; theirPickId: number }) =>
+    ipcRenderer.invoke('propose-draft-trade', payload),
 };
