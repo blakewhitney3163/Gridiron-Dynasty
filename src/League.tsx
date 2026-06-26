@@ -6,16 +6,18 @@ import Stats from './Stats';
 import Records from './Records';
 import Playoffs from './Playoffs';
 import Teams from './Teams';
+import LeagueOffice from './LeagueOffice';
 
-type View = 'standings' | 'schedule' | 'stats' | 'records' | 'playoffs' | 'teams';
+type View = 'standings' | 'schedule' | 'stats' | 'records' | 'playoffs' | 'teams' | 'office';
 
 const SUB_TABS: { id: View; label: string }[] = [
   { id: 'standings', label: 'STANDINGS' },
-  { id: 'schedule', label: 'SCHEDULE' },
-  { id: 'stats', label: 'STATS' },
-  { id: 'records', label: 'RECORDS' },
-  { id: 'playoffs', label: 'PLAYOFFS' },
-  { id: 'teams', label: 'TEAMS' },
+  { id: 'schedule',  label: 'SCHEDULE'  },
+  { id: 'stats',     label: 'STATS'     },
+  { id: 'records',   label: 'RECORDS'   },
+  { id: 'playoffs',  label: 'PLAYOFFS'  },
+  { id: 'teams',     label: 'TEAMS'     },
+  { id: 'office',    label: 'OFFICE'    },
 ];
 
 export default function League() {
@@ -28,14 +30,11 @@ export default function League() {
   };
 
   const style = (v: View): React.CSSProperties =>
-    view === v ? { flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' } : { display: 'none' }
+    view === v ? { flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' } : { display: 'none' };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{
-        display: 'flex', borderBottom: `1px solid ${T.borderMid}`,
-        background: T.bgDark, padding: '0 20px', flexShrink: 0,
-      }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', borderBottom: `1px solid ${T.borderFaint}`, flexShrink: 0 }}>
         {SUB_TABS.map(tab => (
           <button key={tab.id} onClick={() => handleView(tab.id)} style={{
             padding: '10px 18px', background: 'none', border: 'none',
@@ -50,11 +49,12 @@ export default function League() {
       </div>
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {mounted.has('standings') && <div style={style('standings')}><Standings /></div>}
-        {mounted.has('schedule') && <div style={style('schedule')}><Schedule /></div>}
-        {mounted.has('stats') && <div style={style('stats')}><Stats /></div>}
-        {mounted.has('records') && <div style={style('records')}><Records /></div>}
-        {mounted.has('playoffs') && <div style={style('playoffs')}><Playoffs /></div>}
-        {mounted.has('teams') && <div style={style('teams')}><Teams /></div>}
+        {mounted.has('schedule')  && <div style={style('schedule')}><Schedule /></div>}
+        {mounted.has('stats')     && <div style={style('stats')}><Stats /></div>}
+        {mounted.has('records')   && <div style={style('records')}><Records /></div>}
+        {mounted.has('playoffs')  && <div style={style('playoffs')}><Playoffs /></div>}
+        {mounted.has('teams')     && <div style={style('teams')}><Teams /></div>}
+        {mounted.has('office')    && <div style={style('office')}><LeagueOffice /></div>}
       </div>
     </div>
   );
