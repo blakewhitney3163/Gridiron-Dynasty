@@ -81,4 +81,10 @@ export const seasonApi = {
 
   requestUserRelocation: (payload: { city: string; name: string; abbreviation: string; marketSize: string }) =>
     ipcRenderer.invoke('request-user-relocation', payload),
+
+  getRecentLeagueEvents: () =>
+    ipcRenderer.invoke('get-recent-league-events'),
+
+  getAllGmPersonalities: () =>
+    ipcRenderer.invoke('get-all-gm-personalities'),
 };
