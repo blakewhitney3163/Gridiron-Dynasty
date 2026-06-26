@@ -35,11 +35,10 @@ interface TierDef {
   label: string;
   color: string;
   bg: string;
-  maxSalary: number; // in $M
+  maxSalary: number;
   ovrRange: string;
 }
 
-// All salary values in $M to match DB storage
 const TIERS: Record<BudgetTier, TierDef> = {
   bronze: { label: 'Bronze', color: '#CD7F32', bg: '#1a0f00', maxSalary: 2.0,  ovrRange: '60–74' },
   silver: { label: 'Silver', color: '#C0C0C0', bg: '#111111', maxSalary: 4.0,  ovrRange: '70–82' },
@@ -72,7 +71,6 @@ const ovrColor = (v: number) =>
 const scoutOvrColor = (v: number) =>
   v >= 70 ? '#4caf50' : v >= 50 ? '#FF8740' : '#e57373';
 
-// Salary is stored in $M — just format directly
 const fmtM = (n: number) => `$${(n ?? 0).toFixed(1)}M`;
 const fmtScout = (n: number) => `$${(n ?? 0).toFixed(1)}M`;
 
@@ -97,9 +95,13 @@ export default function PreSeasonStaffPanel({
   const [pendingDuration, setPendingDuration] = useState<Record<number, number>>({});
   const [working, setWorking]               = useState(false);
   const [confirmed, setConfirmed]           = useState(false);
-  const [coachingBudget, setCoachingBudget] = useState(DEFAULT_BUDGET);
+  const [baseBudget, setBaseBudget]         = useState(DEFAULT_BUDGET);
+  const [extraBudget, setExtraBudget]       = useState(0);
   const [budgetRequestUsed, setBudgetRequestUsed] = useState(false);
   const [budgetRequestMsg, setBudgetRequestMsg]   = useState<string | null>(null);
+
+  // Total budget = template base + any owner grant (extra persists through loadData refreshes)
+  const coachingBudget = baseBudget + extraBudget;
 
   const loadData = async () => {
     const [s, a, sc, asc, tmpl] = await Promise.all([
@@ -113,15 +115,14 @@ export default function PreSeasonStaffPanel({
     setAvailable(a ?? []);
     setScouts(sc ?? []);
     setAvailableScouts((asc ?? []).slice(0, 12));
-    setCoachingBudget(TEMPLATE_BUDGETS[tmpl as string] ?? DEFAULT_BUDGET);
+    setBaseBudget(TEMPLATE_BUDGETS[tmpl as string] ?? DEFAULT_BUDGET);
   };
 
   useEffect(() => { loadData(); }, [teamId]);
 
-  const totalCoachSalary  = staff.reduce((sum, c) => sum + (c.salary ?? 0), 0);
-  const totalScoutSalary  = scouts.reduce((sum, s) => sum + (s.salary ?? 0), 0);
-  const budgetRemaining   = coachingBudget - totalCoachSalary;
-  const overBudget        = budgetRemaining < 0;
+  const totalCoachSalary = staff.reduce((sum, c) => sum + (c.salary ?? 0), 0);
+  const budgetRemaining  = coachingBudget - totalCoachSalary;
+  const overBudget       = budgetRemaining < 0;
 
   const getCoach = (role: 'HC' | 'OC' | 'DC' | 'ST') => staff.find(c => c.role === role) ?? null;
 
@@ -139,15 +140,15 @@ export default function PreSeasonStaffPanel({
     let grant = 0;
     let msg = '';
     if (patience > 70) {
-      grant = (Math.floor(Math.random() * 3) + 4); // $4–6M
+      grant = (Math.floor(Math.random() * 3) + 4);
       msg = `✓ The owner is confident — granted ${fmtM(grant)} in additional coaching budget.`;
     } else if (patience >= 40) {
-      grant = (Math.floor(Math.random() * 2) + 2); // $2–3M
+      grant = (Math.floor(Math.random() * 2) + 2);
       msg = `✓ The owner approved a modest increase — granted ${fmtM(grant)} in additional coaching budget.`;
     } else {
       msg = `✗ The owner isn't willing to invest further right now. Improve results to unlock more budget.`;
     }
-    if (grant > 0) setCoachingBudget(prev => prev + grant);
+    if (grant > 0) setExtraBudget(prev => prev + grant);
     setBudgetRequestMsg(msg);
   };
 
@@ -234,6 +235,7 @@ export default function PreSeasonStaffPanel({
             </div>
             <div style={{ fontSize: 8, color: T.textDim, marginTop: 1 }}>
               {fmtM(totalCoachSalary)} of {fmtM(coachingBudget)} used
+              {extraBudget > 0 && <span style={{ color: '#4caf50', marginLeft: 4 }}>(+{fmtM(extraBudget)} granted)</span>}
             </div>
           </div>
           {!budgetRequestUsed ? (
@@ -268,7 +270,6 @@ export default function PreSeasonStaffPanel({
               border: `1px solid ${isExpanded ? T.borderMid : T.borderFaint}`,
               borderRadius: 6, overflow: 'hidden',
             }}>
-              {/* Slot header */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
                 <span style={{ fontSize: 11 }}>{icon}</span>
                 <div style={{ flex: 1 }}>
@@ -305,10 +306,8 @@ export default function PreSeasonStaffPanel({
                 )}
               </div>
 
-              {/* Hire panel — only shown when expanded */}
               {isExpanded && (
                 <div style={{ borderTop: `1px solid ${T.borderFaint}`, padding: '12px 14px', background: T.bgPage }}>
-                  {/* Tier filter — shown only inside hire panel */}
                   <div style={{ marginBottom: 12 }}>
                     <div style={{ fontSize: 8, letterSpacing: 1.5, color: T.textMuted, textTransform: 'uppercase', marginBottom: 6 }}>
                       Market Filter
@@ -355,7 +354,6 @@ export default function PreSeasonStaffPanel({
                             <div style={{ fontSize: 11, color: T.textSecondary, fontFamily: 'monospace', minWidth: 50, textAlign: 'right' }}>
                               {fmtM(c.salary ?? 0)}/yr
                             </div>
-                            {/* Contract duration selector */}
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 60 }}>
                               <div style={{ fontSize: 8, color: T.textMuted }}>Contract</div>
                               <div style={{ display: 'flex', gap: 2 }}>
