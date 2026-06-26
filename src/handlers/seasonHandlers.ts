@@ -50,7 +50,24 @@ export function registerSeasonHandlers(): void {
     const recentNews = db.prepare(
       "SELECT headline, detail, event_type, category, season, week FROM news_events ORDER BY id DESC LIMIT 8"
     ).all() as any[];
-    return { team, record, recentNews };
+
+    const allStandings = db.prepare(`
+      SELECT t.id, t.city, t.name, t.abbreviation, t.conference,
+        COALESCE(SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score > g.away_score)
+                          OR (g.away_team_id = t.id AND g.away_score > g.home_score) THEN 1 ELSE 0 END), 0) as wins,
+        COALESCE(SUM(CASE WHEN (g.home_team_id = t.id AND g.home_score < g.away_score)
+                          OR (g.away_team_id = t.id AND g.away_score < g.home_score) THEN 1 ELSE 0 END), 0) as losses
+      FROM teams t
+      LEFT JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id)
+        AND g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
+      GROUP BY t.id
+      ORDER BY wins DESC, losses ASC
+    `).all(season) as any[];
+
+    const topAFC = allStandings.filter((t: any) => t.conference === 'AFC').slice(0, 3);
+    const topNFC = allStandings.filter((t: any) => t.conference === 'NFC').slice(0, 3);
+
+    return { team, record, recentNews, topAFC, topNFC };
   });
 
   ipcMain.handle('get-schedule', (_event: any, season: number) =>
