@@ -28,6 +28,12 @@ export function registerSettingsHandlers(): void {
 
   ipcMain.handle('get-user-team', () => settingsRepo.getUserTeam());
 
+    ipcMain.handle('get-teams', () =>
+    db.prepare(
+      'SELECT id, city, name, abbreviation, conference, division FROM teams ORDER BY conference, division, city'
+    ).all()
+  );
+
   ipcMain.handle('set-user-team', (_event: IpcEvent, teamId: number) => {
     settingsRepo.set('user_team_id', String(teamId));
     return { success: true };
