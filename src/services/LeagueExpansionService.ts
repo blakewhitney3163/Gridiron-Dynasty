@@ -95,7 +95,7 @@ export function checkExpansionVote(season: number): void {
     voteFor ? votesFor++ : votesAgainst++;
   }
 
-  const userVote = getSetting(`expansion_user_vote_${season}`);
+  const userVote = getSetting('user_expansion_vote');
   if (userVote === 'for') votesFor++;
   else if (userVote === 'against') votesAgainst++;
   else votesFor++; // user abstained → counted as neutral/for
@@ -145,6 +145,7 @@ export function checkExpansionVote(season: number): void {
       detail: `${votesFor}-${votesAgainst} vote approves the ${cityConfig.city} ${cityConfig.name} as an expansion franchise in the ${target.conference} ${target.division}.`,
       season,
     });
+    setSetting('user_expansion_vote', '');
   } else {
     try {
       db.prepare(`
@@ -158,6 +159,7 @@ export function checkExpansionVote(season: number): void {
       detail: `Expansion vote fails ${votesFor}-${votesAgainst}. The league will remain at its current size.`,
       season,
     });
+    setSetting('user_expansion_vote', '');
   }
 }
 
@@ -294,3 +296,4 @@ export function checkCpuRelocation(season: number): void {
     season,
   });
 }
+
