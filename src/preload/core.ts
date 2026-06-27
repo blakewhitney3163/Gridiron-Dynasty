@@ -94,4 +94,7 @@ getAllTeamFinances:  () => ipcRenderer.invoke('get-all-team-finances'),
     conference?: string;
     division?: string;
   }) => ipcRenderer.invoke('edit-team', payload),
+  buyStadiumUpgrade: (teamId: number) =>
+    ipcRenderer.invoke('buy-stadium-upgrade', teamId),
+
 };
