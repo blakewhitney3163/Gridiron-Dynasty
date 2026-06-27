@@ -230,6 +230,7 @@ export default function PreseasonPanel({ status, userTeamId, currentSeason, onSt
                   Your result: <strong style={{ color: C.textPrimary }}>
                     {userGame.away_abbr} {userGame.away_score} @ {userGame.home_abbr} {userGame.home_score}
                   </strong>
+                  <span style={{ marginLeft: 10, fontSize: 10, color: C.textDim }}>Exhibition — no box score</span>
                 </div>
               )}
             </div>
