@@ -1,5 +1,5 @@
 # SIDELINE TO SIDELINE FOOTBALL — FULL FEATURE INVENTORY
-Last Updated: June 27, 2026
+Last Updated: June 27, 2026 (session 2)
 Repository: [https://github.com/blakewhitney3163/Sideline-to-Sideline-Football](https://github.com/blakewhitney3163/Sideline-to-Sideline-Football)
 
 CORE INFRASTRUCTURE
@@ -13,7 +13,7 @@ historical_records, news_events, pick_assets, team_trade_overrides,
 player_milestones, dead_cap_entries, coaching_staff, team_schemes,
 owner_goals, injury_history, team_chemistry, chemistry_events, scouts,
 team_finances, expansion_history
-- Schema version: v22. Migration runner in runMigrations() upgrades existing
+- Schema version: v26. Migration runner in runMigrations() upgrades existing
 saves on launch. Active migrations:
 v9:  team_id INTEGER on career_stats_history + idx_career_stats_team
 v10: Recalibrate all active-roster contract salaries to market-rate scale
@@ -51,6 +51,16 @@ v21: stadium_upgrade_level INTEGER DEFAULT 0 and pending_upgrade INTEGER
  stadium_upgrade_level incremented (+ 8,000 capacity) each season advance
 v22: coaching_xp INTEGER DEFAULT 0 and coaching_level INTEGER DEFAULT 1
  added to coaching_staff; XP awarded each season advance via progressCoachXP
+v23: player_goals table (id, player_id, season, goal_type, target_value,
+ current_value, is_achieved); PlayerGoalsService generates up to 4 goals
+ per qualifying player at season start; evaluated at season end
+v24: is_preseason INTEGER DEFAULT 0 column on games; all standings/schedule
+ queries updated to exclude preseason games via WHERE is_preseason = 0
+v25: projected_overall_pick INTEGER DEFAULT 0 on draft_prospects; noisy
+ projected slot assigned at class generation (sleepers/busts modeled)
+v26: attributes_json TEXT DEFAULT '{}' and revealed_attrs TEXT DEFAULT '[]'
+ on draft_prospects; position-specific attribute grades stored at class
+ generation; revealed selectively via scout-prospect-attr IPC (1 pt/reveal)
 - Salary cap is dynamic: stored in settings under key 'salary_cap'. All
 contract logic reads it via getSalaryCap() helper (src/helpers/getSalaryCap.ts)
 which falls back to 279000000 if not set. Cap escalates via LeagueExpansionService.
@@ -72,8 +82,9 @@ injury_history: player_id
 chemistry_events: (team_id,season)
 - player_milestones: PRIMARY KEY (player_id, milestone_key)
 - 32 fictional teams auto-seeded on first launch (AFC/NFC, 4 divisions each)
-- Fictional player generator: 53 players per team + 176 free agents on fresh
-start; each player receives a weighted random archetype
+- Fictional player generator: 54 players per team (including 1 punter) + free
+agents on fresh start; each player receives a weighted random archetype.
+Positions: QB×3, RB×5, WR×6, TE×3, OL×9, DL×7, LB×7, CB×7, S×5, K×1, P×1
 - Multiple save files — save picker at launch, lazy DB init via Proxy
 - Season advance prunes: news_events kept to last 3 seasons; raw stats kept to
 current + prior season
@@ -473,13 +484,36 @@ DRAFT TAB
 
 - Always visible year-round; 280 prospects auto-generated at season start
 - Draft Class Strength panel: per-position composite rating (QB/RB/WR/TE/OL/
-DL/LB/CB/S/K) displayed with Elite/Strong/Average/Weak/Poor grade labels;
+DL/LB/CB/S/K/P) displayed with Elite/Strong/Average/Weak/Poor grade labels;
 stored in settings as class_strength_{season}
-- In-season scouting budget: earned from scout quality sum (ceil(rating/15)
-per scout, capped at 70 total pts/season); added after each simulated week
-or game; used to reveal prospect ratings
-- Scouting reveals ratings; combine measurables always public
-- User picks; CPU auto-picks (position need-aware)
+- In-season scouting: scout points earned from scout quality sum (ceil(rating/15)
+per scout, capped at 70 pts/season); points accrued after each simulated week
+or live game; each point reveals one position-specific attribute grade for one
+prospect (1 pt = 1 reveal)
+- Scouting Season View: attribute grade chips per prospect (A+/A/A-/B+…F),
+locked (🔒 padlock) or revealed (colored grade). Position-specific attributes:
+QB: Accuracy, Arm Strength, Mobility, Decision Making, Pocket Presence
+RB: Speed, Elusiveness, Power, Receiving, Pass Protection
+WR: Speed, Route Running, Hands, Separation, YAC Ability
+TE: Speed, Route Running, Hands, Blocking, Frame
+OL: Pass Blocking, Run Blocking, Strength, Technique
+DL/DE: Pass Rush, Run Defense, Strength, Motor
+LB: Coverage, Run Stopping, Pass Rush, Instincts
+CB: Coverage, Speed, Press Coverage, Ball Hawk
+S: Coverage, Tackling, Range, Ball Hawk
+K: Leg Strength, FG Accuracy, Kickoffs
+P: Leg Strength, Hang Time, Directional Punting
+- Projected round/pick always visible (noisy — sleepers and busts built in)
+- Raw OVR never shown — quality inferred from revealed grades + combine stats
+- Combine Screen (CombineView.tsx): dedicated offseason view after playoffs,
+before draft opens. All 280 prospects' athletic measurables public (no cost).
+Sortable by position, 40-yd dash, bench, vertical, cone. Revealed attribute
+grades shown inline. "Lock In Draft Board" advances to draft day.
+- Draft board (ProspectBoard.tsx): revealed attribute grade chips + combine
+stats displayed per card; no raw OVR; projected pick slot visible
+- CPU draft logic follows projected_overall_pick order (not raw OVR) — CPU
+teams share the same imperfect scouting information as the user
+- User picks; CPU auto-picks (position need-aware, threshold: P×1 included)
 - Slotted rookie contracts: auto-generated at draft time based on round/pick
 number with salary scale by slot; first-round picks flagged is_rookie_deal=1
 and fifth_year_option_eligible=1
@@ -492,7 +526,10 @@ DRAFT COMBINE / DEEPER SCOUTING
 ────────────────────────────────────────────────────────────────────────────────
 
 - Five measurables: forty_time, bench_press, vertical_jump, broad_jump, cone_time
-- Position-specific distributions; color-coded badges; always public
+- Position-specific distributions; color-coded badges; public at Combine screen
+- IPC: get-combine-results (returns all prospects with combine + revealed grades)
+- IPC: scout-prospect-attr (takes {prospectId, attribute}; costs 1 scout point;
+appends to revealed_attrs JSON array; returns grade + remaining points)
 
 STATS TAB
 ────────────────────────────────────────────────────────────────────────────────
@@ -600,6 +637,10 @@ rendered in box score modal on Home tab, grouped by quarter
 - Weather: clear / rain / snow / wind with pass, rush, score multipliers
 - Home field advantage: +0.5 scoring drives; away QB accuracy penalty
 - Depth chart integration: healthy players cascade to backups
+- Punter (P) fully integrated: 1 per roster, 4 in FA pool, in draft class,
+depth chart Special Teams group, injury risk 0.5%. executePunt() in
+LiveGameEngine reads punter overall_rating to scale net yards:
+baseMean = 30 + (ovr − 50) × 0.40 → 70 OVR ≈ 38 yd net, 85 OVR ≈ 44 yd net
 - Background simulation: simulateGame runs in a worker thread (simWorker)
 
 SEASON ADVANCE (advanceSeason in SeasonService.ts)
@@ -708,7 +749,7 @@ FA POOL REPLENISHMENT
 ────────────────────────────────────────────────────────────────────────────────
 
 - MIN_FA_PER_POSITION: QB:10, RB:22, WR:28, TE:14, OL:28, DL:24, LB:24, CB:24,
-S:18, K:6 (doubled from original to create a meaningful FA market each offseason)
+S:18, K:6, P:4 (doubled from original to create a meaningful FA market each offseason)
 - New FAs get weighted random archetype via genArchetype()
 
 BACKEND IPC HANDLERS (full list)
@@ -731,8 +772,8 @@ restructure-player release-player get-team-stats
 promote-from-ps sign-free-agent get-expiring-contracts
 resign-player get-offseason-status cpu-fa-signing
 generate-draft-class get-draft-class get-draft-order
-get-round-pick-order make-draft-pick scout-prospect
-get-scout-count run-cpu-round complete-draft
+get-round-pick-order make-draft-pick scout-prospect scout-prospect-attr
+get-combine-results get-scout-count run-cpu-round complete-draft
 get-depth-chart set-depth-chart-order reset-depth-chart
 get-alltime-leaders get-season-records get-season-awards
 get-franchise-records get-team-needs check-setup-done

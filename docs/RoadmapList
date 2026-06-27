@@ -1,5 +1,5 @@
 SIDELINE TO SIDELINE FOOTBALL — ROADMAP
-Last Updated: June 27, 2026
+Last Updated: June 27, 2026 (session 2)
 Repository: https://github.com/blakewhitney3163/Sideline-to-Sideline-Football
 ================================================================================
 
@@ -139,6 +139,26 @@ SIMULATION & SCHEDULE
  Duplicate handler conflict in seasonHandlers.ts fixed (broken PlayoffService
  stubs removed).
 
+[DONE June 27, 2026] Scouting System Overhaul — replaced OVR-reveal scouting
+    with position-specific attribute grade system. Each prospect has 4–5 position-
+    specific attributes (e.g. QB: Accuracy, Arm Strength, Mobility, Decision Making,
+    Pocket Presence) graded A+/A/A-/B+…F derived from OVR ± noise. 1 scout point
+    reveals 1 attribute for 1 prospect; OVR never shown directly. Dedicated
+    CombineView screen appears after playoffs, before draft: all measurables public,
+    sortable by position/drill, "Lock In Draft Board" gates transition to draft.
+    ProspectBoard on draft day shows revealed grade chips + combine stats, no raw OVR.
+    CPU draft logic switched to ORDER BY projected_overall_pick ASC (same imperfect
+    scouting as user — sleepers stay available longer). DB schema v26 adds
+    attributes_json and revealed_attrs to draft_prospects. New IPCs:
+    scout-prospect-attr, get-combine-results.
+
+[DONE June 27, 2026] Punter (P) Position — fully integrated across all systems.
+    Each roster gets 1 punter; 4 punter FAs in pool; P in draft class and CPU
+    draft need thresholds. Punter OVR drives punt net yards in LiveGameEngine
+    (executePunt). Attributes: Leg Strength, Hang Time, Directional Punting.
+    Added to POSITION_TO_GROUP, depth chart Special Teams group, injury risk,
+    waiver limits, trade value, all UI position filters.
+
 [ ] Multi-Season Batch Sim — "Sim N seasons" with a progress bar for
     fast-forwarding dynasties. Low priority until core OOTP loop is polished.
 
@@ -216,8 +236,7 @@ NEXT OOTP-TIER FEATURES (queued)
     level 6 fires an HC candidate news event. CoachingTab.tsx updated with level
     badge, tier label, and XP progress bar on every coach card.
 
-[ ] Preseason Games — 2–4 preseason games before Week 1 to evaluate depth
-    chart placement and practice squad development.
+[DONE June 27, 2026] Preseason Games — see SIMULATION & SCHEDULE section above.
 
 [DONE June 27, 2026] Stadium Upgrades — 5-level upgrade system (schema v21)
     added to FinancesTab. Each upgrade costs $50M/$75M/$110M/$150M/$200M (indexed
