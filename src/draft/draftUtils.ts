@@ -35,6 +35,14 @@ export function maskedOvr(id: number, actual: number): string {
   return `${low}–${high}`;
 }
 
+/** Returns a ±5 OVR range shown after the first scout, before the deep scout. */
+export function partialOvrRange(id: number, ovr: number): string {
+  const offset = ((id * 11) % 7) - 3;
+  const lo = Math.max(50, ovr + offset - 3);
+  const hi = Math.min(99, ovr + offset + 4);
+  return `${lo}–${hi}`;
+}
+
 export function preScoutTier(id: number, ovr: number): { label: string; color: string } {
   const noise = ((id * 13) % 5) === 0 ? 7 : ((id * 13) % 5) === 1 ? -7 : 0;
   const n = ovr + noise;
@@ -44,16 +52,13 @@ export function preScoutTier(id: number, ovr: number): { label: string; color: s
   if (n >= 63) return { label: 'Day 3',        color: '#4FC3F7' };
   return            { label: 'Priority FA',  color: T.textMuted };
 }
-// ─── Combine Utilities ────────────────────────────────────────────────────────
 
-/** Primary combine stat label for a given position. */
 export const COMBINE_PRIMARY: Record<string, string> = {
   QB: 'forty_time', RB: 'forty_time', WR: 'forty_time',
   TE: 'bench_press', OL: 'bench_press', DL: 'bench_press',
   LB: 'forty_time', CB: 'forty_time', S: 'forty_time', K: 'bench_press',
 };
 
-/** Color for a forty time (lower is better). */
 export function fortyColor(t: number): string {
   if (t <= 4.38) return '#FFD700';
   if (t <= 4.50) return '#4caf50';
@@ -61,7 +66,6 @@ export function fortyColor(t: number): string {
   return T.textMuted;
 }
 
-/** Color for bench press reps (higher is better). */
 export function benchColor(reps: number): string {
   if (reps >= 28) return '#FFD700';
   if (reps >= 22) return '#4caf50';
@@ -69,7 +73,6 @@ export function benchColor(reps: number): string {
   return T.textMuted;
 }
 
-/** Color for vertical jump (higher is better). */
 export function vertColor(inches: number): string {
   if (inches >= 40) return '#FFD700';
   if (inches >= 36) return '#4caf50';
@@ -77,7 +80,6 @@ export function vertColor(inches: number): string {
   return T.textMuted;
 }
 
-/** Color for cone time (lower is better). */
 export function coneColor(t: number): string {
   if (t <= 6.80) return '#FFD700';
   if (t <= 7.10) return '#4caf50';
