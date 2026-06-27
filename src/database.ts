@@ -565,7 +565,7 @@ export function generateContracts(): void {
   console.log(`Contracts generated: ${activePlayers.length} active + ${psPlayers.length} PS`);
 }
 
-const CURRENT_SCHEMA_VERSION = 20;
+const CURRENT_SCHEMA_VERSION = 21;
 
 interface Migration { version: number; description: string; up: () => void; }
 
@@ -844,6 +844,17 @@ const MIGRATIONS: Migration[] = [
         END
         WHERE attendance_rate IS NULL OR attendance_rate = 0
       `).run();
+    },
+  },
+  {
+    version: 21,
+    description: 'Add stadium_upgrade_level and pending_upgrade columns to team_finances',
+    up: () => {
+      const finCols = (db.prepare('PRAGMA table_info(team_finances)').all() as any[]).map((c: any) => c.name);
+      if (!finCols.includes('stadium_upgrade_level'))
+        db.prepare('ALTER TABLE team_finances ADD COLUMN stadium_upgrade_level INTEGER DEFAULT 0').run();
+      if (!finCols.includes('pending_upgrade'))
+        db.prepare('ALTER TABLE team_finances ADD COLUMN pending_upgrade INTEGER DEFAULT 0').run();
     },
   },
 ];
