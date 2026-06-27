@@ -12,6 +12,9 @@ import TradeDeadlineTicker from './home/TradeDeadlineTicker';
 import { CpuOffer } from './trades/types';
 import LiveGameView from './home/LiveGameView';
 import PreseasonPanel from './home/PreseasonPanel';
+import ChemistryPanel from './home/ChemistryPanel';
+import GameWeekPrep from './home/GameWeekPrep';
+import PreSeasonStaffPanel from './home/PreSeasonStaffPanel';
 
 declare const window: any;
 
@@ -62,6 +65,10 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [settingStatus, setSettingStatus] = useState(false);
   const [preseasonStatus, setPreseasonStatus] = useState<{ generated: boolean; done: boolean; weeksDone: number[]; games: any[] } | null>(null);
   const [franchiseHealth, setFranchiseHealth] = useState<FranchiseHealth | null>(null);
+  const [ownerGoals, setOwnerGoals] = useState<any[]>([]);
+  const [ownerPatience, setOwnerPatience] = useState(75);
+  const [teamChemistry, setTeamChemistry] = useState<{ chemistry: number; events: any[]; archetypes: any[] } | null>(null);
+  const [hasCoaches, setHasCoaches] = useState(true);
 
   useEffect(() => {
     if (!userTeam) return;
@@ -72,7 +79,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setPlayoffResults(null); setUserRecord(null); setInjuryReport([]);
       setSeasonAwards(null);
 
-      const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffer, tradeStatus, spots, health] = await Promise.all([
+      const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffer, tradeStatus, spots, health, goals, patience] = await Promise.all([
         window.api.getCurrentWeek(),
         window.api.getDashboard(currentSeason),
         window.api.getChampions(),
@@ -84,6 +91,8 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         window.api.getTeamStatus(userTeam.id),
         window.api.getRosterSpots(userTeam.id),
         window.api.getFranchiseHealth(userTeam.id),
+        window.api.getOwnerGoals(currentSeason),
+        window.api.getOwnerPatience(),
       ]);
       if (cancelled) return;
 
@@ -106,6 +115,8 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setOfferHandled(false);
       setUserTradeStatus(tradeStatus ?? null);
       setFranchiseHealth(health ?? null);
+      setOwnerGoals(Array.isArray(goals) ? goals : []);
+      setOwnerPatience(typeof patience === 'number' ? patience : 75);
 
       if (offseason.playoffsComplete) setPlayoffsComplete(true);
 
@@ -115,6 +126,13 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       if (!status.hasSchedule) {
         const presStatus = await window.api.getPreseasonStatus(currentSeason);
         if (!cancelled) setPreseasonStatus(presStatus ?? null);
+        const coachingStaff = await window.api.getCoachingStaff(userTeam.id);
+        if (!cancelled) setHasCoaches(Array.isArray(coachingStaff) && coachingStaff.length > 0);
+      }
+
+      if (status.hasSchedule && status.currentWeek !== null) {
+        const chem = await window.api.getTeamChemistry(userTeam.id);
+        if (!cancelled) setTeamChemistry(chem ?? null);
       }
 
       if (status.hasSchedule && !seasonDone) {
@@ -349,7 +367,17 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         )}
 
         {/* ── No schedule ── */}
-        {!hasSchedule && (
+        {!hasSchedule && !hasCoaches && (
+          <PreSeasonStaffPanel
+            teamId={userTeam.id}
+            season={currentSeason}
+            onConfirm={() => setHasCoaches(true)}
+            onGenerateSchedule={handleGenerateSchedule}
+            generatingSchedule={generatingSchedule}
+          />
+        )}
+
+        {!hasSchedule && hasCoaches && (
           <div>
             {preseasonStatus && !preseasonStatus.done ? (
               <PreseasonPanel
@@ -379,6 +407,17 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
             currentWeek={currentWeek}
             currentSeason={currentSeason}
             refreshKey={simCount}
+          />
+        )}
+
+        {/* ── Game Week Prep ── */}
+        {hasSchedule && !allWeeksDone && userGame && currentWeek !== null && (
+          <GameWeekPrep
+            season={currentSeason}
+            week={currentWeek}
+            opponentTeamId={isHome ? (userGame as any).away_team_id : (userGame as any).home_team_id}
+            opponentName={oppTeamName ?? ''}
+            injuredPlayers={injuryReport}
           />
         )}
 
@@ -520,6 +559,15 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
           </div>
         )}
 
+        {/* ── Team Chemistry ── */}
+        {hasSchedule && !allWeeksDone && teamChemistry && (
+          <ChemistryPanel
+            chemistry={teamChemistry.chemistry}
+            events={teamChemistry.events}
+            archetypes={teamChemistry.archetypes}
+          />
+        )}
+
         {/* ── Active Alerts ── */}
         {hasSchedule && !allWeeksDone && (seriousInjuries.length > 0 || psAlert) && (
           <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '14px 20px' }}>
@@ -603,6 +651,8 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         onCancelConfirm={() => setConfirming(false)}
         onAdvance={handleAdvance}
         onSetTradeStatus={handleSetTradeStatus}
+        ownerGoals={ownerGoals}
+        ownerPatience={ownerPatience}
       />
 
       {liveGameId !== null && userTeam && (
