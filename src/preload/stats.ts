@@ -40,8 +40,11 @@ export const statsApi = {
   getFranchiseRecords: (teamId: number) =>
     ipcRenderer.invoke('get-franchise-records', teamId),
 
-  importHistoricalRecords: (recordType: 'alltime' | 'season') =>
+    importHistoricalRecords: (recordType: 'alltime' | 'season') =>
     ipcRenderer.invoke('import-historical-records', recordType),
+
+  importCareerStats: () =>
+    ipcRenderer.invoke('import-career-stats'),
 
   importCustomTeams: () =>
     ipcRenderer.invoke('import-custom-teams'),
