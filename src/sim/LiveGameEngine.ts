@@ -169,22 +169,9 @@ function pickReceiver(players: LivePlayer[]): LivePlayer | null {
   return pool[0];
 }
 
-// Field position description
-function fieldDesc(yardLine: number, possession: 'home' | 'away', homeTeamName: string, awayTeamName: string): string {
-  if (yardLine <= 50) return `own ${yardLine}`;
-  const oppLine = 100 - yardLine;
-  if (oppLine === 0) return 'goal line';
-  return `opp ${oppLine}`;
-}
-
 // Advance clock; handle quarter transitions
 function tickClock(state: LiveGameState, seconds: number): void {
   state.clockSeconds = Math.max(0, state.clockSeconds - seconds);
-}
-
-function downStr(down: number, ytg: number): string {
-  const d = ['1st', '2nd', '3rd', '4th'][down - 1] ?? `${down}th`;
-  return `${d} & ${ytg}`;
 }
 
 // ─── Play Executors ───────────────────────────────────────────────────────────
@@ -241,7 +228,7 @@ function executeRun(state: LiveGameState): PlayResult {
     if (rb) {
       const s = ensureStat(state, rb.id, teamId);
       s.rush_attempts++;
-      s.forced_fumbles = (s.forced_fumbles ?? 0);
+      s.forced_fumbles++;
     }
   } else {
     const yStr = yards > 0 ? `${yards}` : `a loss of ${Math.abs(yards)}`;
@@ -974,4 +961,8 @@ export function abortLiveGame(gameId: number): void {
 
 export function hasActiveGame(gameId: number): boolean {
   return activeGames.has(gameId);
+}
+
+export function getActiveGame(gameId: number): LiveGameState | undefined {
+  return activeGames.get(gameId);
 }
