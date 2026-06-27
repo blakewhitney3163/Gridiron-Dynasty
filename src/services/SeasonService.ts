@@ -18,6 +18,18 @@ function isHOFEligible(position: string, career: any): boolean {
   return thresholds.some((t: any) => (parseFloat(career[t.stat]) || 0) >= t.value);
 }
 
+
+// ─── Apply Pending Stadium Upgrades ───────────────────────────────────────────
+function applyPendingStadiumUpgrades(): void {
+  db.prepare(`
+    UPDATE team_finances
+    SET stadium_upgrade_level = stadium_upgrade_level + 1,
+        stadium_capacity = stadium_capacity + 8000,
+        pending_upgrade = 0
+    WHERE pending_upgrade = 1 AND stadium_upgrade_level < 5
+  `).run();
+}
+
 // ─── Dynamic Revenue Recalculation ────────────────────────────────────────────
 function recalculateTeamFinances(completedSeason: number): void {
   const allTeams = db.prepare('SELECT id FROM teams').all() as any[];
@@ -463,6 +475,9 @@ export async function advanceSeason(): Promise<AdvanceSeasonResult> {
   checkCapEscalation(next);
   checkExpansionVote(next);
   checkCpuRelocation(next);
+
+  // ── Apply Pending Stadium Upgrades ──────────────────────────────────────────
+  applyPendingStadiumUpgrades();
 
   // ── Dynamic Revenue Update ────────────────────────────────────────────────
   recalculateTeamFinances(current);
