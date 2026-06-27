@@ -135,7 +135,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setPlayoffResults(null); setUserRecord(null); setInjuryReport([]);
       setSeasonAwards(null); setStaffSetupComplete(false);
 
-      const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffers, tradeStatus, spots, health, psAlerts, announcingRets, news, chemistry] = await Promise.all([
+            const [status, dashboard, champs, standings, offseason, injuries, leaders, tradeOffers, tradeStatus, spots, health, psAlerts, announcingRets, news, chemistry, ownerGoalsData, ownerPatienceData] = await Promise.all([
         window.api.getCurrentWeek(),
         window.api.getDashboard(currentSeason),
         window.api.getChampions(),
@@ -151,6 +151,8 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
         window.api.getAnnouncingRetirements(),
         window.api.getNewsFeed({ season: currentSeason, limit: 6 }),
         window.api.getTeamChemistry(userTeam.id),
+        window.seasonApi.getOwnerGoals(currentSeason),
+        window.seasonApi.getOwnerPatience(),
       ]);
       if (cancelled) return;
 
@@ -176,7 +178,9 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setPSPromotionAlerts(psAlerts ?? []);
       setAnnouncingRetirements(announcingRets ?? []);
       setRecentNews(news ?? []);
-      setTeamChemistry(chemistry ?? null);
+            setTeamChemistry(chemistry ?? null);
+      setOwnerGoals(Array.isArray(ownerGoalsData) ? ownerGoalsData : []);
+      setOwnerPatience(typeof ownerPatienceData === 'number' ? ownerPatienceData : 75);
 
       if (offseason.playoffsComplete) setPlayoffsComplete(true);
 
