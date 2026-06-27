@@ -30,6 +30,23 @@ export function loadTeamData(teamId: number): TeamData {
            p.throw_accuracy, p.throw_power,
            p.catching, p.route_running,
            p.tackle_rating, p.coverage, p.pass_rush,
+           COALESCE(p.acceleration, 0)         AS acceleration,
+           COALESCE(p.agility, 0)              AS agility,
+           COALESCE(p.throw_under_pressure, 0) AS throw_under_pressure,
+           COALESCE(p.play_action, 0)          AS play_action,
+           COALESCE(p.elusiveness, 0)          AS elusiveness,
+           COALESCE(p.trucking, 0)             AS trucking,
+           COALESCE(p.break_tackle, 0)         AS break_tackle,
+           COALESCE(p.spectacular_catch, 0)    AS spectacular_catch,
+           COALESCE(p.catch_in_traffic, 0)     AS catch_in_traffic,
+           COALESCE(p.release_rating, 0)       AS release_rating,
+           COALESCE(p.hit_power, 0)            AS hit_power,
+           COALESCE(p.pursuit, 0)              AS pursuit,
+           COALESCE(p.block_shedding, 0)       AS block_shedding,
+           COALESCE(p.power_moves, 0)          AS power_moves,
+           COALESCE(p.finesse_moves, 0)        AS finesse_moves,
+           COALESCE(p.play_recognition, 0)     AS play_recognition,
+           COALESCE(p.man_coverage, 0)         AS man_coverage,
            COALESCE(dc.slot, 999) AS depth_slot
     FROM players p
     LEFT JOIN depth_chart dc ON dc.player_id = p.id AND dc.team_id = ?
@@ -141,17 +158,20 @@ export function computeTeamRatings(data: TeamData): TeamRatings {
     switch (scheme.offense_scheme) {
       case 'West Coast': {
         const qbAcc = qbs[0]?.throw_accuracy ?? 70;
+        const qbTup = (qbs[0]?.throw_under_pressure as number) ?? 70;
         const teAvg = avg(topN(tes, 2));
-        offMod = ((qbAcc + teAvg) / 2 - 70) * 0.08;
+        offMod = (((qbAcc + qbTup) / 2 + teAvg) / 2 - 70) * 0.08;
         break;
       }
       case 'Air Raid':
         offMod = (avg(topN(wrs, 3)) - 70) * 0.14;
         break;
       case 'Power Run': {
-        const rbAvg = avg(topN(rbs, 2));
+        const topRBs = topN(rbs, 2);
+        const rbAvg = avg(topRBs);
+        const rbTrk = topRBs.reduce((s, p) => s + (((p as any).trucking as number) || 70), 0) / Math.max(1, topRBs.length);
         const olAvg = avg(topN(ols, 5));
-        offMod = ((rbAvg + olAvg) / 2 - 70) * 0.12;
+        offMod = (((rbAvg + rbTrk) / 2 + olAvg) / 2 - 70) * 0.12;
         break;
       }
       case 'Spread': {
@@ -166,23 +186,36 @@ export function computeTeamRatings(data: TeamData): TeamRatings {
     }
 
     switch (scheme.defense_scheme) {
-      case '4-3':
-        defMod = (avg(topN(dls, 4)) - 70) * 0.12;
+      case '4-3': {
+        const frontFour = topN(dls, 4);
+        const dlScore = avg(frontFour) * 0.5
+          + avgAttr(frontFour, 'block_shedding') * 0.3
+          + avgAttr(frontFour, 'power_moves') * 0.2;
+        defMod = (dlScore - 70) * 0.12;
         break;
+      }
       case '3-4':
         defMod = (avg(topN(lbs, 4)) - 70) * 0.13;
         break;
       case 'Zone Cover 2': {
         const dbAll = [...topN(cbs, 3), ...topN(ss, 2)];
-        defMod = (avgAttr(dbAll, 'coverage') - 70) * 0.11;
+        const zoneScore = avgAttr(dbAll, 'coverage') * 0.6
+          + avgAttr(dbAll, 'play_recognition') * 0.4;
+        defMod = (zoneScore - 70) * 0.11;
         break;
       }
-      case 'Man Press':
-        defMod = (avg(topN(cbs, 2)) - 70) * 0.11;
+      case 'Man Press': {
+        const pressCBs = topN(cbs, 2);
+        const manScore = avg(pressCBs) * 0.4 + avgAttr(pressCBs, 'man_coverage') * 0.6;
+        defMod = (manScore - 70) * 0.11;
         break;
+      }
       case 'Blitz Heavy': {
         const rushers = [...dls, ...lbs].sort((a, b) => b.overall_rating - a.overall_rating).slice(0, 6);
-        defMod = (avgAttr(rushers, 'pass_rush') - 70) * 0.15;
+        const blitzScore = avgAttr(rushers, 'pass_rush') * 0.5
+          + avgAttr(rushers, 'power_moves') * 0.25
+          + avgAttr(rushers, 'finesse_moves') * 0.25;
+        defMod = (blitzScore - 70) * 0.15;
         break;
       }
     }
