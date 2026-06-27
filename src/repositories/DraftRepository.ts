@@ -15,6 +15,8 @@ type ProspectInsert = {
   broad_jump: number;
   cone_time: number;
   projected_overall_pick: number;
+  attributes_json: string;
+  revealed_attrs: string;
 };
 
 class DraftRepository {
@@ -47,17 +49,29 @@ class DraftRepository {
     const ins = db.prepare(`
       INSERT INTO draft_prospects
         (season, first_name, last_name, position, overall_rating, dev_trait, age,
-         forty_time, bench_press, vertical_jump, broad_jump, cone_time, projected_overall_pick)
+         forty_time, bench_press, vertical_jump, broad_jump, cone_time,
+         projected_overall_pick, attributes_json, revealed_attrs)
       VALUES
         (@season, @first_name, @last_name, @position, @overall_rating, @dev_trait, @age,
-         @forty_time, @bench_press, @vertical_jump, @broad_jump, @cone_time, @projected_overall_pick)
+         @forty_time, @bench_press, @vertical_jump, @broad_jump, @cone_time,
+         @projected_overall_pick, @attributes_json, @revealed_attrs)
     `);
     const run = db.transaction(() => { for (const p of prospects) ins.run(p); });
     run();
   }
 
+  /** Appends `attribute` to the JSON array stored in revealed_attrs. */
+  revealAttribute(prospectId: number, attribute: string): void {
+    const row = db.prepare('SELECT revealed_attrs FROM draft_prospects WHERE id = ?').get(prospectId) as any;
+    if (!row) return;
+    const current: string[] = JSON.parse(row.revealed_attrs ?? '[]');
+    if (!current.includes(attribute)) {
+      current.push(attribute);
+      db.prepare('UPDATE draft_prospects SET revealed_attrs = ? WHERE id = ?').run(JSON.stringify(current), prospectId);
+    }
+  }
+
   markScouted(id: number): void {
-    // Progressive: 0 → 1 (partial), 1 → 2 (full), capped at 2
     db.prepare('UPDATE draft_prospects SET scouted = MIN(scouted + 1, 2) WHERE id = ?').run(id);
   }
 

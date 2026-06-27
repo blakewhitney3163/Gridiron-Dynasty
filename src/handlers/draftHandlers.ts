@@ -6,7 +6,8 @@ import { getCurrentSeason } from '../helpers/getCurrentSeason';
 import { playerRepo, contractRepo, pickRepo, draftRepo, settingsRepo } from '../repositories';
 import { logNewsEvent } from '../helpers/logNewsEvent';
 import { scoutRepo } from '../repositories';
-import { calcPickTradeValue, calcPlayerTradeValue } from '../services/TradeService';
+import { calcPickTradeValue } from '../services/TradeService';
+import { generateAttributes } from '../draft/draftUtils';
 
 function generateCombine(position: string, ovr: number): {
   forty_time: number; bench_press: number; vertical_jump: number;
@@ -170,6 +171,8 @@ export function registerDraftHandlers(): void {
         dev_trait: getDevTrait(ovr),
         age: Math.random() < 0.6 ? 21 : Math.random() < 0.6 ? 22 : 23,
         projected_overall_pick: projectSlot(i + 1),
+        attributes_json: JSON.stringify(generateAttributes(position, ovr)),
+        revealed_attrs: '[]',
         ...combine,
       });
     }
@@ -274,21 +277,45 @@ export function registerDraftHandlers(): void {
     return { success: true };
   });
 
+  // Legacy handler kept for backward compat (no longer used by UI)
   ipcMain.handle('scout-prospect', (_event: any, prospectId: number) => {
+    return { success: false, reason: 'Use scout-prospect-attr instead.' };
+  });
+
+  /** Reveal one attribute grade for a prospect. Costs 1 scout point. */
+  ipcMain.handle('scout-prospect-attr', (_event: any, { prospectId, attribute }: { prospectId: number; attribute: string }) => {
     const season = getCurrentSeason();
     const prospect = draftRepo.getById(prospectId);
     if (!prospect) return { success: false, reason: 'Prospect not found.' };
-    if ((prospect.scouted ?? 0) >= 2) return { success: false, reason: 'Already fully scouted.' };
-    const used = draftRepo.countScouted(season);
-    const rawBudget = parseInt(settingsRepo.get(`scouting_budget_${season}`) ?? '25');
-    const userTeamId = settingsRepo.getUserTeamId() ?? -1;
-    const myScouts = userTeamId > 0 ? (scoutRepo.getByTeam(userTeamId) as any[]) : [];
-    const hasCollegeScout = myScouts.some((s: any) => s.specialty === 'College');
-    const effectiveBudget = hasCollegeScout ? Math.floor(rawBudget / 0.7) : rawBudget;
-    if (used >= effectiveBudget) return { success: false, reason: 'No scouting budget remaining.' };
-    draftRepo.markScouted(prospectId);
-    const newLevel = (prospect.scouted ?? 0) + 1;
-    return { success: true, level: newLevel };
+
+    const revealed: string[] = JSON.parse((prospect as any).revealed_attrs ?? '[]');
+    if (revealed.includes(attribute)) return { success: false, reason: 'Already revealed.' };
+
+    const attrs: Record<string, string> = JSON.parse((prospect as any).attributes_json ?? '{}');
+    if (!attrs[attribute]) return { success: false, reason: 'Unknown attribute.' };
+
+    const budget = parseInt(settingsRepo.get(`scouting_budget_${season}`) ?? '0');
+    if (budget <= 0) return { success: false, reason: 'No scouting points remaining.' };
+
+    // Spend 1 point
+    settingsRepo.set(`scouting_budget_${season}`, String(Math.max(0, budget - 1)));
+    draftRepo.revealAttribute(prospectId, attribute);
+
+    return { success: true, attribute, grade: attrs[attribute], remaining: budget - 1 };
+  });
+
+  /** Returns all prospects with combine data — public, no cost. */
+  ipcMain.handle('get-combine-results', () => {
+    const season = getCurrentSeason();
+    return db.prepare(`
+      SELECT id, first_name, last_name, position, age,
+             projected_overall_pick,
+             forty_time, bench_press, vertical_jump, broad_jump, cone_time,
+             revealed_attrs, attributes_json
+      FROM draft_prospects
+      WHERE season = ? AND is_drafted = 0
+      ORDER BY CASE WHEN projected_overall_pick > 0 THEN projected_overall_pick ELSE 999 END ASC, id ASC
+    `).all(season);
   });
 
   ipcMain.handle('get-scout-count', () => {
@@ -336,9 +363,15 @@ export function registerDraftHandlers(): void {
         let prospect: any = null;
         if (needs.length > 0) {
           const needsPh = needs.map(() => '?').join(',');
-          prospect = db.prepare(`SELECT * FROM draft_prospects WHERE season = ? AND is_drafted = 0 AND position IN (${needsPh}) ORDER BY overall_rating DESC LIMIT 1`).get(season, ...needs);
+          prospect = db.prepare(`
+            SELECT * FROM draft_prospects WHERE season = ? AND is_drafted = 0 AND position IN (${needsPh})
+            ORDER BY CASE WHEN projected_overall_pick > 0 THEN projected_overall_pick ELSE 999 END ASC LIMIT 1
+          `).get(season, ...needs);
         }
-        if (!prospect) prospect = db.prepare('SELECT * FROM draft_prospects WHERE season = ? AND is_drafted = 0 ORDER BY overall_rating DESC LIMIT 1').get(season);
+        if (!prospect) prospect = db.prepare(`
+          SELECT * FROM draft_prospects WHERE season = ? AND is_drafted = 0
+          ORDER BY CASE WHEN projected_overall_pick > 0 THEN projected_overall_pick ELSE 999 END ASC LIMIT 1
+        `).get(season);
         if (!prospect) continue;
         const overallPick = (round - 1) * 32 + (i + 1);
         const pickInRound = i + 1;

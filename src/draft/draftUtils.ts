@@ -2,6 +2,67 @@ import { T } from '../theme';
 
 export const POSITIONS = ['ALL','QB','RB','WR','TE','OL','DL','LB','CB','S','K'];
 
+// ─── Attribute-Grade Scouting ─────────────────────────────────────────────────
+
+/** Position-specific attributes shown as letter grades in scouting. */
+export const POSITION_ATTRS: Record<string, string[]> = {
+  QB:  ['Accuracy', 'Arm Strength', 'Mobility', 'Decision Making', 'Pocket Presence'],
+  RB:  ['Speed', 'Elusiveness', 'Power', 'Receiving', 'Pass Protection'],
+  WR:  ['Speed', 'Route Running', 'Hands', 'Separation', 'YAC Ability'],
+  TE:  ['Speed', 'Route Running', 'Hands', 'Blocking', 'Frame'],
+  OL:  ['Pass Blocking', 'Run Blocking', 'Strength', 'Technique'],
+  DL:  ['Pass Rush', 'Run Defense', 'Strength', 'Motor'],
+  DE:  ['Pass Rush', 'Run Defense', 'Strength', 'Motor'],
+  LB:  ['Coverage', 'Run Stopping', 'Pass Rush', 'Instincts'],
+  CB:  ['Coverage', 'Speed', 'Press Coverage', 'Ball Hawk'],
+  S:   ['Coverage', 'Tackling', 'Range', 'Ball Hawk'],
+  FS:  ['Coverage', 'Tackling', 'Range', 'Ball Hawk'],
+  SS:  ['Coverage', 'Tackling', 'Range', 'Ball Hawk'],
+  K:   ['Leg Strength', 'FG Accuracy', 'Kickoffs'],
+  P:   ['Leg Strength', 'Hang Time', 'Directional Punting'],
+};
+
+/** Convert a numeric score (0–100) to an NFL-style letter grade. */
+export function gradeFromScore(score: number): string {
+  if (score >= 93) return 'A+';
+  if (score >= 87) return 'A';
+  if (score >= 82) return 'A-';
+  if (score >= 77) return 'B+';
+  if (score >= 72) return 'B';
+  if (score >= 67) return 'B-';
+  if (score >= 62) return 'C+';
+  if (score >= 57) return 'C';
+  if (score >= 52) return 'C-';
+  if (score >= 46) return 'D+';
+  if (score >= 40) return 'D';
+  return 'F';
+}
+
+/** Color for a grade string. */
+export function gradeColor(grade: string): string {
+  if (grade === 'A+' || grade === 'A')  return '#FFD700';
+  if (grade === 'A-' || grade === 'B+') return '#4caf50';
+  if (grade === 'B'  || grade === 'B-') return '#4FC3F7';
+  if (grade === 'C+' || grade === 'C')  return '#FF8740';
+  if (grade === 'C-' || grade === 'D+') return '#e57373';
+  return T.textMuted;
+}
+
+/**
+ * Generate position-specific attribute grades for a prospect.
+ * Each attribute is OVR ± noise (~±12 pts) so players have uneven skill profiles.
+ * Called server-side during draft class generation; stored as JSON in the DB.
+ */
+export function generateAttributes(position: string, ovr: number): Record<string, string> {
+  const attrs = POSITION_ATTRS[position] ?? POSITION_ATTRS['OL'];
+  const result: Record<string, string> = {};
+  for (const attr of attrs) {
+    const noise = (Math.random() - 0.5) * 24; // ±12 pts
+    result[attr] = gradeFromScore(Math.max(20, Math.min(99, ovr + noise)));
+  }
+  return result;
+}
+
 export const ROUND_LABELS: Record<number, string> = {
   1:'1st', 2:'2nd', 3:'3rd', 4:'4th', 5:'5th', 6:'6th', 7:'7th',
 };

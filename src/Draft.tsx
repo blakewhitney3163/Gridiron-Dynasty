@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { T } from './theme';
 import { Prospect, DraftTeam, PickSlot, MyPick, CpuPick } from './draft/types';
-import { MAX_SCOUTS, draftGrade, preScoutTier } from './draft/draftUtils';
+import { draftGrade, POSITION_ATTRS, gradeColor } from './draft/draftUtils';
 import ProspectBoard from './draft/ProspectBoard';
 import MyPicksSidebar from './draft/MyPicksSidebar';
 import DraftSummary from './draft/DraftSummary';
+import CombineView from './draft/CombineView';
 import { useGameStore } from './store/gameStore';
 
 declare const window: any;
@@ -13,26 +14,6 @@ interface Props {
   onDraftComplete: () => void;
 }
 
-const POSITION_LABELS: Record<string, string> = {
-  QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', OL: 'OL',
-  DL: 'DL', LB: 'LB', CB: 'CB', S: 'S', K: 'K',
-};
-
-function classGradeLabel(rating: number): string {
-  if (rating >= 85) return 'Elite';
-  if (rating >= 75) return 'Strong';
-  if (rating >= 65) return 'Average';
-  if (rating >= 55) return 'Weak';
-  return 'Poor';
-}
-
-function classGradeColor(rating: number): string {
-  if (rating >= 85) return '#FFD700';
-  if (rating >= 75) return '#4caf50';
-  if (rating >= 65) return '#FF8740';
-  if (rating >= 55) return '#ef5350';
-  return '#666';
-}
 
 export default function Draft({ onDraftComplete }: Props) {
   const { userTeam, currentSeason, playoffsComplete } = useGameStore();
@@ -51,10 +32,10 @@ export default function Draft({ onDraftComplete }: Props) {
   const [showResults, setShowResults] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [running, setRunning] = useState(false);
-  const [scoutsUsed, setScoutsUsed] = useState(0);
-  const [scoutBudget, setScoutBudget] = useState(25);
-  const [scouting, setScouting] = useState<number | null>(null);
+  const [scoutPoints, setScoutPoints] = useState(0);
+  const [revealingAttr, setRevealingAttr] = useState<string | null>(null); // "prospectId:attr"
   const [classStrength, setClassStrength] = useState<Record<string, number> | null>(null);
+  const [combineViewed, setCombineViewed] = useState(false);
 
   // In-draft trade modal state
   const [showTradeModal, setShowTradeModal] = useState(false);
@@ -75,8 +56,7 @@ export default function Draft({ onDraftComplete }: Props) {
     ]);
     setProspects(cls);
     setDraftOrder(order);
-    setScoutsUsed(sc?.used ?? sc ?? 0);
-    setScoutBudget(sc?.budget ?? 25);
+    setScoutPoints(sc?.budget ?? 25);
     setDraftGenerated(cls.length > 0);
     if (cs && typeof cs === 'object' && !cs.error) {
       setClassStrength(cs);
@@ -123,16 +103,20 @@ export default function Draft({ onDraftComplete }: Props) {
     setGenerating(false);
   };
 
-  const handleScout = async (prospectId: number) => {
-    if (scoutsUsed >= scoutBudget || scouting !== null) return;
-    setScouting(prospectId);
-    const result = await window.api.scoutProspect(prospectId);
+  const handleScoutAttr = async (prospectId: number, attribute: string) => {
+    if (scoutPoints <= 0 || revealingAttr !== null) return;
+    const key = `${prospectId}:${attribute}`;
+    setRevealingAttr(key);
+    const result = await window.api.scoutProspectAttr({ prospectId, attribute });
     if (result.success) {
-      setScoutsUsed(prev => prev + 1);
+      setScoutPoints(result.remaining);
       setProspects(await window.api.getDraftClass());
     }
-    setScouting(null);
+    setRevealingAttr(null);
   };
+
+  // Legacy — kept for ProspectBoard compat (draft day no longer needs it)
+  const handleScout = async (_prospectId: number) => {};
 
   const handlePick = async (prospect: Prospect) => {
     if (running || !userTeam) return;
@@ -225,16 +209,13 @@ export default function Draft({ onDraftComplete }: Props) {
 
   if (!userTeam) return null;
 
-  const scoutsLeft = scoutBudget - scoutsUsed;
   const available = prospects.filter(p => !p.is_drafted && (posFilter === 'ALL' || p.position === posFilter));
   const pickNum = userPickSlots[currentPickIdx];
   const totalPicksThisRound = userPickSlots.length;
 
-  // Pick slots available to the user for trading (unused picks with a valid pickAssetId)
   const myTradableSlots = roundPickSlots.filter(
     slot => slot.ownerTeamId === userTeam.id && !slot.isUsed && slot.pickAssetId !== null,
   );
-  // CPU teams in this round
   const cpuTeamIds = [...new Set(
     roundPickSlots
       .filter(slot => slot.ownerTeamId !== userTeam.id && !slot.isUsed)
@@ -271,11 +252,10 @@ export default function Draft({ onDraftComplete }: Props) {
   }
 
   if (!playoffsComplete) {
-    const scoutsAvailable = scoutBudget - scoutsUsed;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px 24px' }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, color: T.textPrimary }}>
               {currentSeason} Draft — Scouting Season
@@ -285,154 +265,133 @@ export default function Draft({ onDraftComplete }: Props) {
             </div>
           </div>
           <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-            <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1 }}>SCOUTS AVAILABLE</div>
+            <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1 }}>SCOUT POINTS</div>
             <div style={{
-              color: scoutsAvailable >= 5 ? '#4caf50' : scoutsAvailable > 0 ? '#FF8740' : '#e57373',
-              fontWeight: 700,
-              fontSize: 16,
+              color: scoutPoints >= 5 ? '#4caf50' : scoutPoints > 0 ? '#FF8740' : '#e57373',
+              fontWeight: 700, fontSize: 20,
             }}>
-              {scoutsAvailable} / {scoutBudget}
+              {scoutPoints}
             </div>
-            <div style={{ fontSize: 9, color: T.textDim }}>simulate games to earn more</div>
+            <div style={{ fontSize: 9, color: T.textDim }}>1 pt per attribute reveal · earn by simming games</div>
           </div>
         </div>
 
-        {/* Draft Class Strength panel */}
-        {classStrength && (
-          <div style={{
-            background: '#07100f', border: '1px solid #1a2e1a', borderRadius: 6,
-            padding: '10px 16px', marginBottom: 12,
-          }}>
-            <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1, marginBottom: 8 }}>
-              {currentSeason} DRAFT CLASS STRENGTH
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {Object.entries(POSITION_LABELS).map(([pos, label]) => {
-                const rating = classStrength[pos] ?? 0;
-                return (
-                  <div key={pos} style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center',
-                    background: '#0e1a0e', border: '1px solid #1e2e1e', borderRadius: 4,
-                    padding: '4px 10px', minWidth: 48,
-                  }}>
-                    <span style={{ fontSize: 9, color: T.textDim, letterSpacing: 0.5 }}>{label}</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: classGradeColor(rating) }}>
-                      {rating > 0 ? rating : '—'}
-                    </span>
-                    <span style={{ fontSize: 8, color: classGradeColor(rating) }}>
-                      {rating > 0 ? classGradeLabel(rating) : ''}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
+        {/* Tip banner */}
         <div style={{
           background: '#0a1000', border: '1px solid #1a2a1a', borderRadius: 6,
-          padding: '10px 16px', marginBottom: 14, fontSize: 11, color: '#4caf50',
-          fontFamily: 'monospace',
+          padding: '9px 14px', marginBottom: 12, fontSize: 11, color: '#4caf50',
         }}>
-          📋 Scouting mode — reveal prospect ratings now to prepare for draft day.
-          Pick buttons unlock after playoffs complete.
+          Spend scout points to reveal attribute grades for individual prospects. Each reveal costs 1 point.
+          Combine stats will be public after playoffs — come back then to see athletic testing.
+        </div>
+
+        {/* Position filter */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+          {['ALL', 'QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K'].map(pos => (
+            <button
+              key={pos}
+              onClick={() => setPosFilter(pos)}
+              style={{
+                padding: '3px 10px', fontSize: 10, cursor: 'pointer', borderRadius: 3,
+                background: posFilter === pos ? '#FF8740' : '#141414',
+                border: `1px solid ${posFilter === pos ? '#FF8740' : '#222'}`,
+                color: posFilter === pos ? '#000' : '#555',
+              }}
+            >
+              {pos}
+            </button>
+          ))}
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-            {['ALL', 'QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K'].map(pos => (
-              <button
-                key={pos}
-                onClick={() => setPosFilter(pos)}
-                style={{
-                  padding: '3px 10px', fontSize: 10, cursor: 'pointer', borderRadius: 3,
-                  background: posFilter === pos ? '#FF8740' : '#141414',
-                  border: `1px solid ${posFilter === pos ? '#FF8740' : '#222'}`,
-                  color: posFilter === pos ? '#000' : '#555', fontFamily: 'monospace',
-                }}
-              >
-                {pos}
-              </button>
-            ))}
-          </div>
-
           {prospects
             .filter(p => !p.is_drafted && (posFilter === 'ALL' || p.position === posFilter))
-            .slice(0, 60)
+            .slice(0, 80)
             .map(p => {
-              const isScouting = scouting === p.id;
               const proj = p.projected_overall_pick ?? 0;
               const projRound = proj > 0 ? Math.ceil(proj / 32) : null;
               const projPick  = proj > 0 ? ((proj - 1) % 32) + 1 : null;
-              const projLabel = projRound != null
-                ? `Rd ${projRound}, ~${projPick}`
-                : '—';
-
-              const { label: tierLabel, color: tierColor } = p.scouted >= 1
-                ? preScoutTier(p.id, p.overall_rating)
-                : { label: '', color: '' };
+              const projLabel = projRound != null ? `Rd ${projRound}, ~${projPick}` : '—';
+              const attrs: Record<string, string> = JSON.parse(p.attributes_json ?? '{}');
+              const revealed: string[] = JSON.parse(p.revealed_attrs ?? '[]');
+              const posAttrs = POSITION_ATTRS[p.position] ?? [];
 
               return (
                 <div key={p.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '8px 12px', marginBottom: 3, borderRadius: 4,
-                  background: '#0e0e0e', border: '1px solid #161616',
+                  padding: '10px 14px', marginBottom: 6, borderRadius: 6,
+                  background: '#0e0e0e', border: '1px solid #1a1a1a',
                 }}>
-                  {/* OVR — revealed only after level-2 scout */}
-                  <span style={{
-                    width: 36, textAlign: 'center', fontWeight: 700, fontSize: 13,
-                    color: p.scouted >= 2
-                      ? (p.overall_rating >= 80 ? '#FFD700' : p.overall_rating >= 70 ? '#4FC3F7' : '#888')
-                      : '#444',
-                  }}>
-                    {p.scouted >= 2 ? p.overall_rating : '—'}
-                  </span>
-
-                  {/* Name, position, age */}
-                  <span style={{ flex: 1, fontSize: 12, color: '#aaa', fontFamily: 'monospace' }}>
-                    {p.first_name} {p.last_name}
-                    <span style={{ color: '#555', marginLeft: 8, fontSize: 10 }}>
-                      {p.position} · Age {p.age}
+                  {/* Prospect header row */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <span style={{
+                      fontSize: 12, fontWeight: 700, color: T.textPrimary, flex: 1,
+                    }}>
+                      {p.first_name} {p.last_name}
+                      <span style={{ color: '#555', marginLeft: 8, fontSize: 10, fontWeight: 400 }}>
+                        {p.position} · Age {p.age}
+                      </span>
                     </span>
-                  </span>
-
-                  {/* Projected pick (always visible) */}
-                  <span style={{ fontSize: 10, color: '#4a6a4a', fontFamily: 'monospace', minWidth: 72, textAlign: 'right' }}>
-                    {projLabel}
-                  </span>
-
-                  {/* Tier label after level-1 scout */}
-                  {p.scouted >= 1 && p.scouted < 2 && (
-                    <span style={{ fontSize: 10, color: tierColor, fontFamily: 'monospace', minWidth: 80, textAlign: 'right' }}>
-                      {tierLabel}
+                    <span style={{ fontSize: 10, color: '#4a6a4a', minWidth: 80, textAlign: 'right' }}>
+                      {projLabel}
                     </span>
-                  )}
-                  {p.scouted >= 2 && (
-                    <span style={{ fontSize: 10, color: '#2a5a2a', fontFamily: 'monospace' }}>✓ Full</span>
-                  )}
+                  </div>
 
-                  {/* Scout button */}
-                  {p.scouted < 2 && (
-                    <button
-                      onClick={() => handleScout(p.id)}
-                      disabled={scoutsAvailable <= 0 || isScouting}
-                      style={{
-                        padding: '3px 10px', fontSize: 10,
-                        cursor: scoutsAvailable > 0 ? 'pointer' : 'not-allowed',
-                        borderRadius: 3, background: '#141414',
-                        border: `1px solid ${scoutsAvailable > 0 ? '#2a4a2a' : '#222'}`,
-                        color: scoutsAvailable > 0 ? '#4caf50' : '#333', fontFamily: 'monospace',
-                      }}
-                    >
-                      {isScouting ? '...' : p.scouted >= 1 ? '🔍 Deep Scout' : '🔍 Scout'}
-                    </button>
-                  )}
+                  {/* Attribute chips */}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {posAttrs.map(attr => {
+                      const isRevealed = revealed.includes(attr);
+                      const grade = attrs[attr] ?? '?';
+                      const revKey = `${p.id}:${attr}`;
+                      const isWorking = revealingAttr === revKey;
+
+                      if (isRevealed) {
+                        return (
+                          <div key={attr} style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            padding: '4px 8px', borderRadius: 5,
+                            background: '#111', border: `1px solid ${gradeColor(grade)}44`,
+                            minWidth: 52,
+                          }}>
+                            <span style={{ fontSize: 8, color: '#555', marginBottom: 1 }}>{attr}</span>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: gradeColor(grade) }}>
+                              {grade}
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <button
+                          key={attr}
+                          onClick={() => handleScoutAttr(p.id, attr)}
+                          disabled={scoutPoints <= 0 || revealingAttr !== null}
+                          title={scoutPoints <= 0 ? 'No scout points remaining' : `Reveal ${attr} (1 pt)`}
+                          style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            padding: '4px 8px', borderRadius: 5, cursor: scoutPoints > 0 ? 'pointer' : 'not-allowed',
+                            background: '#0c0c0c', border: '1px solid #2a2a2a',
+                            minWidth: 52, gap: 1,
+                          }}
+                        >
+                          <span style={{ fontSize: 8, color: '#444' }}>{attr}</span>
+                          <span style={{ fontSize: 13, color: '#333' }}>
+                            {isWorking ? '…' : '🔒'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
         </div>
       </div>
     );
+  }
+
+  // After playoffs: show Combine before Draft
+  if (!combineViewed) {
+    return <CombineView onComplete={() => setCombineViewed(true)} />;
   }
 
   return (
@@ -466,13 +425,13 @@ export default function Draft({ onDraftComplete }: Props) {
             </button>
           )}
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1 }}>SCOUTS</div>
+            <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1 }}>SCOUT PTS</div>
             <div style={{
-              color: scoutsLeft >= 5 ? '#4caf50' : scoutsLeft > 0 ? '#FF8740' : '#e57373',
+              color: scoutPoints >= 5 ? '#4caf50' : scoutPoints > 0 ? '#FF8740' : '#e57373',
               fontWeight: 700,
               fontSize: 16,
             }}>
-              {scoutsLeft} / {scoutBudget}
+              {scoutPoints}
             </div>
           </div>
         </div>
@@ -505,8 +464,8 @@ export default function Draft({ onDraftComplete }: Props) {
           lastCpuPicks={lastCpuPicks}
           roundPickSlots={roundPickSlots}
           draftOrder={draftOrder}
-          scoutsLeft={scoutsLeft}
-          scouting={scouting}
+          scoutsLeft={scoutPoints}
+          scouting={null}
           running={running}
           userTeam={userTeam}
           onPick={handlePick}

@@ -18,6 +18,10 @@ export interface Prospect {
   vertical_jump: number | null;
   broad_jump: number | null;
   cone_time: number | null;
+  /** JSON string — Record<attrName, letterGrade> */
+  attributes_json: string;
+  /** JSON string — string[] of revealed attribute names */
+  revealed_attrs: string;
 }
 
 export interface DraftTeam {

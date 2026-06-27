@@ -200,7 +200,9 @@ export function initDatabase(dbPath: string): void {
       broad_jump INTEGER,
       cone_time REAL,
       scouted INTEGER DEFAULT 0,
-      projected_overall_pick INTEGER DEFAULT 0
+      projected_overall_pick INTEGER DEFAULT 0,
+      attributes_json TEXT DEFAULT '{}',
+      revealed_attrs TEXT DEFAULT '[]'
     );
     CREATE TABLE IF NOT EXISTS depth_chart (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -592,7 +594,7 @@ export function generateContracts(): void {
   console.log(`Contracts generated: ${activePlayers.length} active + ${psPlayers.length} PS`);
 }
 
-const CURRENT_SCHEMA_VERSION = 25;
+const CURRENT_SCHEMA_VERSION = 26;
 
 interface Migration { version: number; description: string; up: () => void; }
 
@@ -930,6 +932,17 @@ const MIGRATIONS: Migration[] = [
       const cols = (db.prepare('PRAGMA table_info(draft_prospects)').all() as any[]).map((c: any) => c.name);
       if (!cols.includes('projected_overall_pick'))
         db.prepare('ALTER TABLE draft_prospects ADD COLUMN projected_overall_pick INTEGER DEFAULT 0').run();
+    },
+  },
+  {
+    version: 26,
+    description: 'Add attributes_json and revealed_attrs to draft_prospects for attribute-grade scouting',
+    up: () => {
+      const cols = (db.prepare('PRAGMA table_info(draft_prospects)').all() as any[]).map((c: any) => c.name);
+      if (!cols.includes('attributes_json'))
+        db.prepare("ALTER TABLE draft_prospects ADD COLUMN attributes_json TEXT DEFAULT '{}'").run();
+      if (!cols.includes('revealed_attrs'))
+        db.prepare("ALTER TABLE draft_prospects ADD COLUMN revealed_attrs TEXT DEFAULT '[]'").run();
     },
   },
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { T } from '../theme';
 import { Prospect, MyPick, CpuPick, PickSlot, DraftTeam } from './types';
-import { POSITIONS, TRAIT_META, ovrColor, maskedOvr, partialOvrRange, preScoutTier, draftGrade, fortyColor, benchColor, vertColor, coneColor } from './draftUtils';
+import { POSITIONS, TRAIT_META, ovrColor, gradeColor, fortyColor, benchColor, vertColor, coneColor } from './draftUtils';
 
 interface Props {
   available: Prospect[];
@@ -33,15 +33,13 @@ export default function ProspectBoard({
   showResults, userPickSlots, currentPickIdx, currentRound,
   pickNum, totalPicksThisRound,
   myPicks, lastCpuPicks, roundPickSlots, draftOrder,
-  scoutsLeft, scouting, running, userTeam,
-  onPick, onAutoPick, onScout, onNextRound,
+  running, userTeam,
+  onPick, onAutoPick, onNextRound,
 }: Props) {
   const canPick = !showResults && userPickSlots.length > 0 && !running;
-  const canScout = scoutsLeft > 0 && scouting === null;
 
   return (
     <div>
-
       {/* On the clock banner */}
       {!showResults && userPickSlots.length > 0 && (
         <div style={{
@@ -80,8 +78,13 @@ export default function ProspectBoard({
           </div>
           {myPicks.filter(p => p.round === currentRound).map((pick) => {
             const trait = TRAIT_META[pick.player.dev_trait] ?? TRAIT_META['Normal'];
+            const revealed: string[] = JSON.parse(pick.player.revealed_attrs ?? '[]');
+            const attrs: Record<string, string> = JSON.parse(pick.player.attributes_json ?? '{}');
             return (
-              <div key={pick.player.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0', fontSize: 11 }}>
+              <div key={pick.player.id} style={{
+                display: 'flex', gap: 8, alignItems: 'center',
+                padding: '4px 0', fontSize: 11, flexWrap: 'wrap',
+              }}>
                 <span style={{ color: '#FF8740', fontWeight: 'bold', fontSize: 9 }}>YOUR PICK #{pick.slot}</span>
                 <span style={{ color: '#fff' }}>{pick.player.first_name} {pick.player.last_name}</span>
                 <span style={{ color: T.textMuted, fontSize: 9 }}>{pick.player.position}</span>
@@ -90,8 +93,16 @@ export default function ProspectBoard({
                     {trait.short}
                   </span>
                 )}
-                <span style={{ color: ovrColor(pick.player.overall_rating), fontWeight: 'bold' }}>{pick.player.overall_rating}</span>
-                <span style={{ color: pick.gradeColor, fontWeight: 'bold' }}>{pick.grade}</span>
+                <span style={{ color: ovrColor(pick.player.overall_rating), fontWeight: 'bold' }}>{pick.player.overall_rating} OVR</span>
+                {revealed.map(a => (
+                  <span key={a} style={{
+                    fontSize: 10, fontWeight: 700, color: gradeColor(attrs[a] ?? '?'),
+                    padding: '1px 5px', background: `${gradeColor(attrs[a] ?? '?')}18`,
+                    borderRadius: 3, border: `1px solid ${gradeColor(attrs[a] ?? '?')}44`,
+                  }} title={a}>
+                    {attrs[a]}
+                  </span>
+                ))}
               </div>
             );
           })}
@@ -105,7 +116,9 @@ export default function ProspectBoard({
                   const trait = TRAIT_META[cp.prospect.dev_trait] ?? TRAIT_META['Normal'];
                   const teamName = draftOrder.find(t => t.id === cp.teamId);
                   return (
-                    <div key={cp.prospect.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 10, color: T.textMuted }}>
+                    <div key={cp.prospect.id} style={{
+                      display: 'flex', gap: 8, alignItems: 'center', fontSize: 10, color: T.textMuted,
+                    }}>
                       <span style={{ color: T.textDim, fontSize: 9, minWidth: 20 }}>{cp.pickInRound}</span>
                       <span style={{ minWidth: 120, fontSize: 9 }}>{teamName?.city} {teamName?.name}</span>
                       <span style={{ color: '#ccc' }}>{cp.prospect.first_name} {cp.prospect.last_name}</span>
@@ -115,7 +128,6 @@ export default function ProspectBoard({
                           {trait.short}
                         </span>
                       )}
-                      <span style={{ color: ovrColor(cp.prospect.overall_rating), fontWeight: 'bold' }}>{cp.prospect.overall_rating}</span>
                     </div>
                   );
                 })}
@@ -145,58 +157,64 @@ export default function ProspectBoard({
         ))}
       </div>
 
-      {/* Column header */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: '28px 1fr 42px 100px 50px 80px 70px',
-        gap: 4, padding: '4px 8px', marginBottom: 4,
-      }}>
-        {['#', 'NAME', 'POS', 'SCOUTING', 'AGE', 'OVR / RANGE', ''].map((h, i) => (
-          <div key={i} style={{ fontSize: 9, color: T.textDim, letterSpacing: 1 }}>{h}</div>
-        ))}
-      </div>
-
       {/* Prospect list */}
       {available.length === 0 ? (
         <div style={{ color: T.textDim, fontSize: 11, padding: '16px 8px' }}>No prospects available.</div>
       ) : (
         <div>
           {available.map((p, index) => {
-            const scoutLevel = p.scouted ?? 0;
-            const isFullyScouted = scoutLevel >= 2;
-            const isPartialScouted = scoutLevel === 1;
-            const tier = preScoutTier(p.id, p.overall_rating);
+            const revealed: string[] = JSON.parse(p.revealed_attrs ?? '[]');
+            const attrs: Record<string, string> = JSON.parse(p.attributes_json ?? '{}');
             const trait = TRAIT_META[p.dev_trait] ?? TRAIT_META['Normal'];
-            draftGrade(p.overall_rating);
+            const proj = p.projected_overall_pick ?? 0;
+            const projRound = proj > 0 ? Math.ceil(proj / 32) : null;
+            const projPick  = proj > 0 ? ((proj - 1) % 32) + 1 : null;
+            const projLabel = projRound != null ? `Rd ${projRound} / ${projPick}` : '—';
 
             return (
               <div
                 key={p.id}
                 onClick={() => canPick && onPick(p)}
-                onMouseEnter={e => { if (canPick) (e.currentTarget as HTMLElement).style.background = '#2a2a2a'; }}
+                onMouseEnter={e => { if (canPick) (e.currentTarget as HTMLElement).style.background = '#1e1e1e'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = T.bgCard; }}
                 style={{
-                  display: 'grid', gridTemplateColumns: '28px 1fr 42px 100px 50px 80px 70px',
-                  gap: 4, alignItems: 'center', padding: '6px 8px',
-                  background: T.bgCard, borderRadius: 4, marginBottom: 2,
+                  display: 'flex', gap: 10, alignItems: 'flex-start',
+                  padding: '8px 10px', background: T.bgCard, borderRadius: 5, marginBottom: 3,
                   cursor: canPick ? 'pointer' : 'default',
                   border: `1px solid ${canPick ? 'transparent' : T.borderFaint}`,
                   transition: 'background 0.1s',
-                  boxSizing: 'border-box',
                 }}
               >
-                {/* # */}
-                <div style={{ fontSize: 10, color: T.textDim }}>{index + 1}</div>
+                {/* Rank */}
+                <div style={{ fontSize: 10, color: T.textDim, minWidth: 22, paddingTop: 2 }}>
+                  {index + 1}
+                </div>
 
                 {/* Name + combine stats */}
-                <div>
-                  <div style={{ fontSize: 12, color: T.textPrimary, fontWeight: 500 }}>
-                    {p.first_name} {p.last_name}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 12, color: T.textPrimary, fontWeight: 600 }}>
+                      {p.first_name} {p.last_name}
+                    </span>
+                    <span style={{ fontSize: 10, color: '#FF8740', fontWeight: 700 }}>{p.position}</span>
+                    {trait.short && (
+                      <span style={{
+                        background: trait.bg, color: trait.color,
+                        fontSize: 8, padding: '1px 4px', borderRadius: 2, fontWeight: 'bold',
+                      }}>
+                        {trait.short}
+                      </span>
+                    )}
+                    <span style={{ fontSize: 9, color: '#4a6a4a', marginLeft: 'auto' }}>
+                      {projLabel}
+                    </span>
                   </div>
-                  <div style={{ fontSize: 9, color: T.textDim, marginTop: 1 }}>Age {p.age}</div>
+
+                  {/* Combine mini-stats */}
                   {(p.forty_time != null || p.bench_press != null) && (
-                    <div style={{ fontSize: 9, marginTop: 3, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 9, marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {p.forty_time != null && (
-                        <span style={{ color: fortyColor(p.forty_time) }}>40: {p.forty_time}s</span>
+                        <span style={{ color: fortyColor(p.forty_time) }}>40: {p.forty_time.toFixed(2)}s</span>
                       )}
                       {p.bench_press != null && (
                         <span style={{ color: benchColor(p.bench_press) }}>Bench: {p.bench_press}</span>
@@ -204,98 +222,32 @@ export default function ProspectBoard({
                       {p.vertical_jump != null && (
                         <span style={{ color: vertColor(p.vertical_jump) }}>Vert: {p.vertical_jump}"</span>
                       )}
-                      {p.broad_jump != null && (
-                        <span style={{ color: '#555' }}>BJ: {p.broad_jump}"</span>
-                      )}
                       {p.cone_time != null && (
-                        <span style={{ color: coneColor(p.cone_time) }}>Cone: {p.cone_time}s</span>
+                        <span style={{ color: coneColor(p.cone_time) }}>Cone: {p.cone_time.toFixed(2)}s</span>
                       )}
                     </div>
                   )}
-                </div>
 
-                {/* Position */}
-                <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 600 }}>{p.position}</div>
-
-                {/* Scouting tier */}
-                <div style={{ fontSize: 9, fontWeight: 'bold', letterSpacing: 0.8 }}>
-                  {isFullyScouted && <span style={{ color: '#4caf50' }}>SCOUTED</span>}
-                  {isPartialScouted && <span style={{ color: '#FF8740' }}>PARTIAL</span>}
-                  {scoutLevel === 0 && <span style={{ color: tier.color }}>{tier.label}</span>}
-                </div>
-
-                {/* Age */}
-                <div style={{ fontSize: 10, color: T.textMuted }}>{p.age}</div>
-
-                {/* OVR / Range */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  {isFullyScouted && (
-                    <>
-                      <span style={{ color: ovrColor(p.overall_rating), fontWeight: 'bold', fontSize: 13 }}>
-                        {p.overall_rating}
-                      </span>
-                      {trait.short && (
-                        <span style={{
-                          background: trait.bg, color: trait.color,
-                          fontSize: 8, padding: '1px 4px', borderRadius: 2, fontWeight: 'bold',
-                        }}>
-                          {trait.short}
+                  {/* Revealed attribute grade chips */}
+                  {revealed.length > 0 && (
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 5 }}>
+                      {revealed.map(attr => (
+                        <span
+                          key={attr}
+                          title={attr}
+                          style={{
+                            fontSize: 10, fontWeight: 700,
+                            color: gradeColor(attrs[attr] ?? '?'),
+                            padding: '2px 6px', borderRadius: 4,
+                            background: `${gradeColor(attrs[attr] ?? '?')}18`,
+                            border: `1px solid ${gradeColor(attrs[attr] ?? '?')}44`,
+                          }}
+                        >
+                          {attrs[attr]}
+                          <span style={{ fontSize: 8, color: '#555', marginLeft: 3, fontWeight: 400 }}>{attr}</span>
                         </span>
-                      )}
-                    </>
-                  )}
-                  {isPartialScouted && (
-                    <div>
-                      <div style={{ color: '#FF8740', fontSize: 11, fontWeight: 700 }}>
-                        {partialOvrRange(p.id, p.overall_rating)}
-                      </div>
-                      <div style={{ color: '#444', fontSize: 9 }}>Dev: ?</div>
+                      ))}
                     </div>
-                  )}
-                  {scoutLevel === 0 && (
-                    <span style={{ color: T.textMuted, fontSize: 10 }}>{maskedOvr(p.id, p.overall_rating)}</span>
-                  )}
-                </div>
-
-                {/* Scout / Deep Scout button */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  {isFullyScouted && (
-                    <span style={{ fontSize: 9, color: '#2a5a2a', fontFamily: 'monospace' }}>✓ Full</span>
-                  )}
-                  {isPartialScouted && (
-                    <button
-                      onClick={e => { e.stopPropagation(); if (canScout) onScout(p.id); }}
-                      disabled={!canScout || scouting === p.id}
-                      title="Spend 1 more scout to reveal exact OVR and dev trait"
-                      style={{
-                        fontSize: 9, padding: '2px 6px',
-                        background: canScout ? '#1a0d00' : 'transparent',
-                        border: `1px solid ${canScout ? '#FF8740' : 'transparent'}`,
-                        borderRadius: 3,
-                        color: canScout ? '#FF8740' : T.textDim,
-                        cursor: canScout ? 'pointer' : 'not-allowed',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {scouting === p.id ? '...' : 'Deep Scout'}
-                    </button>
-                  )}
-                  {scoutLevel === 0 && (
-                    <button
-                      onClick={e => { e.stopPropagation(); if (canScout) onScout(p.id); }}
-                      disabled={!canScout || scouting === p.id}
-                      title="Spend 1 scout to reveal OVR range"
-                      style={{
-                        fontSize: 9, padding: '2px 6px',
-                        background: canScout ? T.bgInput : 'transparent',
-                        border: `1px solid ${canScout ? T.borderFaint : 'transparent'}`,
-                        borderRadius: 3,
-                        color: canScout ? T.textMuted : T.textDim,
-                        cursor: canScout ? 'pointer' : 'not-allowed',
-                      }}
-                    >
-                      {scouting === p.id ? '...' : 'Scout'}
-                    </button>
                   )}
                 </div>
               </div>

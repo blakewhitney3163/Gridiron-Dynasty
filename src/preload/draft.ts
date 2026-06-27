@@ -28,6 +28,12 @@ export const draftApi = {
   scoutProspect: (prospectId: number) =>
     ipcRenderer.invoke('scout-prospect', prospectId),
 
+  scoutProspectAttr: (payload: { prospectId: number; attribute: string }) =>
+    ipcRenderer.invoke('scout-prospect-attr', payload),
+
+  getCombineResults: () =>
+    ipcRenderer.invoke('get-combine-results'),
+
   getScoutCount: (): Promise<{ used: number; budget: number }> =>
     ipcRenderer.invoke('get-scout-count'),
 

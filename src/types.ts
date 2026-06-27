@@ -153,6 +153,16 @@ export interface DraftProspect {
   drafted_by_team_id?: number;
   scouted?: 0 | 1 | 2;
   projected_overall_pick?: number;
+  /** JSON string — Record<attrName, letterGrade>. Hidden from user until revealed. */
+  attributes_json?: string;
+  /** JSON string — string[] of revealed attribute names. */
+  revealed_attrs?: string;
+  // Combine stats (public after combine week)
+  forty_time?: number;
+  bench_press?: number;
+  vertical_jump?: number;
+  broad_jump?: number;
+  cone_time?: number;
 }
 
 export interface PickAsset {
