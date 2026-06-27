@@ -945,6 +945,36 @@ const MIGRATIONS: Migration[] = [
         db.prepare("ALTER TABLE draft_prospects ADD COLUMN revealed_attrs TEXT DEFAULT '[]'").run();
     },
   },
+  {
+    version: 27,
+    description: 'Add expanded Madden-style attribute columns to players table',
+    up: () => {
+      const cols = (db.prepare('PRAGMA table_info(players)').all() as any[]).map((c: any) => c.name);
+      const newCols: [string, string][] = [
+        ['acceleration',         'INTEGER DEFAULT 0'],
+        ['agility',              'INTEGER DEFAULT 0'],
+        ['throw_under_pressure', 'INTEGER DEFAULT 0'],
+        ['play_action',          'INTEGER DEFAULT 0'],
+        ['elusiveness',          'INTEGER DEFAULT 0'],
+        ['trucking',             'INTEGER DEFAULT 0'],
+        ['break_tackle',         'INTEGER DEFAULT 0'],
+        ['spectacular_catch',    'INTEGER DEFAULT 0'],
+        ['catch_in_traffic',     'INTEGER DEFAULT 0'],
+        ['release_rating',       'INTEGER DEFAULT 0'],
+        ['hit_power',            'INTEGER DEFAULT 0'],
+        ['pursuit',              'INTEGER DEFAULT 0'],
+        ['block_shedding',       'INTEGER DEFAULT 0'],
+        ['power_moves',          'INTEGER DEFAULT 0'],
+        ['finesse_moves',        'INTEGER DEFAULT 0'],
+        ['play_recognition',     'INTEGER DEFAULT 0'],
+        ['man_coverage',         'INTEGER DEFAULT 0'],
+      ];
+      for (const [col, def] of newCols) {
+        if (!cols.includes(col))
+          db.prepare(`ALTER TABLE players ADD COLUMN ${col} ${def}`).run();
+      }
+    },
+  },
 
 ];
 
