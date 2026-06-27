@@ -103,6 +103,12 @@ export function getPreseasonStatus(season: number): PreseasonStatus {
     ORDER BY g.week, g.id
   `).all(season) as any[];
 
+  // Auto-heal: if key exists but no games in DB, reset so user can regenerate
+  if (games.length === 0) {
+    db.prepare("DELETE FROM settings WHERE key = ?").run(key);
+    return { generated: false, done: false, weeksDone: [], games: [] };
+  }
+
   const weeksDone: number[] = [];
   for (let w = 1; w <= 4; w++) {
     const wGames = games.filter((g: any) => g.week === w);
