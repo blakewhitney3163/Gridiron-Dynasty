@@ -110,6 +110,16 @@ SIMULATION & SCHEDULE
  pending_upgrade flag + applyPendingStadiumUpgrades() in SeasonService. Schema v21.
  IPC: buy-stadium-upgrade. Each level +8,000 seats +$15M/season revenue. Max level 5.
 
+[DONE June 27, 2026] Player Goals & Contract Demands — per-player seasonal goals
+ for OVR-qualifying players on the user's team. Schema v23 adds player_goals table.
+ PlayerGoalsService.ts: generatePlayerGoals() assigns up to 4 goal types at season
+ start (starter_role OVR 72+, top_contract OVR 82+ final year underpaid, contender
+ OVR 84+ age 27+, stats_milestone OVR 76+ by position). evaluatePlayerGoals()
+ resolves goals at season end: ±5 morale per goal, extra −5 on expiring contracts
+ for failed non-starter goals (feeds holdout system). getTeamPlayerGoals() for UI.
+ IPC: get-team-player-goals. OffseasonTab shows a self-fetching PLAYER GOALS panel
+ with achieved ✅ / unmet ❌ / active ○ goal cards for each key player.
+
 [DONE June 27, 2026] Coaching Development — XP + level system for all 4 coaching roles.
  progressCoachXP() in CoachingService awards XP per season. 10 levels. Rating boosts
  on level-up. HC candidate news events for elite coordinators. Schema v22. CoachingTab
@@ -142,8 +152,13 @@ SIMULATION & SCHEDULE
     response). OOTP equivalent: the "watch" mode in live sim. Nice-to-have;
     significant engineering effort.
 
-Preseason Games — 2–4 preseason games before the regular season to evaluate
- depth chart and practice squad before Week 1. Pending.
+[DONE June 27, 2026] Preseason Games — 4-week preseason schedule before the
+ regular season. PreseasonService.ts generates 64 random matchups (16 games ×
+ 4 weeks). Schema v24 adds is_preseason column to games; all standings/schedule
+ queries updated to exclude preseason games. PreseasonPanel.tsx renders the
+ 4-week tracker with per-week Sim and per-game Play buttons, user game
+ highlighted each week. Home.tsx renders PreseasonPanel when hasSchedule=false
+ post-season-advance. Skip Preseason and Start Regular Season buttons available.
 
 LEAGUE & FINANCIALS
 ────────────────────────────────────────────────────────────────────────────────
@@ -214,9 +229,8 @@ NEXT OOTP-TIER FEATURES (queued)
     tile, cost vs. budget display, and action button. Button disabled if at max
     level (5), pending upgrade active, or owner_budget insufficient.
 
-[ ] Player Goals & Contract Demands — individual players demand starter roles,
-    specific salary figures, or particular teams based on morale + OVR beyond
-    the existing holdout flag system.
+[DONE June 27, 2026] Player Goals & Contract Demands — see ROSTER / PLAYER
+    MANAGEMENT section above for full detail.
 
 [DONE June 27, 2026] Trade Deadline Ticker — CPU-vs-CPU trades shown as a
     live news-style ticker around the trade deadline. TradeDeadlineTicker.tsx
