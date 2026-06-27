@@ -45,14 +45,15 @@ export const POSITION_TO_GROUP: Record<string, string> = {
   CB: 'CB',
   FS: 'FS', SS: 'SS', S: 'FS',   // S is fallback for unlabeled safeties
   K: 'K',
+  P: 'P',
 };
 
 export const WAIVER_POS_MAX: Record<string, number> = {
-  QB: 3, RB: 4, WR: 6, TE: 3, OL: 9, DL: 6, LB: 5, CB: 5, S: 4, K: 2,
+  QB: 3, RB: 4, WR: 6, TE: 3, OL: 9, DL: 6, LB: 5, CB: 5, S: 4, K: 2, P: 1,
 };
 
 export const MIN_CPU_ROSTER: Record<string, number> = {
-  QB: 2, RB: 3, WR: 4, TE: 2, OL: 6, DL: 4, LB: 4, CB: 4, S: 2, K: 1,
+  QB: 2, RB: 3, WR: 4, TE: 2, OL: 6, DL: 4, LB: 4, CB: 4, S: 2, K: 1, P: 1,
 };
 
 // ─── Hall of Fame Thresholds ──────────────────────────────────────────────────

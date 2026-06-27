@@ -22,6 +22,7 @@ const POS_GROUPS: Record<string, string[]> = {
   CB:  ['CB'],
   S:   ['S', 'FS', 'SS'],
   K:   ['K'],
+  P:   ['P'],
 };
 
 const GROUP_COLOR: Record<string, string> = {

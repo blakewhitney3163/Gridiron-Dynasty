@@ -11,7 +11,7 @@ export function applyMoraleModifier(baseRating: number, morale: number): number 
 const INJURY_TYPES = ['Hamstring', 'Ankle', 'Knee', 'Shoulder', 'Concussion', 'Rib', 'Back', 'Quad', 'Calf', 'Hand'];
 const POS_INJURY_RISK: Record<string, number> = {
   QB: 0.025, RB: 0.055, WR: 0.035, TE: 0.035,
-  OL: 0.020, DL: 0.025, LB: 0.035, CB: 0.035, S: 0.025, K: 0.008,
+  OL: 0.020, DL: 0.025, LB: 0.035, CB: 0.035, S: 0.025, K: 0.008, P: 0.005,
 };
 
 function getPosGroup(pos: string): string[] {

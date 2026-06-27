@@ -4,7 +4,7 @@ declare const window: any;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K'];
+const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K', 'P'];
 
 const POSITION_LABELS: Record<string, string[]> = {
   QB: ['QB'],
@@ -17,6 +17,7 @@ const POSITION_LABELS: Record<string, string[]> = {
   CB: ['CB'],
   S: ['FS', 'SS'],
   K: ['K'],
+  P: ['P'],
 };
 
 const DEV_TRAITS = ['Normal', 'Star', 'Superstar', 'X-Factor'];

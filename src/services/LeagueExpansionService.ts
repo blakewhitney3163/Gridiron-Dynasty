@@ -174,7 +174,7 @@ function seedExpansionRoster(teamId: number): void {
     OL: ['LT','LG','C','RG','RT','LT','LG','RG','RT'],
     DL: ['DE','DE','DT','DT','DE','DT','DE'],
     LB: ['MLB','OLB','OLB','MLB','OLB','OLB','MLB'],
-    CB: ['CB'], S: ['FS','SS','FS','SS','FS'], K: ['K'],
+    CB: ['CB'], S: ['FS','SS','FS','SS','FS'], K: ['K'], P: ['P'],
   };
   const FNAMES = ['James','Marcus','Tyler','Jordan','Derek','Chris','Mike','Ryan','Jake','Aaron','Kevin','Brandon','Justin','Travis','Logan','Andre','Malik','Isaiah'];
   const LNAMES = ['Smith','Johnson','Williams','Brown','Jones','Davis','Miller','Wilson','Moore','Taylor','Anderson','Thomas','Jackson','White','Harris','Martin'];

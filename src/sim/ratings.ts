@@ -39,7 +39,7 @@ export function loadTeamData(teamId: number): TeamData {
       CASE p.position
         WHEN 'QB' THEN 1 WHEN 'RB' THEN 2 WHEN 'WR' THEN 3 WHEN 'TE' THEN 4
         WHEN 'OL' THEN 5 WHEN 'DL' THEN 6 WHEN 'LB' THEN 7
-        WHEN 'CB' THEN 8 WHEN 'S'  THEN 9 WHEN 'K'  THEN 10 ELSE 11
+        WHEN 'CB' THEN 8 WHEN 'S'  THEN 9 WHEN 'K'  THEN 10 WHEN 'P' THEN 11 ELSE 12
       END, COALESCE(dc.slot, 999) ASC, p.overall_rating DESC
   `).all(teamId, teamId) as PlayerRow[];
 

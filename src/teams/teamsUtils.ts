@@ -8,7 +8,7 @@ export const POSITION_ORDER = [
   'LE', 'RE', 'DT', 'IDL',
   'MLB', 'OLB', 'LOLB', 'ROLB', 'WILL', 'MIKE',
   'CB', 'FS', 'SS',
-  'K',
+  'K', 'P',
 ];
 
 export const OFF_POSITIONS = ['QB', 'RB', 'HB', 'FB', 'WR', 'TE'];
@@ -30,6 +30,8 @@ export function getRatingCols(pos: string): RatingCol[] {
   if (['CB', 'FS', 'SS', 'S'].includes(pos))
     return [{ label: 'SPD', key: 'speed' }, { label: 'COV', key: 'coverage' }, { label: 'TKL', key: 'tackle_rating' }, { label: 'AWR', key: 'awareness' }];
   if (pos === 'K')
+    return [{ label: 'KPW', key: 'kickpower' }, { label: 'KAC', key: 'kickaccuracy' }, { label: 'AWR', key: 'awareness' }];
+  if (pos === 'P')
     return [{ label: 'KPW', key: 'kickpower' }, { label: 'KAC', key: 'kickaccuracy' }, { label: 'AWR', key: 'awareness' }];
   return [{ label: 'SPD', key: 'speed' }, { label: 'STR', key: 'strength' }, { label: 'AWR', key: 'awareness' }];
 }
@@ -63,7 +65,7 @@ export function getCareerHeaders(pos: string): string[] {
 }
 
 export function showStats(pos: string): boolean {
-  return OFF_POSITIONS.includes(pos) || DEF_POSITIONS.includes(pos) || pos === 'K';
+  return OFF_POSITIONS.includes(pos) || DEF_POSITIONS.includes(pos) || pos === 'K' || pos === 'P';
 }
 
 export function getAvailablePositions(players: Player[]): string[] {

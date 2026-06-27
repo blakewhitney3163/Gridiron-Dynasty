@@ -532,7 +532,12 @@ function executeFieldGoal(state: LiveGameState): PlayResult {
 }
 
 function executePunt(state: LiveGameState): PlayResult {
-  const net = Math.round(Math.max(15, rn(39, 7)));
+  // Punter rating drives average distance: 70 OVR → ~39 yd net, 85 OVR → ~46 yd net, 55 OVR → ~32 yd net
+  const puntingTeamPlayers = offPlayers(state);
+  const punter = puntingTeamPlayers.find(p => p.position === 'P');
+  const punterOvr = punter?.rating ?? 70;
+  const baseMean = 30 + (punterOvr - 50) * 0.40;  // 50 OVR→30, 70→38, 85→44, 95→48
+  const net = Math.round(Math.max(15, rn(baseMean, 7)));
   const clockUsed = 5;
   tickClock(state, clockUsed);
 
@@ -541,10 +546,12 @@ function executePunt(state: LiveGameState): PlayResult {
   state.yardLine = Math.max(1, Math.min(80, 100 - prevYardLine - net));
   state.down = 1; state.yardsToGo = 10;
 
+  const punterName = punter?.name ?? 'Punter';
   return {
     type: 'punt', yardsGained: -net,
-    description: `Punt — ${net}-yard net, opponent ball at their own ${state.yardLine}`,
+    description: `${punterName} punts ${net} yards net — opponent ball at their own ${state.yardLine}`,
     quarter: state.quarter, clockSeconds: state.clockSeconds,
+    playerName: punterName,
     isScoring: false,
     homeScore: state.homeScore, awayScore: state.awayScore,
     down: state.down, yardsToGo: state.yardsToGo, yardLine: state.yardLine,

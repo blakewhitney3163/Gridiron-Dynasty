@@ -70,6 +70,7 @@ const POSITION_LABEL_POOLS: Record<string, string[]> = {
   CB: ['CB'],
   S:  ['FS', 'SS', 'FS', 'SS', 'FS'],
   K:  ['K'],
+  P:  ['P'],
 };
 
 // ─── Overall Rating by Roster Slot ───────────────────────────────────────────
@@ -199,6 +200,13 @@ function genAttrs(position: string, ovr: number): Attrs {
       kickpower:    b(-5, 10),
       kickaccuracy: b(-5, 10),
     };
+    case 'P': return { ...base,
+      speed:        flat(48, 68),
+      strength:     flat(48, 68),
+      awareness:    b(-8, 5),
+      kickpower:    b(-3, 12),   // leg strength drives punt distance
+      kickaccuracy: b(-5, 8),    // directional accuracy
+    };
     default: return base;
   }
 }
@@ -217,6 +225,7 @@ const ROSTER_SLOTS: { position: string; count: number }[] = [
   { position: 'CB', count: 7  },
   { position: 'S',  count: 5  },
   { position: 'K',  count: 1  },
+  { position: 'P',  count: 1  },
 ];
 
 const FA_SLOTS: { position: string; count: number }[] = [
@@ -230,6 +239,7 @@ const FA_SLOTS: { position: string; count: number }[] = [
   { position: 'CB', count: 22 },
   { position: 'S',  count: 16 },
   { position: 'K',  count: 6  },
+  { position: 'P',  count: 4  },
 ];
 
 // ─── Main Export ──────────────────────────────────────────────────────────────

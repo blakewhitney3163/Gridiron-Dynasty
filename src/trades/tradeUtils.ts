@@ -1,7 +1,7 @@
 import { T } from '../theme';
 import { DraftPick } from './types';
 
-export const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K'];
+export const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K', 'P'];
 
 export const ROUND_LABELS: Record<number, string> = {
   1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th', 6: '6th', 7: '7th',
@@ -38,7 +38,7 @@ export function trajectory(age: number): { label: string; color: string } {
 
 export function calcTradeValue(overall: number, age: number, position: string, devTrait = 'Normal'): number {
   const ageFactor   = age <= 23 ? 1.4 : age <= 26 ? 1.25 : age <= 29 ? 1.0 : age <= 32 ? 0.75 : age <= 35 ? 0.5 : 0.3;
-  const posFactor: Record<string, number> = { QB: 1.4, CB: 1.15, DL: 1.15, LB: 1.1, WR: 1.1, TE: 1.1, OL: 1.05, S: 1.0, RB: 0.85, K: 0.7 };
+  const posFactor: Record<string, number> = { QB: 1.4, CB: 1.15, DL: 1.15, LB: 1.1, WR: 1.1, TE: 1.1, OL: 1.05, S: 1.0, RB: 0.85, K: 0.7, P: 0.6 };
   const traitFactor: Record<string, number> = { Normal: 1.0, Star: 1.15, Superstar: 1.3, 'X-Factor': 1.5 };
   return Math.round(overall * ageFactor * (posFactor[position] ?? 1.0) * (traitFactor[devTrait] ?? 1.0));
 }

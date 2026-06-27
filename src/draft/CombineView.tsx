@@ -93,7 +93,7 @@ export default function CombineView({ onComplete }: Props) {
       {/* Position filter + Sort row */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-          {['ALL', 'QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K'].map(pos => (
+          {['ALL', 'QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K', 'P'].map(pos => (
             <button
               key={pos}
               onClick={() => setPosFilter(pos)}

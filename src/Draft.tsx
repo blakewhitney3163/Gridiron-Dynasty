@@ -287,7 +287,7 @@ export default function Draft({ onDraftComplete }: Props) {
 
         {/* Position filter */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-          {['ALL', 'QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K'].map(pos => (
+          {['ALL', 'QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K', 'P'].map(pos => (
             <button
               key={pos}
               onClick={() => setPosFilter(pos)}

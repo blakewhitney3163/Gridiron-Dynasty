@@ -1,6 +1,6 @@
 import { T } from '../theme';
 
-export const POSITIONS = ['ALL','QB','RB','WR','TE','OL','DL','LB','CB','S','K'];
+export const POSITIONS = ['ALL','QB','RB','WR','TE','OL','DL','LB','CB','S','K','P'];
 
 // ─── Attribute-Grade Scouting ─────────────────────────────────────────────────
 

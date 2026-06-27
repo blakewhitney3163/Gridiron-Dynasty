@@ -11,7 +11,7 @@ declare const window: any;
 const PHASE_GROUPS: { label: string; groups: string[] }[] = [
   { label: 'OFFENSE', groups: ['QB', 'RB', 'WR', 'TE', 'LT', 'LG', 'C', 'RG', 'RT'] },
   { label: 'DEFENSE', groups: ['DE', 'DT', 'MLB', 'OLB', 'CB', 'FS', 'SS'] },
-  { label: 'SPECIAL TEAMS', groups: ['K'] },
+  { label: 'SPECIAL TEAMS', groups: ['K', 'P'] },
 ];
 
 export default function DepthChart() {
