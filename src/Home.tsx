@@ -179,9 +179,17 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     setHasSchedule(status.hasSchedule);
     setCurrentWeek(status.currentWeek);
     setMatchups(await window.api.getWeekMatchups(status.currentWeek));
-    const tradeOffer = await window.api.getCpuTradeOffer();
+    const [tradeOffer, goals, patience, chem] = await Promise.all([
+      window.api.getCpuTradeOffer(),
+      window.api.getOwnerGoals(currentSeason),
+      window.api.getOwnerPatience(),
+      window.api.getTeamChemistry(userTeam?.id),
+    ]);
     setCpuOffer(tradeOffer ?? null);
     setOfferHandled(false);
+    setOwnerGoals(Array.isArray(goals) ? goals : []);
+    setOwnerPatience(typeof patience === 'number' ? patience : 75);
+    setTeamChemistry(chem ?? null);
     setGeneratingSchedule(false);
   };
 
@@ -207,8 +215,14 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     } else if (status.currentWeek) {
       setMatchups(await window.api.getWeekMatchups(status.currentWeek));
     }
-    setStatLeaders(await window.api.getStats(currentSeason));
-    setFranchiseHealth(await window.api.getFranchiseHealth(userTeam.id));
+    const [leaders, health, chem] = await Promise.all([
+      window.api.getStats(currentSeason),
+      window.api.getFranchiseHealth(userTeam.id),
+      window.api.getTeamChemistry(userTeam.id),
+    ]);
+    setStatLeaders(leaders);
+    setFranchiseHealth(health ?? null);
+    setTeamChemistry(chem ?? null);
     setBoxScore(null);
     incrementSimCount();
     setSimulating(false);
@@ -263,7 +277,12 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     } else if (currentWeek) {
       setMatchups(await window.api.getWeekMatchups(currentWeek));
     }
-    setFranchiseHealth(await window.api.getFranchiseHealth(userTeam.id));
+    const [health, chem] = await Promise.all([
+      window.api.getFranchiseHealth(userTeam.id),
+      window.api.getTeamChemistry(userTeam.id),
+    ]);
+    setFranchiseHealth(health ?? null);
+    setTeamChemistry(chem ?? null);
     incrementSimCount();
     setSimulatingGameId(null);
   };
