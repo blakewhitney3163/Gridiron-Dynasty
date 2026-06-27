@@ -4,7 +4,12 @@ import { ratingColor, trajectory, fmtSalary } from './utils';
 
 declare const window: any;
 
-const PS_POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K'];
+const PS_POSITIONS = [
+  'ALL', 'QB', 'RB', 'WR', 'TE',
+  'LT', 'LG', 'C', 'RG', 'RT',
+  'DE', 'DT',
+  'MLB', 'OLB', 'CB', 'FS', 'SS', 'K',
+];
 
 interface Props {
   practiceSquad: PracticePlayer[];
@@ -63,7 +68,6 @@ export default function PracticeSquadTab({ practiceSquad, rosterSpots, showToast
 
   return (
     <div>
-      {/* Capacity bars */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
         <div style={{ background: '#111', border: '1px solid #1a1a1a', borderRadius: 6, padding: '10px 16px', minWidth: 180 }}>
           <div style={{ fontSize: 10, color: '#333', letterSpacing: 1, marginBottom: 4 }}>PRACTICE SQUAD</div>
@@ -86,7 +90,6 @@ export default function PracticeSquadTab({ practiceSquad, rosterSpots, showToast
         </div>
       </div>
 
-      {/* Filters */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
         {PS_POSITIONS.map(pos => (
           <button key={pos} onClick={() => setPosFilter(pos)} style={{
@@ -107,7 +110,6 @@ export default function PracticeSquadTab({ practiceSquad, rosterSpots, showToast
         />
       </div>
 
-      {/* Column headers */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 90px 80px 90px', gap: '0 8px', padding: '4px 8px', marginBottom: 4 }}>
         <span style={{ color: '#333', fontSize: 10, letterSpacing: 1 }}>PLAYER</span>
         <span style={{ color: '#333', fontSize: 10, letterSpacing: 1 }}>AGE / OVR</span>
