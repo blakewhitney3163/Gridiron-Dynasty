@@ -12,6 +12,14 @@ export interface PlayerRow {
   throw_accuracy: number | null; throw_power: number | null;
   catching: number | null; route_running: number | null;
   tackle_rating: number | null; coverage: number | null; pass_rush: number | null;
+  // Expanded Madden-style attrs (v27)
+  acceleration: number | null; agility: number | null;
+  throw_under_pressure: number | null; play_action: number | null;
+  elusiveness: number | null; trucking: number | null; break_tackle: number | null;
+  spectacular_catch: number | null; catch_in_traffic: number | null; release_rating: number | null;
+  hit_power: number | null; pursuit: number | null;
+  block_shedding: number | null; power_moves: number | null; finesse_moves: number | null;
+  play_recognition: number | null; man_coverage: number | null;
 }
 
 export interface CoachRow { role: string; overall_rating: number; offense_rating: number; defense_rating: number; }
