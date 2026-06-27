@@ -496,138 +496,307 @@ processGameResult(game.away_team_id, homeDiff < 0, -homeDiff, game.season, game.
       success: true, gameId, weekComplete,
       homeScore: gameResult.homeScore, awayScore: gameResult.awayScore,
       callups: rosterResult.callups, userPSOpenSpots: rosterResult.userPSOpenSpots,
+
+  ipcMain.handle('generate-preseason', (_event: any, season: number) => {
+    const { generatePreseasonSchedule } = require('../services/PreseasonService');
+    return generatePreseasonSchedule(season ?? getCurrentSeason());
+  });
+
+  ipcMain.handle('get-game-play-log', (_event: IpcEvent, gameId: number) => {
+    const raw = settingsRepo.get(`game_play_log_${gameId}`);
+    return raw ? JSON.parse(raw) : [];
+  });
+
+  ipcMain.handle('get-playoff-state', (_event: IpcEvent, season?: number) => {
+    const s = season ?? getCurrentSeason();
+
+    const playoffCount = (db.prepare('SELECT COUNT(*) as cnt FROM games WHERE season = ? AND is_playoff = 1').get(s) as any).cnt;
+    if (playoffCount === 0) return { initialized: false };
+
+    const { afcSeeds, nfcSeeds } = getOrDerivePlayoffSeeds(s);
+    const afcIdSet = new Set(afcSeeds.map((t: any) => t.id));
+
+    const games = db.prepare(`
+      SELECT g.*,
+        ht.city as home_city, ht.name as home_name,
+        at.city as away_city, at.name as away_name
+      FROM games g
+      JOIN teams ht ON ht.id = g.home_team_id
+      JOIN teams at ON at.id = g.away_team_id
+      WHERE g.season = ? AND g.is_playoff = 1
+      ORDER BY g.week, g.id
+    `).all(s) as any[];
+
+    const fmtTeam = (id: number, city: string, name: string) => ({ id, city, name });
+    const fmtGame = (g: any) => ({
+      id: g.id,
+      week: g.week,
+      homeTeam: fmtTeam(g.home_team_id, g.home_city, g.home_name),
+      awayTeam: fmtTeam(g.away_team_id, g.away_city, g.away_name),
+      homeScore: g.home_score,
+      awayScore: g.away_score,
+      isSimulated: g.is_simulated === 1,
+      winner: g.is_simulated === 1
+        ? (g.home_score > g.away_score
+          ? fmtTeam(g.home_team_id, g.home_city, g.home_name)
+          : fmtTeam(g.away_team_id, g.away_city, g.away_name))
+        : null,
+    });
+
+    const sortBySeedIdx = (list: any[], seeds: any[]) => {
+      const idxOf = (teamId: number) => seeds.findIndex((t: any) => t.id === teamId);
+      return [...list].sort((a, b) => idxOf(a.home_team_id) - idxOf(b.home_team_id));
+    };
+
+    const wcGames    = games.filter(g => g.week === 18);
+    const divGames   = games.filter(g => g.week === 19);
+    const champGames = games.filter(g => g.week === 20);
+    const cupGame    = games.find(g => g.week === 21) ?? null;
+
+    const afcWC  = sortBySeedIdx(wcGames.filter(g => afcIdSet.has(g.home_team_id)), afcSeeds);
+    const nfcWC  = sortBySeedIdx(wcGames.filter(g => !afcIdSet.has(g.home_team_id)), nfcSeeds);
+    const afcDiv = sortBySeedIdx(divGames.filter(g => afcIdSet.has(g.home_team_id)), afcSeeds);
+    const nfcDiv = sortBySeedIdx(divGames.filter(g => !afcIdSet.has(g.home_team_id)), nfcSeeds);
+
+    // Championship: classify by home team conference
+    const afcChampGame = champGames.find(g => afcIdSet.has(g.home_team_id)) ?? null;
+    const nfcChampGame = champGames.find(g => !afcIdSet.has(g.home_team_id)) ?? null;
+
+    const champRow = db.prepare(`
+      SELECT t.id, t.city, t.name FROM champions c
+      JOIN teams t ON t.id = c.team_id WHERE c.season = ?
+    `).get(s) as any;
+
+    return {
+      initialized: true,
+      complete: !!champRow,
+      champion: champRow ? fmtTeam(champRow.id, champRow.city, champRow.name) : null,
+      afcSeeds,
+      nfcSeeds,
+      afc: {
+        wildCard:     afcWC.map(fmtGame),
+        divisional:   afcDiv.map(fmtGame),
+        championship: afcChampGame ? fmtGame(afcChampGame) : null,
+      },
+      nfc: {
+        wildCard:     nfcWC.map(fmtGame),
+        divisional:   nfcDiv.map(fmtGame),
+        championship: nfcChampGame ? fmtGame(nfcChampGame) : null,
+      },
+      gridironCup: cupGame ? fmtGame(cupGame) : null,
     };
   });
 
-  ipcMain.handle('get-injury-report', (_event: IpcEvent, teamId: number) =>
+  ipcMain.handle('get-playoffs', (_event: IpcEvent, season: number) => {
+    const s = season ?? getCurrentSeason();
+    return db.prepare(`
+      SELECT g.week, g.home_score, g.away_score,
+        ht.city || ' ' || ht.name as home_team,
+        at.city || ' ' || at.name as away_team
+      FROM games g
+      JOIN teams ht ON ht.id = g.home_team_id
+      JOIN teams at ON at.id = g.away_team_id
+      WHERE g.season = ? AND g.is_playoff = 1 AND g.is_simulated = 1
+      ORDER BY g.week, g.id
+    `).all(s);
+  });
+
+  ipcMain.handle('get-preseason-status', (_event: any, season: number) => {
+    const { getPreseasonStatus } = require('../services/PreseasonService');
+    return getPreseasonStatus(season ?? getCurrentSeason());
+  });
+
+  ipcMain.handle('init-playoffs', (_event: IpcEvent, season?: number) => {
+    const s = season ?? getCurrentSeason();
+    db.prepare(`DELETE FROM stats WHERE game_id IN (SELECT id FROM games WHERE season = ? AND is_playoff = 1)`).run(s);
+    db.prepare(`DELETE FROM games WHERE season = ? AND is_playoff = 1`).run(s);
+
+    const allRecords = gameRepo.getAllRecords(s);
+    const afcSeeds = (db.prepare(`SELECT id, city, name FROM teams WHERE conference = 'AFC'`).all() as any[])
+      .map((t: any) => ({ ...t, wins: allRecords[t.id]?.wins ?? 0 }))
+      .sort((a: any, b: any) => b.wins - a.wins).slice(0, 7);
+    const nfcSeeds = (db.prepare(`SELECT id, city, name FROM teams WHERE conference = 'NFC'`).all() as any[])
+      .map((t: any) => ({ ...t, wins: allRecords[t.id]?.wins ?? 0 }))
+      .sort((a: any, b: any) => b.wins - a.wins).slice(0, 7);
+
+    settingsRepo.set(`playoff_seeds_AFC_${s}`, JSON.stringify(afcSeeds));
+    settingsRepo.set(`playoff_seeds_NFC_${s}`, JSON.stringify(nfcSeeds));
+
+    const insertPending = db.prepare(`
+      INSERT INTO games
+      (season, week, home_team_id, away_team_id, home_score, away_score,
+       home_q1, home_q2, home_q3, home_q4, away_q1, away_q2, away_q3, away_q4,
+       weather, is_playoff, is_simulated)
+      VALUES (?, 18, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'clear', 1, 0)
+    `);
+
+    db.transaction(() => {
+      insertPending.run(s, afcSeeds[1].id, afcSeeds[6].id);
+      insertPending.run(s, afcSeeds[2].id, afcSeeds[5].id);
+      insertPending.run(s, afcSeeds[3].id, afcSeeds[4].id);
+      insertPending.run(s, nfcSeeds[1].id, nfcSeeds[6].id);
+      insertPending.run(s, nfcSeeds[2].id, nfcSeeds[5].id);
+      insertPending.run(s, nfcSeeds[3].id, nfcSeeds[4].id);
+    })();
+
+    return { initialized: true };
+  });
+
+  ipcMain.handle('simulate-playoff-game', (_event: IpcEvent, gameId: number) => {
+    const s = getCurrentSeason();
+
+    const game = db.prepare(`
+      SELECT g.*,
+        ht.city as home_city, ht.name as home_name,
+        at.city as away_city, at.name as away_name
+      FROM games g
+      JOIN teams ht ON ht.id = g.home_team_id
+      JOIN teams at ON at.id = g.away_team_id
+      WHERE g.id = ? AND g.season = ? AND g.is_playoff = 1
+    `).get(gameId, s) as any;
+
+    if (!game)             return { error: 'Game not found.' };
+    if (game.is_simulated) return { error: 'Game already simulated.' };
+
+    const home = { id: game.home_team_id, city: game.home_city, name: game.home_name };
+    const away = { id: game.away_team_id, city: game.away_city, name: game.away_name };
+
+    const result = simulateGame(home.id, away.id, game.week, -1, 0,
+      undefined, getCpuGamePlan(home.id), getCpuGamePlan(away.id));
+
     db.prepare(`
-      SELECT p.id, p.first_name, p.last_name, p.position, p.position_label,
-             p.overall_rating, p.age, p.dev_trait, p.injury_status, p.weeks_out, p.injury_type
-      FROM players p
-      WHERE p.team_id = ? AND p.injury_status != 'healthy'
-      ORDER BY CASE p.injury_status WHEN 'ir' THEN 1 WHEN 'out' THEN 2 ELSE 3 END, p.overall_rating DESC
-    `).all(teamId));
+      UPDATE games SET
+        home_score = ?, away_score = ?,
+        home_q1 = ?, home_q2 = ?, home_q3 = ?, home_q4 = ?,
+        away_q1 = ?, away_q2 = ?, away_q3 = ?, away_q4 = ?,
+        weather = ?, is_simulated = 1
+      WHERE id = ?
+    `).run(
+      result.homeScore, result.awayScore,
+      result.homeQuarters[0], result.homeQuarters[1], result.homeQuarters[2], result.homeQuarters[3],
+      result.awayQuarters[0], result.awayQuarters[1], result.awayQuarters[2], result.awayQuarters[3],
+      result.weather ?? 'clear', gameId,
+    );
 
-  // ─── Game Plan IPC ────────────────────────────────────────────────────────
+    const winner = result.homeScore > result.awayScore ? home : away;
+    const loser  = result.homeScore > result.awayScore ? away  : home;
+    const ws = Math.max(result.homeScore, result.awayScore);
+    const ls = Math.min(result.homeScore, result.awayScore);
 
-  ipcMain.handle('set-gameplan', (_event: IpcEvent, payload: { season: number; week: number; offense: string; defense: string }) => {
-    settingsRepo.set(`gameplan_${payload.season}_${payload.week}`, JSON.stringify({ offense: payload.offense, defense: payload.defense }));
-    return { success: true };
-  });
+    const ROUND_LABELS: Record<number, string> = {
+      18: 'Wild Card', 19: 'Divisional', 20: 'Conference Championship', 21: 'Gridiron Cup',
+    };
+    logNewsEvent({
+      season: s, category: 'game',
+      headline: `${ROUND_LABELS[game.week] ?? 'Playoff'}: ${winner.city} ${winner.name} ${ws}, ${loser.city} ${loser.name} ${ls}`,
+      detail: `${winner.city} ${winner.name} advance`,
+    });
 
-  ipcMain.handle('get-gameplan', (_event: IpcEvent, payload: { season: number; week: number }) => {
-    const raw = settingsRepo.get(`gameplan_${payload.season}_${payload.week}`);
-    return raw ? JSON.parse(raw) : { offense: 'balanced', defense: 'base' };
-  });
+    const roundGames = db.prepare(
+      'SELECT id, is_simulated, home_team_id, away_team_id, home_score, away_score FROM games WHERE season = ? AND week = ? AND is_playoff = 1'
+    ).all(s, game.week) as any[];
 
-  ipcMain.handle('scout-opponent', (_event: IpcEvent, payload: { opponentTeamId: number; season: number; week: number }) => {
-    const { opponentTeamId, season, week } = payload;
-    const team = db.prepare('SELECT city, name FROM teams WHERE id = ?').get(opponentTeamId) as any;
-    const scheme = db.prepare('SELECT offense_scheme, defense_scheme FROM team_schemes WHERE team_id = ?').get(opponentTeamId) as any;
-    const topPlayers = db.prepare(`
-      SELECT first_name, last_name, position, overall_rating, dev_trait
-      FROM players WHERE team_id = ? AND roster_status = 'active'
-      ORDER BY overall_rating DESC LIMIT 5
-    `).all(opponentTeamId) as any[];
+    const roundComplete = roundGames.every(g => g.is_simulated);
 
-    // Generate a tendency based on recent game stats
-    const recentStats = db.prepare(`
-      SELECT SUM(s.rush_attempts) as rush_att, SUM(s.pass_attempts) as pass_att
-      FROM stats s
-      JOIN games g ON s.game_id = g.id
-      WHERE g.season = ? AND (g.home_team_id = ? OR g.away_team_id = ?)
-        AND s.team_id = ? AND g.week < ?
-      ORDER BY g.week DESC LIMIT 3
-    `).get(season, opponentTeamId, opponentTeamId, opponentTeamId, week) as any;
+    if (roundComplete) {
+      const { afcSeeds, nfcSeeds } = getOrDerivePlayoffSeeds(s);
+      const afcIdSet = new Set(afcSeeds.map((t: any) => t.id));
 
-    let tendency = 'Balanced attack — no clear offensive tendency.';
-    if (recentStats?.rush_att && recentStats?.pass_att) {
-      const total = recentStats.rush_att + recentStats.pass_att;
-      const rushRate = recentStats.rush_att / total;
-      if (rushRate >= 0.55) tendency = `Heavy run team — ${Math.round(rushRate * 100)}% rush rate last 3 weeks.`;
-      else if (rushRate <= 0.38) tendency = `Pass-heavy offense — ${Math.round((1 - rushRate) * 100)}% pass rate last 3 weeks.`;
+      const getWinnerId = (g: any): number =>
+        g.home_score > g.away_score ? g.home_team_id : g.away_team_id;
+
+      const insertPending = db.prepare(`
+        INSERT INTO games
+        (season, week, home_team_id, away_team_id, home_score, away_score,
+         home_q1, home_q2, home_q3, home_q4, away_q1, away_q2, away_q3, away_q4,
+         weather, is_playoff, is_simulated)
+        VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'clear', 1, 0)
+      `);
+
+      const seedIdx = (teamId: number, seeds: any[]): number =>
+        seeds.findIndex((t: any) => t.id === teamId);
+
+      if (game.week === 18) {
+        // Wild Card done → create Divisional games
+        const afcWC = roundGames
+          .filter(g => afcIdSet.has(g.home_team_id))
+          .sort((a, b) => seedIdx(a.home_team_id, afcSeeds) - seedIdx(b.home_team_id, afcSeeds));
+        const nfcWC = roundGames
+          .filter(g => !afcIdSet.has(g.home_team_id))
+          .sort((a, b) => seedIdx(a.home_team_id, nfcSeeds) - seedIdx(b.home_team_id, nfcSeeds));
+
+        const makeDiv = (seeds: any[], wc: any[], insertFn: typeof insertPending) => {
+          const wc0w = getWinnerId(wc[0]);
+          const wc1w = getWinnerId(wc[1]);
+          const wc2w = getWinnerId(wc[2]);
+          // Seed1 vs WC2w (Seed1 always home)
+          insertFn.run(s, 19, seeds[0].id, wc2w);
+          // WC0w vs WC1w (better original seed = home)
+          const homeD1 = seedIdx(wc0w, seeds) < seedIdx(wc1w, seeds) ? wc0w : wc1w;
+          const awayD1 = homeD1 === wc0w ? wc1w : wc0w;
+          insertFn.run(s, 19, homeD1, awayD1);
+        };
+
+        db.transaction(() => {
+          makeDiv(afcSeeds, afcWC, insertPending);
+          makeDiv(nfcSeeds, nfcWC, insertPending);
+        })();
+
+      } else if (game.week === 19) {
+        // Divisional done → create Championships
+        const afcDiv = roundGames.filter(g => afcIdSet.has(g.home_team_id));
+        const nfcDiv = roundGames.filter(g => !afcIdSet.has(g.home_team_id));
+
+        const makeChamp = (seeds: any[], divGms: any[], conf: string) => {
+          const winnerIds = divGms.map(getWinnerId);
+          const homeC = seedIdx(winnerIds[0], seeds) < seedIdx(winnerIds[1], seeds) ? winnerIds[0] : winnerIds[1];
+          const awayC = homeC === winnerIds[0] ? winnerIds[1] : winnerIds[0];
+          insertPending.run(s, 20, homeC, awayC);
+        };
+
+        db.transaction(() => {
+          makeChamp(afcSeeds, afcDiv, 'AFC');
+          makeChamp(nfcSeeds, nfcDiv, 'NFC');
+        })();
+
+      } else if (game.week === 20) {
+        // Championships done → create Gridiron Cup (AFC winner is home)
+        const afcChamp = roundGames.find(g => afcIdSet.has(g.home_team_id))!;
+        const nfcChamp = roundGames.find(g => !afcIdSet.has(g.home_team_id))!;
+        const afcW = getWinnerId(afcChamp);
+        const nfcW = getWinnerId(nfcChamp);
+        insertPending.run(s, 21, afcW, nfcW);
+
+      } else if (game.week === 21) {
+        // Gridiron Cup done → record champion
+        db.prepare('INSERT OR REPLACE INTO champions (season, team_id) VALUES (?, ?)').run(s, winner.id);
+        logNewsEvent({
+          season: s, category: 'game',
+          headline: `🏆 ${winner.city} ${winner.name} are Gridiron Cup Champions!`,
+          detail: `Defeated ${loser.city} ${loser.name} ${ws}–${ls} in the Gridiron Cup`,
+        });
+      }
     }
 
-    settingsRepo.set(`scouted_opponent_${season}_${week}`, '1');
-
-    return { team, scheme, topPlayers, tendency };
+    return {
+      gameId,
+      winner,
+      loser,
+      homeScore: result.homeScore,
+      awayScore: result.awayScore,
+      roundComplete,
+      playoffsComplete: game.week === 21 && roundComplete,
+    };
   });
 
-  // ─── Scout Management IPC ─────────────────────────────────────────────────
-
-  ipcMain.handle('get-scouts', (_event: IpcEvent, teamId: number) =>
-    scoutRepo.getByTeam(teamId));
-
-  ipcMain.handle('get-available-scouts', () =>
-    scoutRepo.getAvailable());
-
-  ipcMain.handle('hire-scout', (_event: IpcEvent, payload: { teamId: number; scoutId: number }) => {
-    const { teamId, scoutId } = payload;
-    const scout = scoutRepo.getById(scoutId);
-    if (!scout) return { success: false, reason: 'Scout not found.' };
-    if (scout.team_id !== null) return { success: false, reason: 'Scout is already on a staff.' };
-    scoutRepo.assignToTeam(scoutId, teamId);
-    return { success: true };
+  ipcMain.handle('simulate-preseason-game', (_event: any, gameId: number) => {
+    const { simulatePreseasonGame } = require('../services/PreseasonService');
+    return simulatePreseasonGame(gameId);
   });
 
-  ipcMain.handle('fire-scout', (_event: IpcEvent, scoutId: number) => {
-    const scout = scoutRepo.getById(scoutId);
-    if (!scout) return { success: false, reason: 'Scout not found.' };
-    if (scout.team_id === null) return { success: false, reason: 'Scout is already a free agent.' };
-    scoutRepo.release(scoutId);
-    return { success: true };
+  ipcMain.handle('simulate-preseason-week', (_event: any, week: number, season?: number) => {
+    const { simulatePreseasonWeek } = require('../services/PreseasonService');
+    return simulatePreseasonWeek(week, season ?? getCurrentSeason());
   });
 
-  ipcMain.handle('get-weekly-scout-pts', (_event: IpcEvent, teamId: number) =>
-    scoutRepo.getWeeklyPoints(teamId));
-
-  ipcMain.handle('is-opponent-scouted', (_event: IpcEvent, payload: { season: number; week: number }) =>
-    settingsRepo.get(`scouted_opponent_${payload.season}_${payload.week}`) === '1');
-
-  ipcMain.handle('get-ps-promotion-alerts', (_event: IpcEvent, teamId: number) =>
-    playerRepo.getPSPromotionAlerts(teamId));
-
-  ipcMain.handle('get-game-box-score', (_event: IpcEvent, gameId: number) => {
-    const game = db.prepare(`
-      SELECT g.id, g.week, g.home_score, g.away_score,
-             g.home_q1, g.home_q2, g.home_q3, g.home_q4,
-             g.away_q1, g.away_q2, g.away_q3, g.away_q4,
-             g.weather,
-             ht.id as home_team_id, ht.city || ' ' || ht.name AS home_team,
-             at.id as away_team_id, at.city || ' ' || at.name AS away_team
-      FROM games g
-      JOIN teams ht ON g.home_team_id = ht.id
-      JOIN teams at ON g.away_team_id = at.id
-      WHERE g.id = ?
-    `).get(gameId) as any;
-    if (!game) return null;
-    const players = db.prepare(`
-      SELECT p.first_name || ' ' || p.last_name as player_name, p.position, s.team_id,
-             s.pass_attempts, s.completions, s.pass_yards, s.pass_tds, s.interceptions,
-             s.rush_attempts, s.rush_yards, s.rush_tds, s.targets, s.receptions,
-             s.rec_yards, s.rec_tds, s.tackles, s.assisted_tackles, s.sacks, s.tfl,
-             s.def_interceptions, s.pass_deflections, s.def_tds,
-             s.fg_made, s.fg_att, s.xp_made, s.xp_att
-      FROM stats s
-      JOIN players p ON s.player_id = p.id
-      WHERE s.game_id = ?
-        AND (s.pass_yards > 0 OR s.rush_yards > 0 OR s.rec_yards > 0
-          OR s.tackles > 2 OR s.sacks > 0 OR s.def_tds > 0 OR s.fg_att > 0)
-      ORDER BY s.team_id, s.pass_yards DESC, s.rush_yards DESC, s.rec_yards DESC
-    `).all(gameId);
-    return { game, players };
-  });
-
-  ipcMain.handle('get-playoff-seeds', () => {
-    const season = getCurrentSeason();
-    const records = gameRepo.getAllRecords(season);
-    const getSeeds = (conference: string) =>
-      (db.prepare('SELECT id, city, name FROM teams WHERE conference = ?').all(conference) as any[])
-        .map((t: any) => {
-          const { wins = 0, losses = 0 } = records[t.id] ?? {};
-          return { ...t, wins, losses, team_name: `${t.city} ${t.name}` };
-        })
-        .sort((a: any, b: any) => b.wins - a.wins).slice(0, 7);
-    return { afc: getSeeds('AFC'), nfc: getSeeds('NFC') };
-  });
-}
+};
