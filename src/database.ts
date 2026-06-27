@@ -199,7 +199,8 @@ export function initDatabase(dbPath: string): void {
       vertical_jump REAL,
       broad_jump INTEGER,
       cone_time REAL,
-      scouted INTEGER DEFAULT 0
+      scouted INTEGER DEFAULT 0,
+      projected_overall_pick INTEGER DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS depth_chart (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -591,7 +592,7 @@ export function generateContracts(): void {
   console.log(`Contracts generated: ${activePlayers.length} active + ${psPlayers.length} PS`);
 }
 
-const CURRENT_SCHEMA_VERSION = 24;
+const CURRENT_SCHEMA_VERSION = 25;
 
 interface Migration { version: number; description: string; up: () => void; }
 
@@ -920,6 +921,15 @@ const MIGRATIONS: Migration[] = [
       const gameCols = (db.prepare('PRAGMA table_info(games)').all() as any[]).map((c: any) => c.name);
       if (!gameCols.includes('is_preseason'))
         db.prepare('ALTER TABLE games ADD COLUMN is_preseason INTEGER DEFAULT 0').run();
+    },
+  },
+  {
+    version: 25,
+    description: 'Add projected_overall_pick to draft_prospects for scouting realism',
+    up: () => {
+      const cols = (db.prepare('PRAGMA table_info(draft_prospects)').all() as any[]).map((c: any) => c.name);
+      if (!cols.includes('projected_overall_pick'))
+        db.prepare('ALTER TABLE draft_prospects ADD COLUMN projected_overall_pick INTEGER DEFAULT 0').run();
     },
   },
 

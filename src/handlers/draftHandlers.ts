@@ -127,6 +127,27 @@ export function registerDraftHandlers(): void {
 
     const ovrMod = isDrought ? -4 : isStrong ? 3 : 0;
 
+    // Assign projected_overall_pick with realistic noise to simulate scouting uncertainty.
+    // ~12% sleepers (project much later than actual quality)
+    // ~12% busts (project much earlier than actual quality)
+    // ~76% project close to true value with small variance
+    function projectSlot(trueSlot: number): number {
+      const r = Math.random();
+      if (r < 0.12) {
+        // Sleeper — true quality hidden, shows up 1–3 rounds later in boards
+        const bump = Math.round(32 + Math.random() * 80);
+        return Math.min(280, trueSlot + bump);
+      }
+      if (r < 0.24) {
+        // Bust — overrated on boards, projects 1–2 rounds higher than actual
+        const pull = Math.round(20 + Math.random() * 60);
+        return Math.max(1, trueSlot - pull);
+      }
+      // Normal — ±20 picks around true slot
+      const noise = Math.round((Math.random() - 0.5) * 40);
+      return Math.max(1, Math.min(280, trueSlot + noise));
+    }
+
     const prospects: any[] = [];
     for (let i = 0; i < 280; i++) {
       let ovr: number;
@@ -148,6 +169,7 @@ export function registerDraftHandlers(): void {
         position, overall_rating: ovr,
         dev_trait: getDevTrait(ovr),
         age: Math.random() < 0.6 ? 21 : Math.random() < 0.6 ? 22 : 23,
+        projected_overall_pick: projectSlot(i + 1),
         ...combine,
       });
     }

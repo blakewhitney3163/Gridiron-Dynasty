@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { T } from './theme';
 import { Prospect, DraftTeam, PickSlot, MyPick, CpuPick } from './draft/types';
-import { MAX_SCOUTS, draftGrade, partialOvrRange } from './draft/draftUtils';
+import { MAX_SCOUTS, draftGrade, preScoutTier } from './draft/draftUtils';
 import ProspectBoard from './draft/ProspectBoard';
 import MyPicksSidebar from './draft/MyPicksSidebar';
 import DraftSummary from './draft/DraftSummary';
@@ -35,7 +35,7 @@ function classGradeColor(rating: number): string {
 }
 
 export default function Draft({ onDraftComplete }: Props) {
-  const { userTeam, currentSeason, playoffsComplete, simCount } = useGameStore();
+  const { userTeam, currentSeason, playoffsComplete } = useGameStore();
 
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [draftOrder, setDraftOrder] = useState<DraftTeam[]>([]);
@@ -55,8 +55,8 @@ export default function Draft({ onDraftComplete }: Props) {
   const [scoutBudget, setScoutBudget] = useState(25);
   const [scouting, setScouting] = useState<number | null>(null);
   const [classStrength, setClassStrength] = useState<Record<string, number> | null>(null);
-  const [reminderVisible, setReminderVisible] = useState(false);
 
+  // In-draft trade modal state
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [tradeMyPickAssetId, setTradeMyPickAssetId] = useState<number | null>(null);
   const [tradeTheirTeamId, setTradeTheirTeamId] = useState<number | null>(null);
@@ -64,20 +64,7 @@ export default function Draft({ onDraftComplete }: Props) {
   const [tradeResult, setTradeResult] = useState<{ accepted: boolean; reason?: string } | null>(null);
   const [tradingPick, setTradingPick] = useState(false);
 
-  const prevSimCount = useRef(simCount);
-
   useEffect(() => { loadDraft(); }, [userTeam?.id]);
-
-  // Show weekly reminder whenever a new simulation happens and scouts are still available
-  useEffect(() => {
-    if (simCount !== prevSimCount.current) {
-      prevSimCount.current = simCount;
-      const available = scoutBudget - scoutsUsed;
-      if (available > 0 && !playoffsComplete) {
-        setReminderVisible(true);
-      }
-    }
-  }, [simCount, scoutBudget, scoutsUsed, playoffsComplete]);
 
   const loadDraft = async () => {
     const [cls, order, sc, cs] = await Promise.all([
@@ -143,8 +130,6 @@ export default function Draft({ onDraftComplete }: Props) {
     if (result.success) {
       setScoutsUsed(prev => prev + 1);
       setProspects(await window.api.getDraftClass());
-      // Dismiss reminder once user acts on it
-      setReminderVisible(false);
     }
     setScouting(null);
   };
@@ -245,9 +230,11 @@ export default function Draft({ onDraftComplete }: Props) {
   const pickNum = userPickSlots[currentPickIdx];
   const totalPicksThisRound = userPickSlots.length;
 
+  // Pick slots available to the user for trading (unused picks with a valid pickAssetId)
   const myTradableSlots = roundPickSlots.filter(
     slot => slot.ownerTeamId === userTeam.id && !slot.isUsed && slot.pickAssetId !== null,
   );
+  // CPU teams in this round
   const cpuTeamIds = [...new Set(
     roundPickSlots
       .filter(slot => slot.ownerTeamId !== userTeam.id && !slot.isUsed)
@@ -287,6 +274,7 @@ export default function Draft({ onDraftComplete }: Props) {
     const scoutsAvailable = scoutBudget - scoutsUsed;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px 24px' }}>
+        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, color: T.textPrimary }}>
@@ -305,35 +293,11 @@ export default function Draft({ onDraftComplete }: Props) {
             }}>
               {scoutsAvailable} / {scoutBudget}
             </div>
-            <div style={{ fontSize: 9, color: T.textDim }}>1st scout reveals range · 2nd reveals exact OVR</div>
+            <div style={{ fontSize: 9, color: T.textDim }}>simulate games to earn more</div>
           </div>
         </div>
 
-        {/* Weekly reminder banner */}
-        {reminderVisible && scoutsAvailable > 0 && (
-          <div style={{
-            background: '#1a1000', border: '1px solid #FF8740', borderRadius: 6,
-            padding: '10px 16px', marginBottom: 12,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            <div>
-              <div style={{ fontSize: 12, color: '#FF8740', fontWeight: 700, marginBottom: 2 }}>
-                📬 Games simulated — deploy your scouts!
-              </div>
-              <div style={{ fontSize: 10, color: '#888' }}>
-                You have <strong style={{ color: '#FF8740' }}>{scoutsAvailable}</strong> scout{scoutsAvailable !== 1 ? 's' : ''} available.
-                First scout reveals an OVR range; a second scout unlocks the exact rating and dev trait.
-              </div>
-            </div>
-            <button
-              onClick={() => setReminderVisible(false)}
-              style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: 18, padding: '0 4px' }}
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
+        {/* Draft Class Strength panel */}
         {classStrength && (
           <div style={{
             background: '#07100f', border: '1px solid #1a2e1a', borderRadius: 6,
@@ -370,7 +334,7 @@ export default function Draft({ onDraftComplete }: Props) {
           padding: '10px 16px', marginBottom: 14, fontSize: 11, color: '#4caf50',
           fontFamily: 'monospace',
         }}>
-          📋 Scouting mode — 1st scout reveals OVR range &amp; position tier · 2nd scout reveals exact OVR &amp; dev trait.
+          📋 Scouting mode — reveal prospect ratings now to prepare for draft day.
           Pick buttons unlock after playoffs complete.
         </div>
 
@@ -396,50 +360,59 @@ export default function Draft({ onDraftComplete }: Props) {
             .filter(p => !p.is_drafted && (posFilter === 'ALL' || p.position === posFilter))
             .slice(0, 60)
             .map(p => {
-              const scoutLevel = p.scouted ?? 0;
               const isScouting = scouting === p.id;
+              const proj = p.projected_overall_pick ?? 0;
+              const projRound = proj > 0 ? Math.ceil(proj / 32) : null;
+              const projPick  = proj > 0 ? ((proj - 1) % 32) + 1 : null;
+              const projLabel = projRound != null
+                ? `Rd ${projRound}, ~${projPick}`
+                : '—';
+
+              const { label: tierLabel, color: tierColor } = p.scouted >= 1
+                ? preScoutTier(p.id, p.overall_rating)
+                : { label: '', color: '' };
+
               return (
                 <div key={p.id} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '8px 12px', marginBottom: 3, borderRadius: 4,
                   background: '#0e0e0e', border: '1px solid #161616',
                 }}>
-                  {/* OVR / range display */}
+                  {/* OVR — revealed only after level-2 scout */}
                   <span style={{
-                    width: 52, textAlign: 'center', fontWeight: 700, fontSize: 13,
-                    color: scoutLevel >= 2
+                    width: 36, textAlign: 'center', fontWeight: 700, fontSize: 13,
+                    color: p.scouted >= 2
                       ? (p.overall_rating >= 80 ? '#FFD700' : p.overall_rating >= 70 ? '#4FC3F7' : '#888')
-                      : scoutLevel === 1 ? '#FF8740' : '#333',
+                      : '#444',
                   }}>
-                    {scoutLevel >= 2
-                      ? p.overall_rating
-                      : scoutLevel === 1
-                      ? partialOvrRange(p.id, p.overall_rating)
-                      : '??'
-                    }
+                    {p.scouted >= 2 ? p.overall_rating : '—'}
                   </span>
 
+                  {/* Name, position, age */}
                   <span style={{ flex: 1, fontSize: 12, color: '#aaa', fontFamily: 'monospace' }}>
                     {p.first_name} {p.last_name}
                     <span style={{ color: '#555', marginLeft: 8, fontSize: 10 }}>
                       {p.position} · Age {p.age}
                     </span>
-                    {scoutLevel === 1 && (
-                      <span style={{ color: '#555', marginLeft: 8, fontSize: 10 }}>· Dev: ?</span>
-                    )}
-                    {scoutLevel >= 2 && p.dev_trait && p.dev_trait !== 'Normal' && (
-                      <span style={{
-                        marginLeft: 8, fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 3,
-                        background: p.dev_trait === 'X-Factor' ? '#4a4020' : p.dev_trait === 'Superstar' ? '#4a3020' : '#2d3f5a',
-                        color: p.dev_trait === 'X-Factor' ? '#FFD700' : p.dev_trait === 'Superstar' ? '#FF8740' : '#4FC3F7',
-                      }}>
-                        {p.dev_trait === 'X-Factor' ? 'XF' : p.dev_trait === 'Superstar' ? 'SS' : 'S'}
-                      </span>
-                    )}
                   </span>
 
-                  {/* Scout / Deep Scout / Scouted indicator */}
-                  {scoutLevel === 0 && (
+                  {/* Projected pick (always visible) */}
+                  <span style={{ fontSize: 10, color: '#4a6a4a', fontFamily: 'monospace', minWidth: 72, textAlign: 'right' }}>
+                    {projLabel}
+                  </span>
+
+                  {/* Tier label after level-1 scout */}
+                  {p.scouted >= 1 && p.scouted < 2 && (
+                    <span style={{ fontSize: 10, color: tierColor, fontFamily: 'monospace', minWidth: 80, textAlign: 'right' }}>
+                      {tierLabel}
+                    </span>
+                  )}
+                  {p.scouted >= 2 && (
+                    <span style={{ fontSize: 10, color: '#2a5a2a', fontFamily: 'monospace' }}>✓ Full</span>
+                  )}
+
+                  {/* Scout button */}
+                  {p.scouted < 2 && (
                     <button
                       onClick={() => handleScout(p.id)}
                       disabled={scoutsAvailable <= 0 || isScouting}
@@ -451,28 +424,8 @@ export default function Draft({ onDraftComplete }: Props) {
                         color: scoutsAvailable > 0 ? '#4caf50' : '#333', fontFamily: 'monospace',
                       }}
                     >
-                      {isScouting ? '...' : '🔍 Scout'}
+                      {isScouting ? '...' : p.scouted >= 1 ? '🔍 Deep Scout' : '🔍 Scout'}
                     </button>
-                  )}
-                  {scoutLevel === 1 && (
-                    <button
-                      onClick={() => handleScout(p.id)}
-                      disabled={scoutsAvailable <= 0 || isScouting}
-                      title="Spend 1 more scout to unlock exact OVR and dev trait"
-                      style={{
-                        padding: '3px 10px', fontSize: 10,
-                        cursor: scoutsAvailable > 0 ? 'pointer' : 'not-allowed',
-                        borderRadius: 3, background: '#1a0d00',
-                        border: `1px solid ${scoutsAvailable > 0 ? '#FF8740' : '#333'}`,
-                        color: scoutsAvailable > 0 ? '#FF8740' : '#333', fontFamily: 'monospace',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {isScouting ? '...' : '🔍 Deep Scout'}
-                    </button>
-                  )}
-                  {scoutLevel >= 2 && (
-                    <span style={{ fontSize: 10, color: '#2a5a2a', fontFamily: 'monospace' }}>✓ Scouted</span>
                   )}
                 </div>
               );
@@ -484,6 +437,7 @@ export default function Draft({ onDraftComplete }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px 24px' }}>
+      {/* Draft Day Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 18, fontWeight: 700, color: T.textPrimary }}>
@@ -524,6 +478,7 @@ export default function Draft({ onDraftComplete }: Props) {
         </div>
       </div>
 
+      {/* CPU drafting spinner */}
       {running && !showResults && (
         <div style={{
           margin: '0 0 12px', padding: '12px 18px', borderRadius: 6,
@@ -569,6 +524,7 @@ export default function Draft({ onDraftComplete }: Props) {
         />
       </div>
 
+      {/* In-Draft Trade Modal */}
       {showTradeModal && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
@@ -585,6 +541,7 @@ export default function Draft({ onDraftComplete }: Props) {
               Offer one of your picks in exchange for a CPU team's pick this round.
             </div>
 
+            {/* Your pick */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1, marginBottom: 6 }}>YOUR PICK TO OFFER</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -605,6 +562,7 @@ export default function Draft({ onDraftComplete }: Props) {
               </div>
             </div>
 
+            {/* CPU team */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1, marginBottom: 6 }}>SELECT CPU TEAM</div>
               <select
@@ -630,6 +588,7 @@ export default function Draft({ onDraftComplete }: Props) {
               </select>
             </div>
 
+            {/* Their pick */}
             {tradeTheirTeamId !== null && theirSlots.length > 0 && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1, marginBottom: 6 }}>
@@ -654,6 +613,7 @@ export default function Draft({ onDraftComplete }: Props) {
               </div>
             )}
 
+            {/* Result */}
             {tradeResult && (
               <div style={{
                 padding: '10px 14px', borderRadius: 5, marginBottom: 16,
@@ -668,6 +628,7 @@ export default function Draft({ onDraftComplete }: Props) {
               </div>
             )}
 
+            {/* Actions */}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button
                 onClick={() => setShowTradeModal(false)}

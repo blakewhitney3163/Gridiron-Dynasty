@@ -14,11 +14,16 @@ type ProspectInsert = {
   vertical_jump: number;
   broad_jump: number;
   cone_time: number;
+  projected_overall_pick: number;
 };
 
 class DraftRepository {
   getClass(season: number): DraftProspect[] {
-    return db.prepare('SELECT * FROM draft_prospects WHERE season = ? ORDER BY overall_rating DESC').all(season) as DraftProspect[];
+    // Order by projected pick so the list mirrors a real scout board — best actual player
+    // is NOT necessarily first. Sleepers appear lower, busts appear higher.
+    return db.prepare(
+      'SELECT * FROM draft_prospects WHERE season = ? ORDER BY CASE WHEN projected_overall_pick > 0 THEN projected_overall_pick ELSE 999 END ASC, id ASC'
+    ).all(season) as DraftProspect[];
   }
 
   getById(id: number): DraftProspect | null {
@@ -42,10 +47,10 @@ class DraftRepository {
     const ins = db.prepare(`
       INSERT INTO draft_prospects
         (season, first_name, last_name, position, overall_rating, dev_trait, age,
-         forty_time, bench_press, vertical_jump, broad_jump, cone_time)
+         forty_time, bench_press, vertical_jump, broad_jump, cone_time, projected_overall_pick)
       VALUES
         (@season, @first_name, @last_name, @position, @overall_rating, @dev_trait, @age,
-         @forty_time, @bench_press, @vertical_jump, @broad_jump, @cone_time)
+         @forty_time, @bench_press, @vertical_jump, @broad_jump, @cone_time, @projected_overall_pick)
     `);
     const run = db.transaction(() => { for (const p of prospects) ins.run(p); });
     run();

@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import { db } from '../database';
-import { settingsRepo } from '../repositories';
+import { settingsRepo, scoutRepo } from '../repositories';
 import {
   initLiveGame, simNextPlay, simToCompletion,
   finalizeLiveGame, abortLiveGame, hasActiveGame, getActiveGame,
@@ -75,6 +75,12 @@ export function registerLiveGameHandlers(): void {
 
         postGameNews(gameRow.season, gameRow.week, gameRow.home_team_id, gameRow.away_team_id,
           result.homeScore, result.awayScore, userTeamId);
+
+        // Award scout points for playing a live game (same rate as simming a game)
+        const lgKey = `scouting_budget_${gameRow.season}`;
+        const lgBudget = parseInt(settingsRepo.get(lgKey) ?? '0');
+        const lgPts = userTeamId > 0 ? scoutRepo.getWeeklyPoints(userTeamId) : 1;
+        if (lgBudget < 70) settingsRepo.set(lgKey, String(Math.min(70, lgBudget + lgPts)));
       } catch (e) {
         console.warn('[LiveGame] post-game pipeline error:', e);
       }

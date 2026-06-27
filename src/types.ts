@@ -151,7 +151,8 @@ export interface DraftProspect {
   draft_round?: number;
   draft_pick?: number;
   drafted_by_team_id?: number;
-  scouted?: 0 | 1;
+  scouted?: 0 | 1 | 2;
+  projected_overall_pick?: number;
 }
 
 export interface PickAsset {
