@@ -294,7 +294,9 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     if (userTeam) {
       const spots = await window.api.getRosterSpots(userTeam.id);
       if (spots && spots.active > 53) {
-        alert(`You must cut ${spots.active - 53} player(s) before advancing.\n\nGo to My Team → Team Management → Active Roster.`);
+        alert(`You must cut ${spots.active - 53} player(s) before advancing.
+
+Go to My Team → Team Management → Active Roster.`);
         return;
       }
     }
@@ -497,6 +499,15 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
                 </div>
                 <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: userWon ? '#4caf50' : '#e57373', marginBottom: 12, letterSpacing: 2 }}>
                   {userWon ? 'VICTORY' : 'DEFEAT'}
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <button
+                    onClick={handleSimulateWeek}
+                    disabled={!!simulating}
+                    style={{ flex: 1, padding: '9px 0', background: '#0d2a0d', border: '1px solid #4caf50', borderRadius: 5, color: '#4caf50', fontWeight: 700, fontSize: 12, cursor: simulating ? 'not-allowed' : 'pointer', opacity: simulating ? 0.5 : 1 }}
+                  >
+                    {simulating ? 'Advancing...' : `▶ Continue to Week ${(currentWeek ?? 0) + 1}`}
+                  </button>
                 </div>
                 <button
                   onClick={() => handleBoxScore(userGame.id)}
