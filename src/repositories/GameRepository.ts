@@ -2,38 +2,38 @@ import { db } from '../database';
 
 class GameRepository {
   countBySeason(season: number, playoff = false): number {
-    const clause = playoff ? 'AND is_playoff = 1' : 'AND is_playoff = 0';
+    const clause = playoff ? 'AND is_playoff = 1' : 'AND is_playoff = 0 AND (is_preseason = 0 OR is_preseason IS NULL)';
     return (db.prepare(`SELECT COUNT(*) as count FROM games WHERE season = ? ${clause}`).get(season) as any).count;
   }
 
   getPendingByWeek(season: number, week: number): any[] {
     return db.prepare(
-      `SELECT id, home_team_id, away_team_id FROM games WHERE season = ? AND week = ? AND is_simulated = 0 AND is_playoff = 0`
+      `SELECT id, home_team_id, away_team_id FROM games WHERE season = ? AND week = ? AND is_simulated = 0 AND is_playoff = 0 AND (is_preseason = 0 OR is_preseason IS NULL)`
     ).all(season, week);
   }
 
   getCurrentWeek(season: number): number | null {
     const row = db.prepare(
-      'SELECT MIN(week) as week FROM games WHERE season = ? AND is_simulated = 0 AND is_playoff = 0'
+      'SELECT MIN(week) as week FROM games WHERE season = ? AND is_simulated = 0 AND is_playoff = 0 AND (is_preseason = 0 OR is_preseason IS NULL)'
     ).get(season) as any;
     return row?.week ?? null;
   }
 
   countPendingInWeek(season: number, week: number): number {
     return (db.prepare(
-      'SELECT COUNT(*) as cnt FROM games WHERE season = ? AND week = ? AND is_simulated = 0 AND is_playoff = 0'
+      'SELECT COUNT(*) as cnt FROM games WHERE season = ? AND week = ? AND is_simulated = 0 AND is_playoff = 0 AND (is_preseason = 0 OR is_preseason IS NULL)'
     ).get(season, week) as any).cnt;
   }
 
   getTeamRecord(teamId: number, season: number): { wins: number; losses: number; ties: number } {
     const wins = (db.prepare(
-      `SELECT COUNT(*) as count FROM games WHERE season = ? AND is_simulated = 1 AND is_playoff = 0 AND ((home_team_id = ? AND home_score > away_score) OR (away_team_id = ? AND away_score > home_score))`
+      `SELECT COUNT(*) as count FROM games WHERE season = ? AND is_simulated = 1 AND is_playoff = 0 AND (is_preseason = 0 OR is_preseason IS NULL) AND ((home_team_id = ? AND home_score > away_score) OR (away_team_id = ? AND away_score > home_score))`
     ).get(season, teamId, teamId) as any).count;
     const losses = (db.prepare(
-      `SELECT COUNT(*) as count FROM games WHERE season = ? AND is_simulated = 1 AND is_playoff = 0 AND ((home_team_id = ? AND home_score < away_score) OR (away_team_id = ? AND away_score < home_score))`
+      `SELECT COUNT(*) as count FROM games WHERE season = ? AND is_simulated = 1 AND is_playoff = 0 AND (is_preseason = 0 OR is_preseason IS NULL) AND ((home_team_id = ? AND home_score < away_score) OR (away_team_id = ? AND away_score < home_score))`
     ).get(season, teamId, teamId) as any).count;
     const ties = (db.prepare(
-      `SELECT COUNT(*) as count FROM games WHERE season = ? AND is_simulated = 1 AND is_playoff = 0 AND (home_team_id = ? OR away_team_id = ?) AND home_score = away_score`
+      `SELECT COUNT(*) as count FROM games WHERE season = ? AND is_simulated = 1 AND is_playoff = 0 AND (is_preseason = 0 OR is_preseason IS NULL) AND (home_team_id = ? OR away_team_id = ?) AND home_score = away_score`
     ).get(season, teamId, teamId) as any).count;
     return { wins, losses, ties };
   }
@@ -58,7 +58,7 @@ class GameRepository {
       FROM teams t
       LEFT JOIN games g
         ON (g.home_team_id = t.id OR g.away_team_id = t.id)
-        AND g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0
+        AND g.season = ? AND g.is_simulated = 1 AND g.is_playoff = 0 AND (g.is_preseason = 0 OR g.is_preseason IS NULL)
       GROUP BY t.id
     `).all(season) as any[];
     const map: Record<number, { wins: number; losses: number; ties: number }> = {};
@@ -71,7 +71,7 @@ class GameRepository {
       SELECT
         SUM(CASE WHEN (home_team_id = ? AND home_score > away_score) OR (away_team_id = ? AND away_score > home_score) THEN 1 ELSE 0 END) as wins,
         COUNT(*) as played
-      FROM games WHERE (home_team_id = ? OR away_team_id = ?) AND season = ? AND is_simulated = 1 AND is_playoff = 0
+      FROM games WHERE (home_team_id = ? OR away_team_id = ?) AND season = ? AND is_simulated = 1 AND is_playoff = 0 AND (is_preseason = 0 OR is_preseason IS NULL)
     `).get(teamId, teamId, teamId, teamId, season) as any;
     return { wins: result?.wins ?? 0, played: result?.played ?? 0 };
   }
