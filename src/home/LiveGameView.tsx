@@ -74,17 +74,19 @@ function fieldLabel(yardLine: number): string {
 }
 
 function playTypeColor(type: string): string {
-  if (['touchdown'].includes(type)) return '#FFD700';
-  if (['field_goal'].includes(type)) return '#FF8740';
+  if (type === 'quarter_end') return '#FFD700';
+  if (type === 'touchdown') return '#FFD700';
+  if (type === 'field_goal') return '#FF8740';
   if (['interception', 'fumble', 'field_goal_miss'].includes(type)) return '#e57373';
   if (['sack', 'turnover_downs'].includes(type)) return '#e57373';
   if (type === 'timeout' || type === 'challenge') return '#9b59b6';
   if (type === 'kickoff' || type === 'punt') return '#4FC3F7';
-  if (type === 'pass' || type === 'run') return '#ccc';
-  return '#777';
+  if (type === 'pass' || type === 'run') return '#aab8c8';
+  return '#778899';
 }
 
 function playTypeIcon(type: string): string {
+  if (type === 'quarter_end') return '⏱ END';
   if (type === 'touchdown') return '🏈 TD';
   if (type === 'field_goal') return '✅ FG';
   if (type === 'field_goal_miss') return '❌ FG';
@@ -110,8 +112,8 @@ function TimeoutDots({ count, max = 3 }: { count: number; max?: number }) {
       {Array.from({ length: max }, (_, i) => (
         <div key={i} style={{
           width: 8, height: 8, borderRadius: '50%',
-          background: i < count ? '#FFD700' : '#2a2a2a',
-          border: '1px solid #444',
+          background: i < count ? '#FFD700' : '#1a3050',
+          border: '1px solid #2a4060',
         }} />
       ))}
     </div>
@@ -129,16 +131,16 @@ function FieldStrip({ yardLine, possession, homeTeamName, awayTeamName }: {
     : Math.max(2, absPos - 10);
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: 40, background: '#1a2a1a', borderRadius: 4, overflow: 'hidden', border: '1px solid #2a3a2a' }}>
+    <div style={{ position: 'relative', width: '100%', height: 40, background: '#0d2040', borderRadius: 4, overflow: 'hidden', border: '1px solid #1e3550' }}>
       {/* Yard line markers */}
       {[10, 20, 30, 40, 50, 60, 70, 80, 90].map(pct => (
         <div key={pct} style={{
           position: 'absolute', left: `${pct}%`, top: 0, bottom: 0,
-          width: 1, background: '#2a3a2a', opacity: 0.6,
+          width: 1, background: '#1e3550', opacity: 0.8,
         }} />
       ))}
       {/* 50-yard line */}
-      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 2, background: '#3a4a3a' }} />
+      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 2, background: '#2a5070' }} />
       {/* Red zone (inside OPP 20) */}
       <div style={{
         position: 'absolute',
@@ -163,10 +165,10 @@ function FieldStrip({ yardLine, possession, homeTeamName, awayTeamName }: {
         zIndex: 2,
       }} />
       {/* Labels */}
-      <div style={{ position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)', fontSize: 8, color: '#3a5a3a', letterSpacing: 0.5 }}>
+      <div style={{ position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)', fontSize: 8, color: '#4a7090', letterSpacing: 0.5 }}>
         {homeTeamName.split(' ').pop()}
       </div>
-      <div style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', fontSize: 8, color: '#3a5a3a', letterSpacing: 0.5 }}>
+      <div style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', fontSize: 8, color: '#4a7090', letterSpacing: 0.5 }}>
         {awayTeamName.split(' ').pop()}
       </div>
     </div>
@@ -288,7 +290,9 @@ export default function LiveGameView({ gameId, userTeamId, onGameComplete, onClo
   if (loading || !gameState) {
     return (
       <div style={{ ...overlayStyle, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ color: '#FF8740', fontSize: 14 }}>Loading game...</div>
+        <div style={{ background: '#0a1828', border: '1px solid #1e3550', borderRadius: 8, padding: '24px 40px', color: '#FF8740', fontSize: 14 }}>
+          Loading game...
+        </div>
       </div>
     );
   }
@@ -306,7 +310,7 @@ export default function LiveGameView({ gameId, userTeamId, onGameComplete, onClo
       <div style={panelStyle}>
 
         {/* ── Score Bar ──────────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', background: '#050505', borderBottom: '1px solid #1a1a1a' }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', background: '#081a2e', borderBottom: '1px solid #1e3550' }}>
           {/* Home */}
           <div style={{ flex: 1, textAlign: 'left' }}>
             <div style={{ fontSize: 9, color: '#555', letterSpacing: 1 }}>
@@ -357,7 +361,7 @@ export default function LiveGameView({ gameId, userTeamId, onGameComplete, onClo
 
         {/* ── Field Strip ────────────────────────────────────────────────── */}
         {!gs.done && !gs.kickoffNext && (
-          <div style={{ padding: '10px 14px', borderBottom: '1px solid #111' }}>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid #1e3550' }}>
             <FieldStrip
               yardLine={gs.yardLine}
               possession={gs.possession}
@@ -388,26 +392,48 @@ export default function LiveGameView({ gameId, userTeamId, onGameComplete, onClo
             const color = playTypeColor(play.type);
             const icon = playTypeIcon(play.type);
             const isLatest = i === 0;
+            const isQEnd = play.type === 'quarter_end';
+
+            if (isQEnd) {
+              return (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 8px', marginBottom: 4, marginTop: 4,
+                  background: '#0f2540',
+                  borderRadius: 4,
+                  border: '1px solid #FFD70033',
+                  opacity: Math.max(0.5, 1 - i * 0.04),
+                }}>
+                  <span style={{ fontSize: 9, color: '#FFD700', fontWeight: 700, letterSpacing: 1 }}>
+                    {icon}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#FFD700', fontWeight: 700, flex: 1, letterSpacing: 0.5 }}>
+                    {play.description}
+                  </span>
+                </div>
+              );
+            }
+
             return (
               <div key={i} style={{
                 display: 'flex', gap: 8, alignItems: 'flex-start',
                 padding: '5px 8px', marginBottom: 2,
-                background: isLatest ? '#0d0d0d' : 'transparent',
+                background: isLatest ? '#0f2035' : 'transparent',
                 borderRadius: 4,
                 borderLeft: isLatest ? `2px solid ${color}` : '2px solid transparent',
                 opacity: Math.max(0.4, 1 - i * 0.04),
               }}>
-                <span style={{ fontSize: 9, color: '#555', minWidth: 32, paddingTop: 1, flexShrink: 0 }}>
+                <span style={{ fontSize: 9, color: '#4a6080', minWidth: 32, paddingTop: 1, flexShrink: 0 }}>
                   {quarterLabel(play.quarter)}
                 </span>
                 <span style={{ fontSize: 9, color: color, minWidth: 36, flexShrink: 0, fontWeight: 700 }}>
                   {icon}
                 </span>
-                <span style={{ fontSize: 11, color: isLatest ? '#ccc' : '#666', lineHeight: 1.4, flex: 1 }}>
+                <span style={{ fontSize: 11, color: isLatest ? '#c8d8e8' : '#5a7090', lineHeight: 1.4, flex: 1 }}>
                   {play.description}
                 </span>
                 {play.isScoring && (
-                  <span style={{ fontSize: 10, color: '#777', flexShrink: 0 }}>
+                  <span style={{ fontSize: 10, color: '#5a7090', flexShrink: 0 }}>
                     {play.homeScore}–{play.awayScore}
                   </span>
                 )}
@@ -423,14 +449,14 @@ export default function LiveGameView({ gameId, userTeamId, onGameComplete, onClo
 
         {/* ── Controls ───────────────────────────────────────────────────── */}
         {!gs.done && (
-          <div style={{ padding: '10px 14px', borderTop: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ padding: '10px 14px', borderTop: '1px solid #1e3550', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {/* Speed + pause controls */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <button onClick={() => setPaused(p => !p)} style={{
                 padding: '5px 12px', fontSize: 10, cursor: 'pointer', borderRadius: 3,
-                background: paused ? '#FF8740' : '#1a1a1a',
-                border: `1px solid ${paused ? '#FF8740' : '#2a2a2a'}`,
-                color: paused ? '#000' : '#777', fontWeight: 700,
+                background: paused ? '#FF8740' : '#0d1f35',
+                border: `1px solid ${paused ? '#FF8740' : '#1e3550'}`,
+                color: paused ? '#000' : '#8aaccc', fontWeight: 700,
               }}>
                 {paused ? '▶ PLAY' : '⏸ PAUSE'}
               </button>
@@ -441,16 +467,16 @@ export default function LiveGameView({ gameId, userTeamId, onGameComplete, onClo
                 {[{ label: 'Slow', val: 1200 }, { label: 'Normal', val: 600 }, { label: 'Fast', val: 180 }].map(s => (
                   <button key={s.val} onClick={() => setSpeed(s.val)} style={{
                     padding: '3px 8px', fontSize: 9, cursor: 'pointer', borderRadius: 3,
-                    background: speed === s.val ? '#1a1a2a' : 'transparent',
-                    border: `1px solid ${speed === s.val ? '#4FC3F7' : '#2a2a2a'}`,
-                    color: speed === s.val ? '#4FC3F7' : '#444',
+                    background: speed === s.val ? '#0d2040' : 'transparent',
+                    border: `1px solid ${speed === s.val ? '#4FC3F7' : '#1e3550'}`,
+                    color: speed === s.val ? '#4FC3F7' : '#5a7090',
                   }}>{s.label}</button>
                 ))}
               </div>
 
               <button onClick={handleSkipToEnd} style={{
                 marginLeft: 'auto', padding: '5px 12px', fontSize: 10, cursor: 'pointer',
-                background: 'transparent', border: '1px solid #2a2a2a', borderRadius: 3, color: '#555',
+                background: 'transparent', border: '1px solid #1e3550', borderRadius: 3, color: '#5a7090',
               }}>
                 ⏭ Skip to End
               </button>
@@ -465,8 +491,8 @@ export default function LiveGameView({ gameId, userTeamId, onGameComplete, onClo
                 style={{
                   padding: '4px 10px', fontSize: 9, cursor: userTimeouts > 0 && paused ? 'pointer' : 'not-allowed',
                   background: 'transparent',
-                  border: `1px solid ${userTimeouts > 0 ? '#FFD70055' : '#2a2a2a'}`,
-                  borderRadius: 3, color: userTimeouts > 0 && paused ? '#FFD700' : '#444',
+                border: `1px solid ${userTimeouts > 0 ? '#FFD70055' : '#1e3550'}`,
+                borderRadius: 3, color: userTimeouts > 0 && paused ? '#FFD700' : '#3a5570',
                   opacity: userTimeouts > 0 ? 1 : 0.4,
                 }}
               >
@@ -480,8 +506,8 @@ export default function LiveGameView({ gameId, userTeamId, onGameComplete, onClo
                 style={{
                   padding: '4px 10px', fontSize: 9, cursor: userChallenges > 0 ? 'pointer' : 'not-allowed',
                   background: 'transparent',
-                  border: `1px solid ${userChallenges > 0 ? '#9b59b655' : '#2a2a2a'}`,
-                  borderRadius: 3, color: userChallenges > 0 ? '#9b59b6' : '#444',
+                border: `1px solid ${userChallenges > 0 ? '#9b59b655' : '#1e3550'}`,
+                borderRadius: 3, color: userChallenges > 0 ? '#9b59b6' : '#3a5570',
                   opacity: userChallenges > 0 ? 1 : 0.4,
                 }}
               >
@@ -492,7 +518,7 @@ export default function LiveGameView({ gameId, userTeamId, onGameComplete, onClo
             {/* 4th Down Decision Prompt */}
             {awaitingDecision === 'fourth_down' && (
               <div style={{
-                padding: '12px 14px', background: '#0a0a14',
+                padding: '12px 14px', background: '#091828',
                 border: '1px solid #FF874055', borderRadius: 4,
               }}>
                 <div style={{ fontSize: 10, color: '#FF8740', fontWeight: 700, marginBottom: 8 }}>
@@ -516,7 +542,7 @@ export default function LiveGameView({ gameId, userTeamId, onGameComplete, onClo
 
         {/* ── Game Over ──────────────────────────────────────────────────── */}
         {gs.done && (
-          <div style={{ padding: '14px 16px', borderTop: '1px solid #1a1a1a', textAlign: 'center' }}>
+          <div style={{ padding: '14px 16px', borderTop: '1px solid #1e3550', textAlign: 'center' }}>
             <div style={{ fontSize: 12, color: '#4caf50', fontWeight: 700, marginBottom: 8 }}>
               {finalizing ? 'Saving game result...' : 'Game Complete'}
             </div>
@@ -548,13 +574,13 @@ const overlayStyle: React.CSSProperties = {
 const panelStyle: React.CSSProperties = {
   width: 560, maxWidth: '95vw',
   height: 680, maxHeight: '92vh',
-  background: '#0a0a0a',
-  border: '1px solid #222',
+  background: '#0a1828',
+  border: '1px solid #1e3550',
   borderRadius: 8,
   display: 'flex',
   flexDirection: 'column',
   overflow: 'hidden',
-  boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
+  boxShadow: '0 20px 60px rgba(0,0,0,0.7)',
 };
 
 const decBtn = (color: string): React.CSSProperties => ({

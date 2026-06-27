@@ -68,6 +68,7 @@ export interface LiveGameState {
   homeQBInts: number;
   awayQBInts: number;
   lastPlaySnapshot?: Partial<LiveGameState>;
+  userOffensePlan: string;  // 'balanced'|'run_heavy'|'pass_attack'|'ball_control'|'bombs_away'
 }
 
 export type UserDecision =
@@ -207,8 +208,8 @@ function executeRun(state: LiveGameState): PlayResult {
   const teamId = offTeamId(state);
 
   const ratingFactor = Math.pow(Math.max(0.5, off.offenseRating / def.defenseRating), 0.4);
-  let yards = Math.round(rn(4.2, 4.5) * ratingFactor);
-  yards = Math.max(-6, Math.min(65, yards));
+  let yards = Math.round(rn(4.0, 3.5) * ratingFactor);
+  yards = Math.max(-5, Math.min(45, yards));
 
   const isFumble = Math.random() < 0.008;
   const clockUsed = Math.round(Math.max(10, rn(30, 8)));
@@ -572,14 +573,30 @@ function selectPlayType(state: LiveGameState): 'run' | 'pass' {
     : state.awayScore - state.homeScore;
   const lateGame = state.quarter === 4 && state.clockSeconds < 300;
 
+  // Base pass rate: ~55 %
   let passProb = 0.55;
-  if (state.down === 3 && state.yardsToGo <= 3) passProb = 0.40;
-  else if (state.down === 3 && state.yardsToGo > 6) passProb = 0.72;
-  else if (state.down === 2 && state.yardsToGo <= 2) passProb = 0.30;
 
-  if (lateGame && scoreDiff < -8) passProb = Math.min(0.85, passProb + 0.20);
-  if (lateGame && scoreDiff > 10) passProb = Math.max(0.20, passProb - 0.20);
+  // Game plan shifts play-calling when the user has the ball
+  if (isUserPossession(state)) {
+    const PLAN_MODS: Record<string, number> = {
+      balanced:     0,
+      run_heavy:   -0.18,  // ~37 % pass
+      ball_control:-0.22,  // ~33 % pass
+      pass_attack:  0.15,  // ~70 % pass
+      bombs_away:   0.25,  // ~80 % pass
+    };
+    passProb += PLAN_MODS[state.userOffensePlan] ?? 0;
+  }
 
+  // Down-and-distance adjustments
+  if (state.down === 3 && state.yardsToGo <= 3) passProb -= 0.15;
+  else if (state.down === 3 && state.yardsToGo > 6) passProb += 0.17;
+  else if (state.down === 2 && state.yardsToGo <= 2) passProb -= 0.25;
+
+  if (lateGame && scoreDiff < -8) passProb = Math.min(0.88, passProb + 0.20);
+  if (lateGame && scoreDiff > 10) passProb = Math.max(0.12, passProb - 0.20);
+
+  passProb = Math.max(0.12, Math.min(0.88, passProb));
   return Math.random() < passProb ? 'pass' : 'run';
 }
 
@@ -607,6 +624,7 @@ function checkQuarterEnd(state: LiveGameState): PlayResult | null {
     return null;
   }
 
+  const endedQuarter = state.quarter;
   state.quarter++;
   state.clockSeconds = 900;
 
@@ -614,11 +632,18 @@ function checkQuarterEnd(state: LiveGameState): PlayResult | null {
   if (state.quarter === 3) {
     state.timeouts = { home: 3, away: 3 };
     state.kickoffNext = true;
-    // Second-half kickoff: possession flips from who kicked off in Q1
     state.possession = flipPossession(state.possession);
   }
 
-  return null;
+  const qLabels = ['1ST', '2ND', '3RD', '4TH'];
+  return {
+    type: 'quarter_end', yardsGained: 0,
+    description: `END OF ${qLabels[endedQuarter - 1] ?? `Q${endedQuarter}`} QUARTER  •  ${state.homeTeamName} ${state.homeScore}  —  ${state.awayTeamName} ${state.awayScore}`,
+    quarter: endedQuarter, clockSeconds: 0,
+    isScoring: false, homeScore: state.homeScore, awayScore: state.awayScore,
+    down: state.down, yardsToGo: state.yardsToGo, yardLine: state.yardLine,
+    possession: state.possession, clockUsed: 0,
+  };
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -689,6 +714,7 @@ export function initLiveGame(gameId: number, userTeamId: number): LiveGameState 
     playerStats: {},
     homeQBInts: 0,
     awayQBInts: 0,
+    userOffensePlan: userGamePlan?.offense ?? 'balanced',
   };
 
   activeGames.set(gameId, state);
@@ -787,7 +813,7 @@ export function simNextPlay(gameId: number, decision: UserDecision = null): SimP
     }
 
     const qEnd = checkQuarterEnd(state);
-    if (qEnd && qEnd.type === 'game_over') return { play: qEnd, state };
+    if (qEnd) return { play: qEnd, state };
     return { play, state };
   }
 
@@ -797,7 +823,7 @@ export function simNextPlay(gameId: number, decision: UserDecision = null): SimP
   const play = playType === 'run' ? executeRun(state) : executePass(state);
 
   const qEnd = checkQuarterEnd(state);
-  if (qEnd && qEnd.type === 'game_over') return { play: qEnd, state };
+  if (qEnd) return { play: qEnd, state };
 
   return { play, state };
 }
@@ -836,7 +862,7 @@ function buildGameOverPlay(state: LiveGameState): PlayResult {
 export function simToCompletion(gameId: number): { plays: PlayResult[]; state: LiveGameState } {
   const plays: PlayResult[] = [];
   let iterations = 0;
-  const MAX = 200;
+  const MAX = 400; // quarter_end plays add a few extra iterations
 
   while (iterations++ < MAX) {
     const result = simNextPlay(gameId, null);
