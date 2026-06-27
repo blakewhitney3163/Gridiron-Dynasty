@@ -565,7 +565,7 @@ export function generateContracts(): void {
   console.log(`Contracts generated: ${activePlayers.length} active + ${psPlayers.length} PS`);
 }
 
-const CURRENT_SCHEMA_VERSION = 22;
+const CURRENT_SCHEMA_VERSION = 24;
 
 interface Migration { version: number; description: string; up: () => void; }
 
@@ -866,6 +866,34 @@ const MIGRATIONS: Migration[] = [
         db.prepare('ALTER TABLE coaching_staff ADD COLUMN coaching_xp INTEGER DEFAULT 0').run();
       if (!cols.includes('coaching_level'))
         db.prepare('ALTER TABLE coaching_staff ADD COLUMN coaching_level INTEGER DEFAULT 1').run();
+    },
+  },
+
+  {
+    version: 23,
+    description: 'Add player_goals table for per-player season goals',
+    up: () => {
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS player_goals (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          player_id INTEGER NOT NULL,
+          goal_type TEXT NOT NULL,
+          target_value REAL,
+          season INTEGER NOT NULL,
+          status TEXT DEFAULT 'active',
+          FOREIGN KEY (player_id) REFERENCES players(id)
+        )
+      `).run();
+      try { db.prepare('CREATE INDEX IF NOT EXISTS idx_player_goals_player_season ON player_goals(player_id, season)').run(); } catch {}
+    },
+  },
+  {
+    version: 24,
+    description: 'Add is_preseason column to games table',
+    up: () => {
+      const gameCols = (db.prepare('PRAGMA table_info(games)').all() as any[]).map((c: any) => c.name);
+      if (!gameCols.includes('is_preseason'))
+        db.prepare('ALTER TABLE games ADD COLUMN is_preseason INTEGER DEFAULT 0').run();
     },
   },
 
