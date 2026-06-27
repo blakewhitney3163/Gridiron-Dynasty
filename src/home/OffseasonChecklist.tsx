@@ -23,17 +23,17 @@ interface Props {
   draftGenerated: boolean;
   faOpen: boolean;
   rosterSize: number;
-  announcingRetirements: AnnouncingRetirement[];
+  announcingRetirements?: AnnouncingRetirement[];
   refreshOffseasonStatus: () => void;
   onNavigate: (tab: string) => void;
   onOpenFreeAgency: () => void;
-  onMakeOffer: (playerId: number) => Promise<{ accepted: boolean; name: string; salary?: number }>;
-  onLetGo: (playerId: number) => Promise<void>;
-  offseasonPhase: string;
-  onAdvancePhase: () => void;
-  onRunCpuFa: () => void;
-  cpuFaDone: boolean;
-  cpuFaResult: CpuFaResult | null;
+  onMakeOffer?: (playerId: number) => Promise<{ accepted: boolean; name: string; salary?: number }>;
+  onLetGo?: (playerId: number) => Promise<void>;
+  offseasonPhase?: string;
+  onAdvancePhase?: () => void;
+  onRunCpuFa?: () => void;
+  cpuFaDone?: boolean;
+  cpuFaResult?: CpuFaResult | null;
 }
 
 const PHASES = [
@@ -47,9 +47,9 @@ const PHASES = [
 
 export default function OffseasonChecklist({
   pendingResigns, draftComplete, draftGenerated, faOpen, rosterSize,
-  announcingRetirements, refreshOffseasonStatus, onNavigate,
-  onOpenFreeAgency, onMakeOffer, onLetGo,
-  offseasonPhase, onAdvancePhase, onRunCpuFa, cpuFaDone, cpuFaResult,
+  announcingRetirements = [], refreshOffseasonStatus, onNavigate,
+  onOpenFreeAgency, onMakeOffer = async () => ({ accepted: false, name: '' }), onLetGo = async () => {},
+  offseasonPhase = 'resign', onAdvancePhase = () => {}, onRunCpuFa = () => {}, cpuFaDone = false, cpuFaResult = null,
 }: Props) {
   const [retResults, setRetResults] = useState<Record<number, { accepted: boolean; salary?: number }>>({});
   const [retWorking, setRetWorking] = useState<Set<number>>(new Set());
