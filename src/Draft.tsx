@@ -56,7 +56,6 @@ export default function Draft({ onDraftComplete }: Props) {
   const [scouting, setScouting] = useState<number | null>(null);
   const [classStrength, setClassStrength] = useState<Record<string, number> | null>(null);
 
-  // In-draft trade modal state
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [tradeMyPickAssetId, setTradeMyPickAssetId] = useState<number | null>(null);
   const [tradeTheirTeamId, setTradeTheirTeamId] = useState<number | null>(null);
@@ -124,7 +123,7 @@ export default function Draft({ onDraftComplete }: Props) {
   };
 
   const handleScout = async (prospectId: number) => {
-    if (scoutsUsed >= MAX_SCOUTS || scouting !== null) return;
+    if (scoutsUsed >= scoutBudget || scouting !== null) return;
     setScouting(prospectId);
     const result = await window.api.scoutProspect(prospectId);
     if (result.success) {
@@ -230,11 +229,9 @@ export default function Draft({ onDraftComplete }: Props) {
   const pickNum = userPickSlots[currentPickIdx];
   const totalPicksThisRound = userPickSlots.length;
 
-  // Pick slots available to the user for trading (unused picks with a valid pickAssetId)
   const myTradableSlots = roundPickSlots.filter(
     slot => slot.ownerTeamId === userTeam.id && !slot.isUsed && slot.pickAssetId !== null,
   );
-  // CPU teams in this round
   const cpuTeamIds = [...new Set(
     roundPickSlots
       .filter(slot => slot.ownerTeamId !== userTeam.id && !slot.isUsed)
@@ -274,7 +271,6 @@ export default function Draft({ onDraftComplete }: Props) {
     const scoutsAvailable = scoutBudget - scoutsUsed;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px 24px' }}>
-        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, color: T.textPrimary }}>
@@ -297,7 +293,6 @@ export default function Draft({ onDraftComplete }: Props) {
           </div>
         </div>
 
-        {/* Draft Class Strength panel */}
         {classStrength && (
           <div style={{
             background: '#07100f', border: '1px solid #1a2e1a', borderRadius: 6,
@@ -409,7 +404,6 @@ export default function Draft({ onDraftComplete }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px 24px' }}>
-      {/* Draft Day Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 18, fontWeight: 700, color: T.textPrimary }}>
@@ -444,13 +438,12 @@ export default function Draft({ onDraftComplete }: Props) {
               fontWeight: 700,
               fontSize: 16,
             }}>
-              {scoutsLeft} / {MAX_SCOUTS}
+              {scoutsLeft} / {scoutBudget}
             </div>
           </div>
         </div>
       </div>
 
-      {/* CPU drafting spinner */}
       {running && !showResults && (
         <div style={{
           margin: '0 0 12px', padding: '12px 18px', borderRadius: 6,
@@ -496,7 +489,6 @@ export default function Draft({ onDraftComplete }: Props) {
         />
       </div>
 
-      {/* In-Draft Trade Modal */}
       {showTradeModal && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
@@ -513,7 +505,6 @@ export default function Draft({ onDraftComplete }: Props) {
               Offer one of your picks in exchange for a CPU team's pick this round.
             </div>
 
-            {/* Your pick */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1, marginBottom: 6 }}>YOUR PICK TO OFFER</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -534,7 +525,6 @@ export default function Draft({ onDraftComplete }: Props) {
               </div>
             </div>
 
-            {/* CPU team */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1, marginBottom: 6 }}>SELECT CPU TEAM</div>
               <select
@@ -560,7 +550,6 @@ export default function Draft({ onDraftComplete }: Props) {
               </select>
             </div>
 
-            {/* Their pick */}
             {tradeTheirTeamId !== null && theirSlots.length > 0 && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 10, color: T.textDim, letterSpacing: 1, marginBottom: 6 }}>
@@ -585,7 +574,6 @@ export default function Draft({ onDraftComplete }: Props) {
               </div>
             )}
 
-            {/* Result */}
             {tradeResult && (
               <div style={{
                 padding: '10px 14px', borderRadius: 5, marginBottom: 16,
@@ -600,7 +588,6 @@ export default function Draft({ onDraftComplete }: Props) {
               </div>
             )}
 
-            {/* Actions */}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button
                 onClick={() => setShowTradeModal(false)}
