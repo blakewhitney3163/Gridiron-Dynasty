@@ -59,6 +59,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [offerWorking, setOfferWorking] = useState(false);
   const [userTradeStatus, setUserTradeStatus] = useState<any>(null);
   const [settingStatus, setSettingStatus] = useState(false);
+  const [preseasonStatus, setPreseasonStatus] = useState<{ generated: boolean; done: boolean; weeksDone: number[]; games: any[] } | null>(null);
   const [franchiseHealth, setFranchiseHealth] = useState<FranchiseHealth | null>(null);
 
   useEffect(() => {
@@ -109,6 +110,11 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
 
       const myTeam = standings.find((t: any) => t.id === userTeam.id);
       if (myTeam) setUserRecord({ wins: myTeam.wins, losses: myTeam.losses });
+
+      if (!status.hasSchedule) {
+        const presStatus = await window.api.getPreseasonStatus(currentSeason);
+        if (!cancelled) setPreseasonStatus(presStatus ?? null);
+      }
 
       if (status.hasSchedule && !seasonDone) {
         const data = await window.api.getWeekMatchups(status.currentWeek);
