@@ -58,7 +58,7 @@ const newsWeekLabel = (week: number) =>
   week === 0 ? 'Offseason' : week >= 19 ? 'Playoffs' : `Wk ${week}`;
 
 export default function Home({ onSeasonAdvance, onNavigate }: Props) {
-  const { userTeam, currentSeason, setPlayoffsComplete, incrementSimCount } = useGameStore();
+  const { userTeam, currentSeason, setPlayoffsComplete, incrementSimCount, simCount } = useGameStore();
 
   const [loading, setLoading] = useState(true);
   const [hasSchedule, setHasSchedule] = useState(false);
@@ -225,6 +225,11 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     if (spots) setRosterSize(spots.active ?? 0);
   };
 
+  // Re-check offseason checklist whenever a roster action increments simCount
+  useEffect(() => {
+    if (currentWeek === null && hasSchedule) refreshOffseasonStatus();
+  }, [simCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleGenerateSchedule = async () => {
     setGeneratingSchedule(true);
     try {
@@ -266,6 +271,12 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     if (status.currentWeek === null && status.hasSchedule) {
       setPlayoffSeeds(await window.api.getPlayoffSeeds());
       setMatchups(await window.api.getWeekMatchups(18));
+      let pState = await window.api.getPlayoffState(currentSeason);
+      if (!pState?.initialized) {
+        await window.api.initPlayoffs(currentSeason);
+        pState = await window.api.getPlayoffState(currentSeason);
+      }
+      setPlayoffState(pState);
     } else if (status.currentWeek) {
       setMatchups(await window.api.getWeekMatchups(status.currentWeek));
     }
@@ -429,7 +440,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-        {/* Pre-Season Staff Setup */}
         {!hasSchedule && !staffSetupComplete && userTeam && (
           <PreSeasonStaffPanel
             teamId={userTeam.id}
@@ -440,7 +450,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
           />
         )}
 
-        {/* Pending Trade Offers */}
         {cpuOffers.map((offer, i) => (
           <TradeOfferCard
             key={i}
@@ -729,7 +738,6 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
           <ChemistryPanel chemistry={teamChemistry.chemistry} events={teamChemistry.events} archetypes={teamChemistry.archetypes ?? []} />
         )}
 
-        {/* Recent News */}
         <div style={{ background: T.bgPanel, border: `1px solid ${T.borderMid}`, borderRadius: 8, padding: '14px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div style={{ fontSize: 9, letterSpacing: 2, color: T.textMuted, textTransform: 'uppercase' }}>Recent News</div>
