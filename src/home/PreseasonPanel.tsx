@@ -66,18 +66,28 @@ export default function PreseasonPanel({ status, userTeamId, currentSeason, onSt
 
   const handleSimWeek = async (week: number) => {
     setSimming(week);
-    await window.api.simulatePreseasonWeek(week, currentSeason);
-    const fresh = await window.api.getPreseasonStatus(currentSeason);
-    onStatusChange(fresh);
-    setSimming(null);
+    try {
+      await window.api.simulatePreseasonWeek(week, currentSeason);
+      const fresh = await window.api.getPreseasonStatus(currentSeason);
+      onStatusChange(fresh);
+    } catch (err) {
+      console.error('simulatePreseasonWeek failed:', err);
+    } finally {
+      setSimming(null);
+    }
   };
 
   const handleSimGame = async (gameId: number) => {
     setSimming(-1);
-    await window.api.simulatePreseasonGame(gameId);
-    const fresh = await window.api.getPreseasonStatus(currentSeason);
-    onStatusChange(fresh);
-    setSimming(null);
+    try {
+      await window.api.simulatePreseasonGame(gameId);
+      const fresh = await window.api.getPreseasonStatus(currentSeason);
+      onStatusChange(fresh);
+    } catch (err) {
+      console.error('simulatePreseasonGame failed:', err);
+    } finally {
+      setSimming(null);
+    }
   };
 
   const handleStartSeason = async () => {
