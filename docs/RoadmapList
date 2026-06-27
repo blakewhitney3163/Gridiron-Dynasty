@@ -296,31 +296,6 @@ MAINTENANCE
 COMPLETED ITEMS
 ================================================================================
 
-[DONE June 27, 2026] FA Pool Increase — MIN_FA_PER_POSITION doubled across all
- 10 positions in generatePlayers.ts. Creates a meaningful FA market each offseason.
-
-[DONE June 27, 2026] Holdouts Wired — holdoutPlayers prop and onResolveHoldout
- handler properly plumbed from Franchise.tsx into OffseasonTab. Holdout banners
- and trade demand cards now render with real data and action buttons.
-
-[DONE June 27, 2026] Owner Goals Panel Surfaced — patience meter + goal list
- added to Sidebar.tsx. Home.tsx fetches owner goals and patience in init
- Promise.all and passes them as props to Sidebar.
-
-[DONE June 27, 2026] Import Tab Expanded (Steps 3–5) — Career Stats import
- (import-career-stats IPC, importHandlers.ts, importCareerStats preload in
- stats.ts), All-Time Records import, and Season Records import added as
- ImportCard steps 3–5 in Import.tsx. formatResult() handles {imported, skipped}
- shape for career stats.
-
-[DONE June 27, 2026] NFL Real-World Data CSVs — five import-ready CSV files
- generated from Madden 2025 ratings (theedgepredictor/nfl-madden-data), nflverse
- career/historical stats (2000–2024), and OTC contract APY data. Files kept
- off-repo for licensing; stored locally in NFL_Import_Data desktop folder.
- Files: nfl_teams.csv, nfl_players.csv (1,598 players), nfl_career_stats.csv
- (3,103 player-season rows), nfl_alltime_records.csv (250 entries),
- nfl_season_records.csv (250 entries).
-
 [DONE June 26, 2026] Game-by-Game Playoff Simulation — Playoffs.tsx rewritten
  with individual game simulate buttons; "Start Playoffs" creates pending Wild
  Card games; each round auto-creates next round on completion; "Simulate All
@@ -488,6 +463,25 @@ COMPLETED ITEMS
 [DONE June 24, 2026] Realistic Trade Offer Frequency — CPU trade offer
  generation reduced from 60% weekly chance to 18%; active only weeks 1–10;
  deadline urgency bump of +15% during weeks 6–8.
+
+[DONE June 27, 2026] Import Tab Expanded — Import.tsx rebuilt as a 5-step
+ sequential flow. Steps 3–5 added to complement the existing team and player
+ imports: (3) Career Stats — new import-career-stats IPC handler in importHandlers.ts
+ matches rows to players by first_name + last_name, upserts into career_stats_history
+ via ON CONFLICT(player_id, season) DO UPDATE; skipped row count reported in result.
+ (4) All-Time Records — surfaces existing import-historical-records('alltime') IPC
+ in Import tab (previously only accessible from Records tab). (5) Season Records —
+ same for import-historical-records('season'). formatResult() updated to handle
+ {imported, skipped} shape. importCareerStats() added to preload/stats.ts.
+
+[DONE June 27, 2026] NFL Real-World Data CSVs — five import-ready CSV files built
+ from open data sources: nfl_teams.csv (32 teams), nfl_players.csv (1,598 players
+ from Madden 2025 ratings + OTC APY contract data), nfl_career_stats.csv (3,103
+ player-season rows from nflverse 2020–2024), nfl_alltime_records.csv (250 all-time
+ leaders aggregated from nflverse 2000–2024), nfl_season_records.csv (250 best single
+ seasons 2000–2024). Sources: theedgepredictor/nfl-madden-data (ratings), nflverse/
+ nflverse-data (stats), overthecap.com (contract APY). Files kept off-repo for
+ licensing; stored locally in NFL_Import_Data folder for manual use via Import tab.
 
 [DONE June 23, 2026] Commissioner Mode
 [DONE June 23, 2026] Team Editor
