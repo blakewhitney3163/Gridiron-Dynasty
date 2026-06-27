@@ -565,7 +565,7 @@ export function generateContracts(): void {
   console.log(`Contracts generated: ${activePlayers.length} active + ${psPlayers.length} PS`);
 }
 
-const CURRENT_SCHEMA_VERSION = 21;
+const CURRENT_SCHEMA_VERSION = 22;
 
 interface Migration { version: number; description: string; up: () => void; }
 
@@ -857,6 +857,18 @@ const MIGRATIONS: Migration[] = [
         db.prepare('ALTER TABLE team_finances ADD COLUMN pending_upgrade INTEGER DEFAULT 0').run();
     },
   },
+  {
+    version: 22,
+    description: 'Add coaching_xp and coaching_level to coaching_staff',
+    up: () => {
+      const cols = (db.prepare('PRAGMA table_info(coaching_staff)').all() as any[]).map((c: any) => c.name);
+      if (!cols.includes('coaching_xp'))
+        db.prepare('ALTER TABLE coaching_staff ADD COLUMN coaching_xp INTEGER DEFAULT 0').run();
+      if (!cols.includes('coaching_level'))
+        db.prepare('ALTER TABLE coaching_staff ADD COLUMN coaching_level INTEGER DEFAULT 1').run();
+    },
+  },
+
 ];
 
 function getSchemaVersion(): number {
