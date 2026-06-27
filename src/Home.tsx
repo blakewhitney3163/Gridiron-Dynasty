@@ -86,6 +86,9 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
   const [draftComplete, setDraftComplete] = useState(false);
   const [draftGenerated, setDraftGenerated] = useState(false);
   const [faOpen, setFaOpen] = useState(false);
+    const [offseasonPhase, setOffseasonPhase] = useState('resign');
+  const [cpuFaDone, setCpuFaDone] = useState(false);
+  const [cpuFaResult, setCpuFaResult] = useState<{ totalSigned: number; teamsActive: number } | null>(null);
   const [rosterSize, setRosterSize] = useState(0);
   const [injuryReport, setInjuryReport] = useState<InjuredPlayer[]>([]);
   const [retiredPlayers, setRetiredPlayers] = useState<{ name: string; position: string; age: number; ovr: number }[]>([]);
@@ -152,6 +155,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
       setDraftComplete(offseason.draftComplete ?? false);
       setDraftGenerated(offseason.draftGenerated ?? false);
       setFaOpen(offseason.faOpen ?? false);
+      setOffseasonPhase(offseason.offseasonPhase ?? 'resign');
       setRosterSize(spots?.active ?? 0);
       setInjuryReport(injuries ?? []);
       setStatLeaders(leaders);
@@ -222,6 +226,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     setDraftComplete(offseason.draftComplete ?? false);
     setDraftGenerated(offseason.draftGenerated ?? false);
     setFaOpen(offseason.faOpen ?? false);
+    setOffseasonPhase(offseason.offseasonPhase ?? 'resign');
     if (spots) setRosterSize(spots.active ?? 0);
   };
 
@@ -377,6 +382,18 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
 
   const handleOpenFreeAgency = async () => {
     await window.api.openFreeAgency();
+    await refreshOffseasonStatus();
+  };
+
+    const handleAdvancePhase = async () => {
+    const result = await window.api.advanceOffseasonPhase();
+    setOffseasonPhase(result.phase);
+  };
+
+  const handleRunCpuFa = async () => {
+    const result = await window.api.cpuFaSigning();
+    setCpuFaResult(result);
+    setCpuFaDone(true);
     await refreshOffseasonStatus();
   };
 
@@ -729,6 +746,11 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
               onOpenFreeAgency={handleOpenFreeAgency}
               onMakeOffer={handleMakeOffer}
               onLetGo={handleLetGo}
+                            offseasonPhase={offseasonPhase}
+              onAdvancePhase={handleAdvancePhase}
+              onRunCpuFa={handleRunCpuFa}
+              cpuFaDone={cpuFaDone}
+              cpuFaResult={cpuFaResult}
             />
             <PlayoffResultsView results={playoffResults} champion={currentChampion} />
           </>
