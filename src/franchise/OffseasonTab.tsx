@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Contract, CapSummary, Decision } from './types';
 import { TRAIT_META, ratingColor, trajectory, fmtSalary, askingPrice } from './utils';
+
+declare const window: any;
 
 interface CpuFaResult { totalSigned: number; teamsActive: number; }
 
@@ -38,6 +40,8 @@ interface Props {
   onResolveHoldout?: (playerId: number, action: 'pay' | 'wait' | 'trade_request') => void;
   onFifthYearOption?: (playerId: number, action: 'pick_up' | 'decline') => void;
   working: boolean;
+  teamId?: number;
+  currentSeason?: number;
 }
 
 export default function OffseasonTab({
@@ -47,8 +51,15 @@ export default function OffseasonTab({
   handleResign, handleLetWalk, handleCpuFa, handleApplyTag, handleRemoveTag,
   pendingCounters, handleAcceptCounter, handleDeclineCounter,
   holdoutPlayers = [], onResolveHoldout, onFifthYearOption,
-  working,
+  working, teamId, currentSeason,
 }: Props) {
+  const [playerGoals, setPlayerGoals] = useState<any[]>([]);
+  useEffect(() => {
+    if (teamId && currentSeason) {
+      window.seasonApi?.getTeamPlayerGoals(teamId, currentSeason).then(setPlayerGoals).catch(() => {});
+    }
+  }, [teamId, currentSeason]);
+
   const resignSalaryNum = parseFloat(resignSalary) || 0;
   const resignCapLeft = cap ? cap.available_cap - resignSalaryNum : 0;
   const pendingCount = Object.values(playerDecisions).filter(d => d === 'pending').length;
@@ -73,6 +84,56 @@ export default function OffseasonTab({
 
   return (
     <div>
+
+
+      {/* ── Player Goals ─────────────────────────────────────────────── */}
+      {playerGoals.length > 0 && (() => {
+        const goalMeta: Record<string, { label: string; color: string; desc: (g: any) => string }> = {
+          starter_role:    { label: 'Starter Role',    color: '#4FC3F7', desc: () => 'Wants to be an active starter this season' },
+          top_contract:    { label: 'Market Contract', color: '#FFD700', desc: (g) => `Wants a deal near $${(g.target_value ?? 0).toFixed(1)}M/yr market value` },
+          contender:       { label: 'Contender',       color: '#FF8740', desc: () => 'Wants the team to make the playoffs' },
+          stats_milestone: { label: 'Stats Goal',      color: '#4caf50', desc: (g) => {
+            const targets: Record<string, string> = { QB: '3,500+ pass yards', RB: '1,000+ rush yards', HB: '1,000+ rush yards', WR: '900+ rec yards', TE: '700+ rec yards', DE: '8+ sacks', LB: '100+ tackles', CB: '4+ INT' };
+            return targets[g.position] ?? `Hit target: ${g.target_value}`;
+          }},
+        };
+        const notable = playerGoals.filter(g => ['top_contract','contender','stats_milestone'].includes(g.goal_type));
+        if (notable.length === 0) return null;
+        const achieved = notable.filter(g => g.status === 'achieved').length;
+        const failed   = notable.filter(g => g.status === 'failed').length;
+        const active   = notable.filter(g => g.status === 'active').length;
+        return (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <div style={{ fontSize: 11, color: '#555', letterSpacing: 1 }}>PLAYER GOALS</div>
+              {achieved > 0 && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 2, background: '#4caf5022', border: '1px solid #4caf5055', color: '#4caf50' }}>{achieved} achieved</span>}
+              {failed > 0   && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 2, background: '#e5737322', border: '1px solid #e5737355', color: '#e57373' }}>{failed} unmet</span>}
+              {active > 0   && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 2, background: '#FF874022', border: '1px solid #FF874055', color: '#FF8740' }}>{active} active</span>}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+              {notable.map(g => {
+                const meta = goalMeta[g.goal_type];
+                if (!meta) return null;
+                const statusColor = g.status === 'achieved' ? '#4caf50' : g.status === 'failed' ? '#e57373' : '#FF8740';
+                const statusIcon  = g.status === 'achieved' ? '✅' : g.status === 'failed' ? '❌' : '○';
+                return (
+                  <div key={g.id} style={{ background: '#0d0d0d', border: `1px solid ${statusColor}22`, borderRadius: 4, padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: 13 }}>{statusIcon}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, color: '#ccc', fontWeight: 600 }}>
+                        {g.first_name} {g.last_name}
+                        <span style={{ fontSize: 9, color: '#555', marginLeft: 6 }}>{g.position} · {g.overall_rating} OVR</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: meta.color, marginTop: 2 }}>{meta.label}</div>
+                      <div style={{ fontSize: 9, color: '#444', marginTop: 1 }}>{meta.desc(g)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Holdouts & Trade Demands ─────────────────────────────────── */}
       {(activeHoldouts.length > 0 || tradeDemands.length > 0) && (
