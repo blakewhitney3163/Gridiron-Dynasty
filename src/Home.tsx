@@ -141,6 +141,10 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     if (spots) setRosterSize(spots.active ?? 0);
   };
 
+  const handlePreseasonDone = async () => {
+    await handleGenerateSchedule();
+  };
+
   const handleGenerateSchedule = async () => {
     setGeneratingSchedule(true);
     await window.api.generateSchedule();
@@ -314,14 +318,26 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
 
         {/* ── No schedule ── */}
         {!hasSchedule && (
-          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>🏈</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: T.textPrimary, marginBottom: 8 }}>
-              No schedule for {currentSeason} yet.
-            </div>
-            <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 24 }}>
-              Click "Start {currentSeason} Season" in the sidebar to generate all 18 weeks.
-            </div>
+          <div>
+            {preseasonStatus && !preseasonStatus.done ? (
+              <PreseasonPanel
+                status={preseasonStatus}
+                userTeamId={userTeam?.id ?? null}
+                currentSeason={currentSeason}
+                onStatusChange={setPreseasonStatus}
+                onStartSeason={handlePreseasonDone}
+              />
+            ) : (
+              <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>🏈</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: T.textPrimary, marginBottom: 8 }}>
+                  {preseasonStatus?.done ? `Preseason complete — ready for ${currentSeason}!` : `No schedule for ${currentSeason} yet.`}
+                </div>
+                <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 24 }}>
+                  Click "Start {currentSeason} Season" in the sidebar to generate all 18 weeks.
+                </div>
+              </div>
+            )}
           </div>
         )}
 
