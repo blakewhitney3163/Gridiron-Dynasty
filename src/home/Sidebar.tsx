@@ -62,9 +62,11 @@ interface Props {
   topNFC: StandingEntry[];
   champions: Champion[];
   statLeaders: any;
-  userTradeStatus?: any;
+    userTradeStatus?: any;
   onSetTradeStatus?: (status: string) => void;
   settingStatus?: boolean;
+  ownerGoals?: { id: number; goal_type: string; target_value: number; achieved: number }[];
+  ownerPatience?: number;
 }
 
 export default function Sidebar({
@@ -76,7 +78,8 @@ export default function Sidebar({
   onGenerateSchedule, onSimulateWeek, onSimulatePlayoffs,
   onConfirm, onCancelConfirm, onAdvance,
   injuryReport, topAFC, topNFC, champions, statLeaders,
-  userTradeStatus, onSetTradeStatus, settingStatus,
+    userTradeStatus, onSetTradeStatus, settingStatus,
+  ownerGoals = [], ownerPatience = 75,
 }: Props) {
 
   const subtitle = !hasSchedule
@@ -249,9 +252,49 @@ export default function Sidebar({
         </SidebarBlock>
       )}
 
-      {topAFC.length === 0 && topNFC.length === 0 && (
+            {topAFC.length === 0 && topNFC.length === 0 && (
         <div style={{ color: T.textDim, fontSize: 11 }}>Simulate games to see standings</div>
       )}
+
+      <SidebarBlock title="OWNER GOALS">
+        {(() => {
+          const patienceColor = ownerPatience >= 65 ? '#4caf50' : ownerPatience >= 40 ? '#FF8740' : '#e57373';
+          const patienceLabel = ownerPatience >= 65 ? 'Confident' : ownerPatience >= 40 ? 'Restless' : 'Furious';
+          const goalLabels: Record<string, string> = {
+            championship: '🏆 Win Championship',
+            playoffs: '🏟 Make Playoffs',
+            wins: `🏈 Win ${ownerGoals.find(g => g.goal_type === 'wins')?.target_value ?? '—'} Games`,
+            development: '📈 Develop Young Player',
+            cap_compliance: '💰 Stay Under Cap',
+          };
+          return (
+            <>
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 10, color: T.textDim }}>OWNER PATIENCE</span>
+                  <span style={{ fontSize: 11, color: patienceColor, fontWeight: 700 }}>{ownerPatience}/100 — {patienceLabel}</span>
+                </div>
+                <div style={{ height: 5, background: '#1a1a1a', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ width: `${ownerPatience}%`, height: '100%', background: patienceColor, borderRadius: 3, transition: 'width 0.4s' }} />
+                </div>
+              </div>
+              {ownerGoals.length === 0 ? (
+                <div style={{ color: T.textDim, fontSize: 10 }}>No goals set for this season yet.</div>
+              ) : (
+                ownerGoals.map(g => (
+                  <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', borderBottom: `1px solid ${T.borderFaint}` }}>
+                    <span style={{ fontSize: 13 }}>{g.achieved ? '✅' : '⬜'}</span>
+                    <span style={{ fontSize: 11, color: g.achieved ? '#4caf50' : T.textMuted, flex: 1 }}>
+                      {goalLabels[g.goal_type] ?? g.goal_type}
+                    </span>
+                  </div>
+                ))
+              )}
+            </>
+          );
+        })()}
+      </SidebarBlock>
+
     </div>
   );
 }
