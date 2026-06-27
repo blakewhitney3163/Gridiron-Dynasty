@@ -10,6 +10,15 @@ export interface LivePlayer {
   position: string;
   rating: number;
   depth_slot: number;
+  // Individual play-level attributes (v27)
+  acceleration: number; agility: number;
+  throw_under_pressure: number;
+  elusiveness: number; trucking: number; break_tackle: number;
+  spectacular_catch: number; catch_in_traffic: number; release_rating: number;
+  hit_power: number; pursuit: number;
+  block_shedding: number; power_moves: number; finesse_moves: number;
+  play_recognition: number; man_coverage: number;
+  coverage: number; tackle_rating: number; pass_rush: number;
 }
 
 interface StatAccum {
@@ -96,20 +105,67 @@ function rn(mean: number, std: number): number {
 function loadLivePlayers(teamId: number): LivePlayer[] {
   const rows = db.prepare(`
     SELECT p.id, p.first_name, p.last_name, p.position, p.overall_rating,
-           COALESCE(dc.slot, 99) as depth_slot
+           COALESCE(dc.slot, 99) as depth_slot,
+           COALESCE(p.acceleration, 0)         AS acceleration,
+           COALESCE(p.agility, 0)              AS agility,
+           COALESCE(p.throw_under_pressure, 0) AS throw_under_pressure,
+           COALESCE(p.elusiveness, 0)          AS elusiveness,
+           COALESCE(p.trucking, 0)             AS trucking,
+           COALESCE(p.break_tackle, 0)         AS break_tackle,
+           COALESCE(p.spectacular_catch, 0)    AS spectacular_catch,
+           COALESCE(p.catch_in_traffic, 0)     AS catch_in_traffic,
+           COALESCE(p.release_rating, 0)       AS release_rating,
+           COALESCE(p.hit_power, 0)            AS hit_power,
+           COALESCE(p.pursuit, 0)              AS pursuit,
+           COALESCE(p.block_shedding, 0)       AS block_shedding,
+           COALESCE(p.power_moves, 0)          AS power_moves,
+           COALESCE(p.finesse_moves, 0)        AS finesse_moves,
+           COALESCE(p.play_recognition, 0)     AS play_recognition,
+           COALESCE(p.man_coverage, 0)         AS man_coverage,
+           COALESCE(p.coverage, 70)            AS coverage,
+           COALESCE(p.tackle_rating, 70)       AS tackle_rating,
+           COALESCE(p.pass_rush, 70)           AS pass_rush
     FROM players p
     LEFT JOIN depth_chart dc ON dc.player_id = p.id AND dc.team_id = ?
     WHERE p.team_id = ? AND p.roster_status = 'active'
       AND p.injury_status NOT IN ('out', 'ir')
     ORDER BY COALESCE(dc.slot, 99), p.overall_rating DESC
   `).all(teamId, teamId) as any[];
-  return rows.map(r => ({
-    id: r.id,
-    name: `${r.first_name} ${r.last_name}`,
-    position: r.position,
-    rating: r.overall_rating,
-    depth_slot: r.depth_slot,
-  }));
+
+  // When attrs are 0 (new columns on old save), derive from overall_rating so play math
+  // stays meaningful rather than collapsing to floor values.
+  const aov = (val: number, ovr: number, offset = -5): number =>
+    val > 0 ? val : Math.max(40, Math.min(99, ovr + offset));
+
+  return rows.map(r => {
+    const ovr: number = r.overall_rating ?? 70;
+    return {
+      id: r.id,
+      name: `${r.first_name} ${r.last_name}`,
+      position: r.position,
+      rating: ovr,
+      depth_slot: r.depth_slot,
+      acceleration:         aov(r.acceleration, ovr, -5),
+      agility:              aov(r.agility, ovr, -8),
+      throw_under_pressure: aov(r.throw_under_pressure, ovr, -5),
+      elusiveness:          aov(r.elusiveness, ovr, -12),
+      trucking:             aov(r.trucking, ovr, -12),
+      break_tackle:         aov(r.break_tackle, ovr, -14),
+      spectacular_catch:    aov(r.spectacular_catch, ovr, -12),
+      catch_in_traffic:     aov(r.catch_in_traffic, ovr, -14),
+      release_rating:       aov(r.release_rating, ovr, -12),
+      hit_power:            aov(r.hit_power, ovr, -10),
+      pursuit:              aov(r.pursuit, ovr, -8),
+      block_shedding:       aov(r.block_shedding, ovr, -10),
+      power_moves:          aov(r.power_moves, ovr, -10),
+      finesse_moves:        aov(r.finesse_moves, ovr, -10),
+      play_recognition:     aov(r.play_recognition, ovr, -5),
+      man_coverage:         aov(r.man_coverage, ovr, -5),
+      coverage:             aov(r.coverage, ovr, -5),
+      tackle_rating:        aov(r.tackle_rating, ovr, -5),
+      pass_rush:            aov(r.pass_rush, ovr, -8),
+    };
+  });
 }
 
 function ensureStat(state: LiveGameState, playerId: number, teamId: number): StatAccum {
@@ -154,6 +210,20 @@ function isUserPossession(state: LiveGameState): boolean {
 }
 function flipPossession(p: 'home' | 'away'): 'home' | 'away' {
   return p === 'home' ? 'away' : 'home';
+}
+
+// Pick the most likely tackler from the defensive side (LBs/Ss > CBs > DL)
+function pickTackler(defenders: LivePlayer[]): LivePlayer | null {
+  const pool = byPos(defenders, 'LB', 'S', 'CB', 'DL', 'DE').slice(0, 8);
+  if (pool.length === 0) return null;
+  const weights = pool.map(p => Math.max(0.1, (p.tackle_rating + p.pursuit) / 140));
+  const total = weights.reduce((s, w) => s + w, 0);
+  let rand = Math.random() * total;
+  for (let i = 0; i < pool.length; i++) {
+    rand -= weights[i];
+    if (rand <= 0) return pool[i];
+  }
+  return pool[0];
 }
 
 // Weighted random receiver (top receivers more likely to be targeted)
@@ -204,14 +274,28 @@ function executeRun(state: LiveGameState): PlayResult {
   const off = offRatings(state);
   const def = defRatings(state);
   const players = offPlayers(state);
+  const defenders = defPlayers(state);
   const rb = byPos(players, 'RB', 'HB', 'FB')[0] ?? byPos(players, 'QB')[0] ?? null;
   const teamId = offTeamId(state);
+  const defTeamId = state.possession === 'home' ? state.awayTeamId : state.homeTeamId;
 
   const ratingFactor = Math.pow(Math.max(0.5, off.offenseRating / def.defenseRating), 0.4);
   let yards = Math.round(rn(4.0, 3.5) * ratingFactor);
+
+  // RB elusiveness/trucking vs. defender pursuit individually affect yardage
+  if (rb) {
+    const elMod  = (rb.elusiveness  - 70) * 0.015;  // ±~0.45 yds
+    const trkMod = (rb.trucking     - 70) * 0.012;  // ±~0.36 yds
+    yards = Math.round(yards * (1 + elMod) + trkMod);
+  }
+  const tackler = pickTackler(defenders);
+  if (tackler) {
+    const purMod = (tackler.pursuit - 70) * -0.008;  // better pursuit = fewer yards
+    yards = Math.round(yards * (1 + purMod));
+  }
   yards = Math.max(-5, Math.min(45, yards));
 
-  const isFumble = Math.random() < 0.008;
+  const isFumble = Math.random() < Math.max(0.004, 0.01 - (rb?.break_tackle ?? 40) * 0.00005);
   const clockUsed = Math.round(Math.max(10, rn(30, 8)));
 
   if (rb && !isFumble) {
@@ -225,16 +309,27 @@ function executeRun(state: LiveGameState): PlayResult {
 
   if (isFumble) {
     playType = 'fumble';
-    description = `${rb?.name ?? 'Ball carrier'} FUMBLES — turnover!`;
+    const forcerName = tackler?.name ?? 'Defender';
+    description = `${rb?.name ?? 'Ball carrier'} FUMBLES — forced by ${forcerName}!`;
     if (rb) {
       const s = ensureStat(state, rb.id, teamId);
       s.rush_attempts++;
       s.forced_fumbles++;
     }
+    if (tackler) {
+      const ds = ensureStat(state, tackler.id, defTeamId);
+      ds.fumble_recoveries++;
+      ds.tackles++;
+    }
   } else {
     const yStr = yards > 0 ? `${yards}` : `a loss of ${Math.abs(yards)}`;
-    description = `${rb?.name ?? 'RB'} rushes for ${yStr} yard${yards !== 1 ? 's' : ''}`;
+    const tacklerStr = tackler ? `, tackled by ${tackler.name}` : '';
+    description = `${rb?.name ?? 'RB'} rushes for ${yStr} yard${yards !== 1 ? 's' : ''}${tacklerStr}`;
     if (yards >= 10) description += ' — big gain!';
+    if (tackler) {
+      const ds = ensureStat(state, tackler.id, defTeamId);
+      ds.tackles++;
+    }
   }
 
   tickClock(state, clockUsed);
@@ -243,23 +338,16 @@ function executeRun(state: LiveGameState): PlayResult {
   let newYardLine = state.yardLine + (isFumble ? 0 : yards);
 
   if (isFumble) {
-    const oppDefPlayer = byPos(defPlayers(state), 'LB', 'DL', 'CB', 'S', 'DE')[0];
-    if (oppDefPlayer) {
-      const ds = ensureStat(state, oppDefPlayer.id, state.possession === 'home' ? state.awayTeamId : state.homeTeamId);
-      ds.fumble_recoveries++;
-    }
     state.possession = flipPossession(state.possession);
     state.yardLine = Math.max(1, Math.min(99, 100 - newYardLine));
     state.down = 1; state.yardsToGo = 10;
   } else if (newYardLine >= 100) {
-    // Touchdown
     return scoretouchdown(state, rb?.name ?? 'RB', rb?.id, teamId, clockUsed, 'run', yards);
   } else if (firstDown) {
     state.yardLine = newYardLine;
     state.down = 1;
     state.yardsToGo = Math.min(10, 100 - newYardLine);
   } else if (state.down >= 4) {
-    // Turnover on downs
     state.possession = flipPossession(state.possession);
     state.yardLine = Math.max(1, Math.min(99, 100 - newYardLine));
     state.down = 1; state.yardsToGo = 10;
@@ -285,16 +373,35 @@ function executePass(state: LiveGameState): PlayResult {
   const off = offRatings(state);
   const def = defRatings(state);
   const players = offPlayers(state);
+  const defenders = defPlayers(state);
   const qb = byPos(players, 'QB')[0] ?? null;
   const receiver = pickReceiver(players);
   const teamId = offTeamId(state);
+  const defTeamId = state.possession === 'home' ? state.awayTeamId : state.homeTeamId;
 
   const ratingFactor = Math.pow(Math.max(0.5, off.offenseRating / def.defenseRating), 0.3);
-  const completionRate = Math.max(0.3, Math.min(0.82, 0.62 * ratingFactor));
+
+  // QB throw_under_pressure boosts accuracy on 3rd/4th down
+  const isPressureDown = state.down >= 3;
+  const tupMod = isPressureDown ? (qb ? (qb.throw_under_pressure - 70) * 0.002 : 0) : 0;
+  const completionRate = Math.max(0.3, Math.min(0.82, 0.62 * ratingFactor + tupMod));
+
+  // Sack rate: top pass rusher's block_shedding + power/finesse moves
+  const defRusher = byPos(defenders, 'DL', 'DE', 'LB', 'OLB')[0];
+  const rushScore = defRusher
+    ? (defRusher.block_shedding * 0.3 + defRusher.power_moves * 0.35 + defRusher.finesse_moves * 0.35) / 70
+    : 1.0;
+  const sackRate = Math.max(0.04, Math.min(0.28, 0.18 * rushScore));
+
+  // INT rate: top coverage DB's man/zone coverage vs. WR release
+  const covDB = byPos(defenders, 'CB', 'S', 'FS', 'SS')[0];
+  const covScore = covDB ? (covDB.man_coverage * 0.5 + covDB.coverage * 0.5) / 70 : 1.0;
+  const recRelease = receiver ? receiver.release_rating / 70 : 1.0;
+  const intRateBase = Math.max(0.005, 0.012 * (def.defenseRating / off.offenseRating));
 
   const isComplete = Math.random() < completionRate;
-  const isSack = !isComplete && Math.random() < 0.18;
-  const isInterception = isComplete && Math.random() < Math.max(0.005, 0.012 * (def.defenseRating / off.offenseRating));
+  const isSack = !isComplete && Math.random() < sackRate;
+  const isInterception = isComplete && Math.random() < intRateBase * (covScore / Math.max(0.5, recRelease));
 
   let clockUsed: number;
   let yards = 0;
@@ -315,11 +422,10 @@ function executePass(state: LiveGameState): PlayResult {
     yards = -Math.round(rn(6, 3));
     yards = Math.max(-15, yards);
     clockUsed = Math.round(rn(8, 4));
-    description = `${qb?.name ?? 'QB'} sacked for a loss of ${Math.abs(yards)}`;
+    description = `${qb?.name ?? 'QB'} sacked by ${defRusher?.name ?? 'Defender'} for a loss of ${Math.abs(yards)}`;
 
-    const defRusher = byPos(defPlayers(state), 'DL', 'DE', 'LB', 'OLB')[0];
     if (defRusher) {
-      const ds = ensureStat(state, defRusher.id, state.possession === 'home' ? state.awayTeamId : state.homeTeamId);
+      const ds = ensureStat(state, defRusher.id, defTeamId);
       ds.sacks++; ds.tfl++;
     }
     if (qb) {
@@ -359,7 +465,7 @@ function executePass(state: LiveGameState): PlayResult {
     playType = 'interception';
     clockUsed = Math.round(rn(8, 5));
     const retYards = Math.round(rn(12, 8));
-    const defBack = byPos(defPlayers(state), 'CB', 'S', 'FS', 'SS', 'LB')[0];
+    const defBack = covDB ?? byPos(defenders, 'CB', 'S', 'FS', 'SS', 'LB')[0];
     description = `INTERCEPTION — ${defBack?.name ?? 'Defender'} picks it off${retYards > 5 ? ` and returns it ${retYards} yards` : ''}`;
 
     if (qb) {
@@ -367,7 +473,7 @@ function executePass(state: LiveGameState): PlayResult {
       qs.interceptions++;
     }
     if (defBack) {
-      const ds = ensureStat(state, defBack.id, state.possession === 'home' ? state.awayTeamId : state.homeTeamId);
+      const ds = ensureStat(state, defBack.id, defTeamId);
       ds.def_interceptions++;
     }
     if (state.possession === 'home') state.homeQBInts++; else state.awayQBInts++;
@@ -379,8 +485,13 @@ function executePass(state: LiveGameState): PlayResult {
     state.down = 1; state.yardsToGo = 10;
 
   } else {
-    // Complete pass
+    // Complete pass — yards boosted by WR spectacular_catch / catch_in_traffic
     yards = Math.round(rn(7.5, 6) * ratingFactor);
+    if (receiver) {
+      const catchMod = (receiver.spectacular_catch - 70) * 0.008
+                     + (receiver.catch_in_traffic  - 70) * 0.004;
+      yards = Math.round(yards * (1 + catchMod));
+    }
     yards = Math.max(0, Math.min(75, yards));
     clockUsed = Math.round(Math.max(8, rn(28, 8)));
 
@@ -393,7 +504,15 @@ function executePass(state: LiveGameState): PlayResult {
       rs.receptions++; rs.rec_yards += yards;
     }
 
-    description = `${qb?.name ?? 'QB'} completes to ${receiver?.name ?? 'WR'} for ${yards} yard${yards !== 1 ? 's' : ''}`;
+    // Credit the defender who made the stop
+    const passTackler = pickTackler(defenders);
+    if (passTackler) {
+      const ds = ensureStat(state, passTackler.id, defTeamId);
+      ds.tackles++;
+    }
+
+    const tacklerStr = passTackler ? `, tackled by ${passTackler.name}` : '';
+    description = `${qb?.name ?? 'QB'} completes to ${receiver?.name ?? 'WR'} for ${yards} yard${yards !== 1 ? 's' : ''}${tacklerStr}`;
     if (yards >= 20) description += ' — BIG GAIN!';
     tickClock(state, clockUsed);
 
