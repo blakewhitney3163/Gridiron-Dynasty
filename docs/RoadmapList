@@ -1,5 +1,5 @@
 SIDELINE TO SIDELINE FOOTBALL — ROADMAP
-Last Updated: June 26, 2026
+Last Updated: June 27, 2026
 Repository: https://github.com/blakewhitney3163/Sideline-to-Sideline-Football
 ================================================================================
 
@@ -42,6 +42,27 @@ Features that bring the game to a competitive level with top sports sims.
 
 ROSTER / PLAYER MANAGEMENT
 ────────────────────────────────────────────────────────────────────────────────
+[DONE June 27, 2026] FA Pool Increase — MIN_FA_PER_POSITION doubled across all
+ positions (QB 5→10, RB 12→22, WR 14→28, TE 7→14, OL 16→28, DL 14→24, LB 14→24,
+ CB 14→24, S 10→18, K 4→6) in generatePlayers.ts replenishFAPool(). Creates a
+ meaningful free agent market each offseason rather than sparse pickings.
+
+[DONE June 27, 2026] Holdouts Wired into Franchise UI — holdoutPlayers and
+ onResolveHoldout props now properly passed from Franchise.tsx to OffseasonTab.
+ loadHoldoutPlayers() calls window.api.getHoldoutPlayers() when offseason tab
+ opens. handleResolveHoldout calls resolveHoldout IPC and refreshes both roster
+ and holdout list. Previously the OffseasonTab component had full holdout render
+ logic but received no data. Now holdout banners and trade demand cards display
+ correctly with Pay Up / Wait It Out / Request Trade action buttons.
+
+[DONE June 27, 2026] Owner Goals Panel Surfaced — OwnerGoalsService backend
+ (generateOwnerGoals, evaluateOwnerGoals, getOwnerGoalsForSeason, getOwnerPatience)
+ was fully built but had no UI. Added OWNER GOALS block to Sidebar.tsx: patience
+ meter with color-coded fill bar (green ≥65 / orange 40–64 / red <39) and label
+ (Confident / Restless / Furious); goal list with ✅/⬜ checkboxes per goal_type.
+ Home.tsx init Promise.all now fetches window.seasonApi.getOwnerGoals(season) and
+ getOwnerPatience() and passes ownerGoals + ownerPatience props to Sidebar.
+
 [DONE June 24, 2026] Scouting Department — hire scouts with regional specialties
  that improve draft prospect accuracy over time. Builds directly on the existing
  combine measurables and in-season scouting budget system.
@@ -274,6 +295,31 @@ MAINTENANCE
 ================================================================================
 COMPLETED ITEMS
 ================================================================================
+
+[DONE June 27, 2026] FA Pool Increase — MIN_FA_PER_POSITION doubled across all
+ 10 positions in generatePlayers.ts. Creates a meaningful FA market each offseason.
+
+[DONE June 27, 2026] Holdouts Wired — holdoutPlayers prop and onResolveHoldout
+ handler properly plumbed from Franchise.tsx into OffseasonTab. Holdout banners
+ and trade demand cards now render with real data and action buttons.
+
+[DONE June 27, 2026] Owner Goals Panel Surfaced — patience meter + goal list
+ added to Sidebar.tsx. Home.tsx fetches owner goals and patience in init
+ Promise.all and passes them as props to Sidebar.
+
+[DONE June 27, 2026] Import Tab Expanded (Steps 3–5) — Career Stats import
+ (import-career-stats IPC, importHandlers.ts, importCareerStats preload in
+ stats.ts), All-Time Records import, and Season Records import added as
+ ImportCard steps 3–5 in Import.tsx. formatResult() handles {imported, skipped}
+ shape for career stats.
+
+[DONE June 27, 2026] NFL Real-World Data CSVs — five import-ready CSV files
+ generated from Madden 2025 ratings (theedgepredictor/nfl-madden-data), nflverse
+ career/historical stats (2000–2024), and OTC contract APY data. Files kept
+ off-repo for licensing; stored locally in NFL_Import_Data desktop folder.
+ Files: nfl_teams.csv, nfl_players.csv (1,598 players), nfl_career_stats.csv
+ (3,103 player-season rows), nfl_alltime_records.csv (250 entries),
+ nfl_season_records.csv (250 entries).
 
 [DONE June 26, 2026] Game-by-Game Playoff Simulation — Playoffs.tsx rewritten
  with individual game simulate buttons; "Start Playoffs" creates pending Wild
