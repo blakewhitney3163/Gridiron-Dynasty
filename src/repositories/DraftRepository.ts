@@ -34,10 +34,11 @@ class DraftRepository {
   }
 
   countScouted(season: number): number {
-    return (db.prepare('SELECT COUNT(*) as c FROM draft_prospects WHERE season = ? AND scouted = 1').get(season) as any).c;
+    // Each scouting level costs 1 action: level-1 = 1 used, level-2 = 2 used
+    return (db.prepare('SELECT COALESCE(SUM(scouted), 0) as c FROM draft_prospects WHERE season = ? AND scouted > 0').get(season) as any).c;
   }
 
-    insertClass(prospects: ProspectInsert[]): void {
+  insertClass(prospects: ProspectInsert[]): void {
     const ins = db.prepare(`
       INSERT INTO draft_prospects
         (season, first_name, last_name, position, overall_rating, dev_trait, age,
@@ -51,7 +52,8 @@ class DraftRepository {
   }
 
   markScouted(id: number): void {
-    db.prepare('UPDATE draft_prospects SET scouted = 1 WHERE id = ?').run(id);
+    // Progressive: 0 → 1 (partial), 1 → 2 (full), capped at 2
+    db.prepare('UPDATE draft_prospects SET scouted = MIN(scouted + 1, 2) WHERE id = ?').run(id);
   }
 
   markDrafted(id: number, round: number, pick: number, teamId: number): void {
