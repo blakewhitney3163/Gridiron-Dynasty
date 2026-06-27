@@ -3,7 +3,7 @@ import { db } from '../database';
 import { settingsRepo } from '../repositories';
 import {
   initLiveGame, simNextPlay, simToCompletion,
-  finalizeLiveGame, abortLiveGame, hasActiveGame,
+  finalizeLiveGame, abortLiveGame, hasActiveGame, getActiveGame,
   UserDecision,
 } from '../sim/LiveGameEngine';
 import { checkMilestones } from '../helpers/checkMilestones';
@@ -14,7 +14,7 @@ function getTeamName(teamId: number): string {
   return t ? `${t.city} ${t.name}` : 'Team';
 }
 
-function postGameNews(season: number, week: number, homeTeamId: number, awayTeamId: number, homeScore: number, awayScore: number, stats: any[], userTeamId: number): void {
+function postGameNews(season: number, week: number, homeTeamId: number, awayTeamId: number, homeScore: number, awayScore: number, userTeamId: number): void {
   const homeName = getTeamName(homeTeamId);
   const awayName  = getTeamName(awayTeamId);
   const winnerName = homeScore > awayScore ? homeName : awayName;
@@ -48,10 +48,8 @@ export function registerLiveGameHandlers(): void {
 
   ipcMain.handle('start-live-game', (_event, gameId: number) => {
     const userTeamId = settingsRepo.getUserTeamId() ?? -1;
-    if (hasActiveGame(gameId)) {
-      // Return existing state if resuming
-      return initLiveGame(gameId, userTeamId);
-    }
+    const existing = getActiveGame(gameId);
+    if (existing) return existing;
     return initLiveGame(gameId, userTeamId);
   });
 
@@ -76,7 +74,7 @@ export function registerLiveGameHandlers(): void {
         if (playerIds.length > 0) checkMilestones(gameRow.season, gameRow.week, playerIds);
 
         postGameNews(gameRow.season, gameRow.week, gameRow.home_team_id, gameRow.away_team_id,
-          result.homeScore, result.awayScore, result.stats, userTeamId);
+          result.homeScore, result.awayScore, userTeamId);
       } catch (e) {
         console.warn('[LiveGame] post-game pipeline error:', e);
       }
