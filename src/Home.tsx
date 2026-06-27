@@ -189,7 +189,7 @@ export default function Home({ onSeasonAdvance, onNavigate }: Props) {
     setSimulating(false);
   };
 
-  const handleLiveGameComplete = async () => {
+  const handleLiveGameComplete = async (_homeScore?: number, _awayScore?: number) => {
     setLiveGameId(null);
     if (!userTeam) return;
     const [status, dashboard, standings, injuries] = await Promise.all([
