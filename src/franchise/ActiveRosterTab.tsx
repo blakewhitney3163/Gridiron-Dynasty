@@ -146,7 +146,6 @@ export default function ActiveRosterTab({
           }}>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1.4fr 1fr 120px', gap: '0 8px', alignItems: 'center' }}>
 
-              {/* Player name + morale bar */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <span
@@ -177,18 +176,15 @@ export default function ActiveRosterTab({
                 </div>
               </div>
 
-              {/* Age / OVR */}
               <div>
                 <div style={{ color: '#aaa', fontSize: 12 }}>{contract.age} <span style={{ color: '#444', fontSize: 10 }}>{traj.label}</span></div>
                 <div style={{ color: ratingColor(contract.overall_rating), fontSize: 15, fontWeight: 700 }}>{contract.overall_rating}</div>
               </div>
 
-              {/* Dev trait */}
               <div style={{ color: trait.color, fontSize: 12 }}>
                 {contract.dev_trait === 'Normal' ? '—' : contract.dev_trait}
               </div>
 
-              {/* Salary / GTD */}
               <div>
                 <div style={{ color: '#ccc', fontSize: 13, fontWeight: 600 }}>{fmtSalary(contract.annual_salary)}</div>
                 {gtdPct > 0 && (
@@ -198,7 +194,6 @@ export default function ActiveRosterTab({
                 )}
               </div>
 
-              {/* Years pips */}
               <div>
                 <div style={{ display: 'flex', gap: 3, marginBottom: 3 }}>
                   {Array.from({ length: contract.years_total }).map((_, i) => (
@@ -214,7 +209,6 @@ export default function ActiveRosterTab({
                 </div>
               </div>
 
-              {/* Action buttons */}
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                 <button
                   onClick={() => isExtending
