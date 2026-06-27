@@ -1,11 +1,11 @@
 // Central color palette — import as: import { T } from './theme';
 export const T = {
   // Backgrounds
-  bgPage:   '#0f172a',   // slate-900 — deep navy
-  bgPanel:  '#1e293b',   // slate-800 — card surface
-  bgCard:   '#263548',   // slate-750 — slightly raised
-  bgInput:  '#1a2535',   // input fields
-  bgDeep:   '#0a1120',   // deepest recesses / sidebars
+  bgPage:   '#131f35',   // dark navy — page base
+  bgPanel:  '#1c2e47',   // mid-navy — card surface
+  bgCard:   '#243754',   // lifted navy — raised cards
+  bgInput:  '#1a2b42',   // input fields
+  bgDeep:   '#0d1829',   // deepest — sidebar
 
   // Borders
   borderFaint:  '#1e293b',   // barely visible separator
@@ -33,6 +33,6 @@ export const T = {
   bgRed:      '#450a0a',   // very dark red
   bgSelected: '#1e3a5f',   // selected row / active item
   // Aliases used by some components
-  bgDark: '#0a1120',  // same as bgDeep
+  bgDark: '#0d1829',  // same as bgDeep
   text:   '#f1f5f9',  // same as textPrimary
 } as const;
