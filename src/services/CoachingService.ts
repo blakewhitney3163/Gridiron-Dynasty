@@ -223,21 +223,25 @@ export function progressCoachXP(season: number): void {
                AND g.is_playoff = 1 THEN 1 ELSE 0 END) as playoff_wins
     FROM teams t
     LEFT JOIN games g ON (g.home_team_id = t.id OR g.away_team_id = t.id)
-      AND g.season = ? AND g.is_simulated = 1
+      AND g.season = ? AND g.is_simulated = 1 AND (g.is_preseason = 0 OR g.is_preseason IS NULL)
     GROUP BY t.id
   `).all(season) as any[];
 
   const teamStats = new Map<number, { wins: number; playoffWins: number }>();
   for (const r of winRows) teamStats.set(r.team_id, { wins: r.wins ?? 0, playoffWins: r.playoff_wins ?? 0 });
 
-  // Determine champion and conference champions from champions table
+  // Determine champion from champions table (single row per season)
   const champRow = db.prepare(
-    "SELECT team_id FROM champions WHERE season = ? AND round = 'Super Bowl'"
+    'SELECT team_id FROM champions WHERE season = ?'
   ).get(season) as any;
-  const confChampRows = db.prepare(
-    "SELECT team_id FROM champions WHERE season = ? AND round IN ('NFC Championship', 'AFC Championship')"
-  ).all(season) as any[];
   const superBowlChamp = champRow?.team_id ?? -1;
+
+  // Derive conference champions from conference championship games (week 20)
+  const confChampRows = db.prepare(`
+    SELECT CASE WHEN home_score > away_score THEN home_team_id ELSE away_team_id END as team_id
+    FROM games
+    WHERE season = ? AND week = 20 AND is_playoff = 1 AND is_simulated = 1
+  `).all(season) as any[];
   const confChamps = new Set(confChampRows.map((r: any) => r.team_id));
 
   // Determine division winners
