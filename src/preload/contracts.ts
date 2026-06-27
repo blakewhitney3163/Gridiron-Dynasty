@@ -61,6 +61,9 @@ export const contractsApi = {
   getOffseasonStatus: () =>
     ipcRenderer.invoke('get-offseason-status'),
 
+  advanceOffseasonPhase: () =>
+    ipcRenderer.invoke('advance-offseason-phase'),
+
   cpuFaSigning: () =>
     ipcRenderer.invoke('cpu-fa-signing'),
 
