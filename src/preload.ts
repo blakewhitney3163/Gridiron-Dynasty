@@ -10,6 +10,7 @@ import { coachingApi } from './preload/coaching';
 import { injuriesApi } from './preload/injuries';
 import { chemistryApi } from './preload/chemistry';
 import { gameprepApi } from './preload/gameprep';
+import { liveGameApi } from './preload/liveGame';
 
 contextBridge.exposeInMainWorld('api', {
   ...coreApi,
@@ -23,4 +24,5 @@ contextBridge.exposeInMainWorld('api', {
   ...injuriesApi,
   ...chemistryApi,
   ...gameprepApi,
+  ...liveGameApi,
 });
